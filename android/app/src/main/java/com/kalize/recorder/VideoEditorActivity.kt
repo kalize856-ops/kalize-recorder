@@ -30,6 +30,10 @@ import java.util.concurrent.Executors
 
 class VideoEditorActivity : Activity() {
 
+    companion object {
+        private const val PICK_VIDEO_REQUEST = 4101
+    }
+
     private var selectedVideo: Uri? = null
     private lateinit var selectedLabel: TextView
     private lateinit var startInput: EditText
@@ -38,17 +42,6 @@ class VideoEditorActivity : Activity() {
     private lateinit var exportButton: Button
 
     private val executor = Executors.newSingleThreadExecutor()
-
-    private val videoPicker =
-        registerForActivityResult(
-            androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
-        ) { uri ->
-            if (uri != null) {
-                selectedVideo = uri
-                selectedLabel.text = "Video selected:\n$uri"
-                exportButton.isEnabled = true
-            }
-        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,7 +74,13 @@ class VideoEditorActivity : Activity() {
         val chooseButton = Button(this).apply {
             text = "Choose video"
             setOnClickListener {
-                videoPicker.launch(arrayOf("video/*"))
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "video/*"
+                }
+
+                @Suppress("DEPRECATION")
+                startActivityForResult(intent, PICK_VIDEO_REQUEST)
             }
         }
         root.addView(chooseButton)
@@ -141,6 +140,27 @@ class VideoEditorActivity : Activity() {
         setContentView(root)
     }
 
+    @Deprecated("Uses the Android activity result callback")
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?
+    ) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == PICK_VIDEO_REQUEST &&
+            resultCode == RESULT_OK
+        ) {
+            val uri = data?.data
+
+            if (uri != null) {
+                selectedVideo = uri
+                selectedLabel.text = "Video selected:\n$uri"
+                exportButton.isEnabled = true
+            }
+        }
+    }
+
     private fun exportSelectedVideo() {
         val inputUri = selectedVideo ?: return
 
@@ -157,6 +177,8 @@ class VideoEditorActivity : Activity() {
             ).show()
             return
         }
+
+        val shouldMuteAudio = muteAudio.isChecked
 
         exportButton.isEnabled = false
         exportButton.text = "Exporting..."
@@ -177,7 +199,7 @@ class VideoEditorActivity : Activity() {
                     cacheFile,
                     (startSeconds * 1_000_000).toLong(),
                     (endSeconds * 1_000_000).toLong(),
-                    muteAudio.isChecked
+                    shouldMuteAudio
                 )
 
                 val savedUri = saveExport(cacheFile)
@@ -196,6 +218,7 @@ class VideoEditorActivity : Activity() {
                             Toast.LENGTH_LONG
                         ).show()
                     }
+
                     exportButton.isEnabled = true
                     exportButton.text = "Export edited video"
                 }
@@ -206,6 +229,7 @@ class VideoEditorActivity : Activity() {
                         "Export failed: ${e.message ?: "Unsupported video"}",
                         Toast.LENGTH_LONG
                     ).show()
+
                     exportButton.isEnabled = true
                     exportButton.text = "Export edited video"
                 }
@@ -254,8 +278,11 @@ class VideoEditorActivity : Activity() {
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
             )
 
+            val outputTracks = mutableMapOf<Int, Int>()
+
             for ((inputTrack, _) in trackMap) {
-                muxer.addTrack(extractor.getTrackFormat(inputTrack))
+                outputTracks[inputTrack] =
+                    muxer.addTrack(extractor.getTrackFormat(inputTrack))
                 extractor.selectTrack(inputTrack)
             }
 
@@ -276,7 +303,7 @@ class VideoEditorActivity : Activity() {
                 val sampleTime = extractor.sampleTime
                 if (sampleTime < 0 || sampleTime >= endUs) break
 
-                val outputTrack = trackMap[inputTrack]
+                val outputTrack = outputTracks[inputTrack]
                 if (outputTrack != null && sampleTime >= startUs) {
                     buffer.clear()
                     val size = extractor.readSampleData(buffer, 0)

@@ -36,16 +36,49 @@ class ScreenshotGalleryActivity : Activity() {
     private lateinit var listContainer: LinearLayout
     private lateinit var searchInput: EditText
     private lateinit var statusText: TextView
+    private lateinit var sortButton: Button
 
     private var screenshots: List<Screenshot> = emptyList()
+    private var favoriteUris = mutableSetOf<String>()
+
+    private val sortOptions = listOf(
+        "Newest first",
+        "Oldest first",
+        "Name A-Z",
+        "Favorites first"
+    )
+
+    private var sortMode = "Newest first"
 
     private val backgroundColor = Color.rgb(9, 13, 27)
     private val cardColor = Color.rgb(20, 28, 48)
     private val accentColor = Color.rgb(139, 92, 246)
     private val mutedColor = Color.rgb(164, 177, 202)
 
+    private val preferences by lazy {
+        getSharedPreferences(
+            "kalize_screenshot_gallery",
+            MODE_PRIVATE
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        favoriteUris = preferences.getStringSet(
+            "favorite_screenshot_uris",
+            emptySet()
+        )?.toMutableSet() ?: mutableSetOf()
+
+        sortMode = preferences.getString(
+            "screenshot_sort_mode",
+            "Newest first"
+        ) ?: "Newest first"
+
+        if (sortMode !in sortOptions) {
+            sortMode = "Newest first"
+        }
+
         buildScreen()
         loadScreenshots()
     }
@@ -84,7 +117,7 @@ class ScreenshotGalleryActivity : Activity() {
         })
 
         root.addView(TextView(this).apply {
-            text = "View, find, share and manage your captures."
+            text = "Save your best captures to Favorites."
             textSize = 13f
             setTextColor(mutedColor)
             setPadding(0, 0, 0, dp(14))
@@ -103,7 +136,33 @@ class ScreenshotGalleryActivity : Activity() {
         root.addView(
             searchInput,
             LinearLayout.LayoutParams(-1, dp(50)).apply {
-                bottomMargin = dp(10)
+                bottomMargin = dp(8)
+            }
+        )
+
+        sortButton = makeButton("")
+        updateSortButton()
+
+        sortButton.setOnClickListener {
+            val currentIndex = sortOptions.indexOf(sortMode)
+                .coerceAtLeast(0)
+
+            sortMode = sortOptions[
+                (currentIndex + 1) % sortOptions.size
+            ]
+
+            preferences.edit()
+                .putString("screenshot_sort_mode", sortMode)
+                .apply()
+
+            updateSortButton()
+            displayScreenshots()
+        }
+
+        root.addView(
+            sortButton,
+            LinearLayout.LayoutParams(-1, dp(44)).apply {
+                bottomMargin = dp(8)
             }
         )
 
@@ -111,8 +170,9 @@ class ScreenshotGalleryActivity : Activity() {
             text = "Loading screenshots..."
             textSize = 14f
             setTextColor(mutedColor)
-            setPadding(dp(2), dp(8), dp(2), dp(10))
+            setPadding(dp(2), dp(6), dp(2), dp(10))
         }
+
         root.addView(statusText)
 
         val scrollView = ScrollView(this).apply {
@@ -163,10 +223,14 @@ class ScreenshotGalleryActivity : Activity() {
         }
 
         val refreshButton = makeButton("↻ Refresh")
-        refreshButton.setOnClickListener { loadScreenshots() }
+        refreshButton.setOnClickListener {
+            loadScreenshots()
+        }
 
         val backButton = makeButton("← Back")
-        backButton.setOnClickListener { finish() }
+        backButton.setOnClickListener {
+            finish()
+        }
 
         bottomButtons.addView(
             refreshButton,
@@ -196,14 +260,31 @@ class ScreenshotGalleryActivity : Activity() {
         Button(this).apply {
             text = label
             isAllCaps = false
+            textSize = 12f
             setTextColor(Color.WHITE)
             setBackgroundColor(Color.rgb(49, 43, 91))
         }
 
+    private fun updateSortButton() {
+        if (::sortButton.isInitialized) {
+            sortButton.text = "Sort: $sortMode  ↻"
+        }
+    }
+
+    private fun saveFavorites() {
+        preferences.edit()
+            .putStringSet(
+                "favorite_screenshot_uris",
+                favoriteUris.toSet()
+            )
+            .apply()
+    }
+
     private fun loadScreenshots() {
         try {
             val result = mutableListOf<Screenshot>()
-            val collection = MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+            val collection =
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI
 
             val projection = if (
                 Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
@@ -228,11 +309,15 @@ class ScreenshotGalleryActivity : Activity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 selection =
                     "${MediaStore.Images.Media.RELATIVE_PATH} = ?"
-                selectionArgs = arrayOf("Pictures/Kalize Recorder/")
+                selectionArgs = arrayOf(
+                    "Pictures/Kalize Recorder/"
+                )
             } else {
                 selection =
                     "${MediaStore.Images.Media.DISPLAY_NAME} LIKE ?"
-                selectionArgs = arrayOf("Kalize_Screenshot_%.png")
+                selectionArgs = arrayOf(
+                    "Kalize_Screenshot_%.png"
+                )
             }
 
             contentResolver.query(
@@ -245,21 +330,25 @@ class ScreenshotGalleryActivity : Activity() {
                 val idColumn = cursor.getColumnIndexOrThrow(
                     MediaStore.Images.Media._ID
                 )
+
                 val nameColumn = cursor.getColumnIndexOrThrow(
                     MediaStore.Images.Media.DISPLAY_NAME
                 )
+
                 val dateColumn = cursor.getColumnIndexOrThrow(
                     MediaStore.Images.Media.DATE_ADDED
                 )
 
                 while (cursor.moveToNext()) {
-                    val name = cursor.getString(nameColumn) ?: continue
+                    val name =
+                        cursor.getString(nameColumn) ?: continue
 
                     if (!name.startsWith("Kalize_Screenshot_")) {
                         continue
                     }
 
                     val id = cursor.getLong(idColumn)
+
                     val uri = Uri.withAppendedPath(
                         collection,
                         id.toString()
@@ -276,9 +365,20 @@ class ScreenshotGalleryActivity : Activity() {
             }
 
             screenshots = result
+
+            val existingUris = screenshots
+                .map { it.uri.toString() }
+                .toSet()
+
+            if (favoriteUris.retainAll(existingUris)) {
+                saveFavorites()
+            }
+
             displayScreenshots()
-        } catch (e: Exception) {
-            statusText.text = "Could not load screenshots. Tap Refresh."
+        } catch (_: Exception) {
+            statusText.text =
+                "Could not load screenshots. Tap Refresh."
+
             Toast.makeText(
                 this,
                 "Could not load screenshots.",
@@ -298,36 +398,76 @@ class ScreenshotGalleryActivity : Activity() {
             ""
         }
 
-        val filtered = screenshots.filter {
-            it.name.contains(query, ignoreCase = true)
+        val filtered = screenshots
+            .filter {
+                it.name.contains(query, ignoreCase = true)
+            }
+            .let { items ->
+                when (sortMode) {
+                    "Oldest first" ->
+                        items.sortedBy { it.dateAdded }
+
+                    "Name A-Z" ->
+                        items.sortedBy {
+                            it.name.lowercase(Locale.getDefault())
+                        }
+
+                    "Favorites first" ->
+                        items.sortedWith(
+                            compareByDescending<Screenshot> {
+                                favoriteUris.contains(
+                                    it.uri.toString()
+                                )
+                            }.thenByDescending {
+                                it.dateAdded
+                            }
+                        )
+
+                    else ->
+                        items.sortedByDescending { it.dateAdded }
+                }
+            }
+
+        val favoriteCount = screenshots.count {
+            favoriteUris.contains(it.uri.toString())
         }
 
         statusText.text = when {
             screenshots.isEmpty() ->
                 "No Kalize screenshots found yet."
+
             filtered.isEmpty() ->
                 "No screenshots match your search."
+
             else ->
-                "${filtered.size} screenshot(s)"
+                "${filtered.size} shown  •  $favoriteCount favorite(s)"
         }
 
         if (filtered.isEmpty()) {
             listContainer.addView(TextView(this).apply {
                 text = if (screenshots.isEmpty()) {
-                    "Screenshots you take with Kalize Recorder will appear here."
+                    "Screenshots taken with Kalize Recorder will appear here."
                 } else {
                     "Try a different search."
                 }
+
                 textSize = 14f
                 setTextColor(mutedColor)
                 gravity = Gravity.CENTER
-                setPadding(dp(20), dp(30), dp(20), dp(30))
+                setPadding(
+                    dp(20),
+                    dp(30),
+                    dp(20),
+                    dp(30)
+                )
             })
             return
         }
 
         filtered.forEach { screenshot ->
-            listContainer.addView(createScreenshotCard(screenshot))
+            listContainer.addView(
+                createScreenshotCard(screenshot)
+            )
         }
     }
 
@@ -337,7 +477,12 @@ class ScreenshotGalleryActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setPadding(
+                dp(10),
+                dp(10),
+                dp(10),
+                dp(10)
+            )
             setBackgroundColor(cardColor)
         }
 
@@ -349,11 +494,13 @@ class ScreenshotGalleryActivity : Activity() {
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val bitmap: Bitmap = contentResolver.loadThumbnail(
-                    screenshot.uri,
-                    android.util.Size(dp(100), dp(100)),
-                    null
-                )
+                val bitmap: Bitmap =
+                    contentResolver.loadThumbnail(
+                        screenshot.uri,
+                        android.util.Size(dp(100), dp(100)),
+                        null
+                    )
+
                 thumbnail.setImageBitmap(bitmap)
             } else {
                 thumbnail.setImageURI(screenshot.uri)
@@ -370,14 +517,21 @@ class ScreenshotGalleryActivity : Activity() {
 
         card.addView(
             thumbnail,
-            LinearLayout.LayoutParams(dp(92), dp(92)).apply {
-                marginEnd = dp(12)
+            LinearLayout.LayoutParams(
+                dp(82),
+                dp(92)
+            ).apply {
+                marginEnd = dp(10)
             }
         )
 
         val details = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
+
+        val isFavorite = favoriteUris.contains(
+            screenshot.uri.toString()
+        )
 
         details.addView(TextView(this).apply {
             text = screenshot.name
@@ -390,14 +544,54 @@ class ScreenshotGalleryActivity : Activity() {
         val date = SimpleDateFormat(
             "dd MMM yyyy, HH:mm",
             Locale.getDefault()
-        ).format(Date(screenshot.dateAdded * 1000L))
+        ).format(
+            Date(screenshot.dateAdded * 1000L)
+        )
 
         details.addView(TextView(this).apply {
             text = date
             textSize = 11f
             setTextColor(mutedColor)
-            setPadding(0, dp(5), 0, dp(8))
+            setPadding(0, dp(5), 0, dp(6))
         })
+
+        val favoriteButton = makeButton(
+            if (isFavorite) {
+                "★ Favorited"
+            } else {
+                "☆ Add to Favorites"
+            }
+        )
+
+        favoriteButton.setOnClickListener {
+            val key = screenshot.uri.toString()
+
+            if (favoriteUris.contains(key)) {
+                favoriteUris.remove(key)
+                Toast.makeText(
+                    this,
+                    "Removed from Favorites.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } else {
+                favoriteUris.add(key)
+                Toast.makeText(
+                    this,
+                    "Added to Favorites.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+
+            saveFavorites()
+            displayScreenshots()
+        }
+
+        details.addView(
+            favoriteButton,
+            LinearLayout.LayoutParams(-1, dp(38)).apply {
+                bottomMargin = dp(5)
+            }
+        )
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -420,18 +614,20 @@ class ScreenshotGalleryActivity : Activity() {
 
         buttons.addView(
             openButton,
-            LinearLayout.LayoutParams(0, dp(40), 1f)
+            LinearLayout.LayoutParams(0, dp(38), 1f)
         )
+
         buttons.addView(
             shareButton,
-            LinearLayout.LayoutParams(0, dp(40), 1f).apply {
-                marginStart = dp(4)
+            LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                marginStart = dp(3)
             }
         )
+
         buttons.addView(
             deleteButton,
-            LinearLayout.LayoutParams(0, dp(40), 1f).apply {
-                marginStart = dp(4)
+            LinearLayout.LayoutParams(0, dp(38), 1f).apply {
+                marginStart = dp(3)
             }
         )
 
@@ -443,9 +639,10 @@ class ScreenshotGalleryActivity : Activity() {
         )
 
         return card.apply {
-            val params = LinearLayout.LayoutParams(-1, -2)
-            params.bottomMargin = dp(10)
-            layoutParams = params
+            layoutParams = LinearLayout.LayoutParams(-1, -2)
+                .apply {
+                    bottomMargin = dp(10)
+                }
         }
     }
 
@@ -453,8 +650,11 @@ class ScreenshotGalleryActivity : Activity() {
         try {
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "image/*")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
             }
+
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(
@@ -470,11 +670,16 @@ class ScreenshotGalleryActivity : Activity() {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "image/png"
                 putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
             }
 
             startActivity(
-                Intent.createChooser(intent, "Share screenshot")
+                Intent.createChooser(
+                    intent,
+                    "Share screenshot"
+                )
             )
         } catch (_: Exception) {
             Toast.makeText(
@@ -501,11 +706,17 @@ class ScreenshotGalleryActivity : Activity() {
                     )
 
                     if (deleted > 0) {
+                        favoriteUris.remove(
+                            screenshot.uri.toString()
+                        )
+                        saveFavorites()
+
                         Toast.makeText(
                             this,
                             "Screenshot deleted.",
                             Toast.LENGTH_SHORT
                         ).show()
+
                         loadScreenshots()
                     } else {
                         Toast.makeText(

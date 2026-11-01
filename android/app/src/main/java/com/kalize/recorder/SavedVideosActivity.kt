@@ -18,11 +18,13 @@ import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
@@ -32,15 +34,16 @@ class SavedVideosActivity : Activity() {
     private data class SavedVideo(
         val uri: Uri,
         val name: String,
-        val durationMs: Long
+        val durationMs: Long,
+        val dateAdded: Long
     )
 
     private lateinit var listContainer: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var searchInput: EditText
     private lateinit var emptyText: TextView
+    private lateinit var sortSpinner: Spinner
 
-    // FIX: Store the complete list of saved videos.
     private var allVideos: List<SavedVideo> = emptyList()
 
     private val backgroundColor = Color.rgb(9, 13, 27)
@@ -49,6 +52,14 @@ class SavedVideosActivity : Activity() {
     private val mutedColor = Color.rgb(164, 177, 202)
     private val accentColor = Color.rgb(139, 92, 246)
     private val accentBlue = Color.rgb(65, 105, 225)
+
+    private val sortOptions = arrayOf(
+        "Newest first",
+        "Oldest first",
+        "Name A–Z",
+        "Longest videos",
+        "Shortest videos"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -194,13 +205,64 @@ class SavedVideosActivity : Activity() {
             LinearLayout.LayoutParams(-1, dp(52))
         )
 
+        val sortLabel = TextView(this).apply {
+            text = "SORT YOUR CLIPS"
+            textSize = 11f
+            letterSpacing = 0.08f
+            setTextColor(mutedColor)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(dp(2), dp(14), 0, dp(6))
+        }
+        root.addView(sortLabel)
+
+        sortSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(
+                this@SavedVideosActivity,
+                android.R.layout.simple_spinner_dropdown_item,
+                sortOptions
+            ).also {
+                it.setDropDownViewResource(
+                    android.R.layout.simple_spinner_dropdown_item
+                )
+            }
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = roundedBackground(
+                Color.rgb(24, 32, 51),
+                dp(12),
+                Color.rgb(45, 56, 81)
+            )
+
+            onItemSelectedListener =
+                object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onItemSelected(
+                        parent: android.widget.AdapterView<*>?,
+                        view: View?,
+                        position: Int,
+                        id: Long
+                    ) {
+                        displayVideos()
+                    }
+
+                    override fun onNothingSelected(
+                        parent: android.widget.AdapterView<*>?
+                    ) {}
+                }
+        }
+
+        root.addView(
+            sortSpinner,
+            LinearLayout.LayoutParams(-1, dp(48)).apply {
+                bottomMargin = dp(4)
+            }
+        )
+
         root.addView(TextView(this).apply {
             text = "YOUR CLIPS"
             textSize = 12f
             letterSpacing = 0.10f
             setTextColor(mutedColor)
             setTypeface(null, Typeface.BOLD)
-            setPadding(dp(2), dp(18), 0, dp(10))
+            setPadding(dp(2), dp(12), 0, dp(10))
         })
 
         val scrollView = ScrollView(this).apply {
@@ -251,7 +313,9 @@ class SavedVideosActivity : Activity() {
     }
 
     private fun loadVideos() {
-        statusText.text = "Loading your library..."
+        if (::statusText.isInitialized) {
+            statusText.text = "Loading your library..."
+        }
 
         try {
             allVideos = querySavedVideos()
@@ -259,7 +323,11 @@ class SavedVideosActivity : Activity() {
         } catch (_: Exception) {
             allVideos = emptyList()
             displayVideos()
-            statusText.text = "Could not load videos. Tap refresh to retry."
+
+            if (::statusText.isInitialized) {
+                statusText.text =
+                    "Could not load videos. Tap refresh to retry."
+            }
 
             Toast.makeText(
                 this,
@@ -278,13 +346,15 @@ class SavedVideosActivity : Activity() {
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.DISPLAY_NAME,
                 MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.DATE_ADDED,
                 MediaStore.Video.Media.RELATIVE_PATH
             )
         } else {
             arrayOf(
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.DATE_ADDED
             )
         }
 
@@ -314,6 +384,8 @@ class SavedVideosActivity : Activity() {
                 it.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
             val durationColumn =
                 it.getColumnIndex(MediaStore.Video.Media.DURATION)
+            val dateColumn =
+                it.getColumnIndex(MediaStore.Video.Media.DATE_ADDED)
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
@@ -323,12 +395,18 @@ class SavedVideosActivity : Activity() {
                 } else {
                     0L
                 }
+                val dateAdded = if (dateColumn >= 0) {
+                    it.getLong(dateColumn)
+                } else {
+                    0L
+                }
 
                 results.add(
                     SavedVideo(
                         uri = ContentUris.withAppendedId(collection, id),
                         name = name,
-                        durationMs = duration
+                        durationMs = duration,
+                        dateAdded = dateAdded
                     )
                 )
             }
@@ -343,6 +421,7 @@ class SavedVideosActivity : Activity() {
         listContainer.removeAllViews()
 
         val query = searchInput.text.toString().trim()
+
         val filteredVideos = if (query.isBlank()) {
             allVideos
         } else {
@@ -351,13 +430,26 @@ class SavedVideosActivity : Activity() {
             }
         }
 
+        val sortedVideos = when (
+            if (::sortSpinner.isInitialized) sortSpinner.selectedItemPosition
+            else 0
+        ) {
+            1 -> filteredVideos.sortedBy { it.dateAdded }
+            2 -> filteredVideos.sortedBy {
+                it.name.lowercase(Locale.ROOT)
+            }
+            3 -> filteredVideos.sortedByDescending { it.durationMs }
+            4 -> filteredVideos.sortedBy { it.durationMs }
+            else -> filteredVideos.sortedByDescending { it.dateAdded }
+        }
+
         statusText.text = if (allVideos.size == 1) {
             "1 video in your library"
         } else {
             "${allVideos.size} videos in your library"
         }
 
-        if (filteredVideos.isEmpty()) {
+        if (sortedVideos.isEmpty()) {
             emptyText.text = if (allVideos.isEmpty()) {
                 "No saved videos yet.\n\nExport a clip from the Video Editor, then refresh your library."
             } else {
@@ -373,7 +465,7 @@ class SavedVideosActivity : Activity() {
         }
 
         emptyText.visibility = View.GONE
-        filteredVideos.forEach { video -> addVideoCard(video) }
+        sortedVideos.forEach { video -> addVideoCard(video) }
     }
 
     private fun addVideoCard(video: SavedVideo) {

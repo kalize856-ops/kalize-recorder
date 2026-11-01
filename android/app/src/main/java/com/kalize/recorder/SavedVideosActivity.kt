@@ -2,10 +2,13 @@
 package com.kalize.recorder
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ContentUris
 import android.content.Intent
 import android.database.Cursor
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,6 +16,7 @@ import android.provider.MediaStore
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -33,14 +37,13 @@ class SavedVideosActivity : Activity() {
     private val backgroundColor = Color.rgb(9, 13, 24)
     private val textColor = Color.WHITE
     private val mutedColor = Color.rgb(155, 169, 199)
-    private val accentColor = Color.rgb(152, 116, 255)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 20, 20, 20)
+            setPadding(dp(20), dp(20), dp(20), dp(20))
             setBackgroundColor(backgroundColor)
         }
 
@@ -48,16 +51,16 @@ class SavedVideosActivity : Activity() {
             text = "Ƙalize Saved Videos"
             textSize = 25f
             setTextColor(textColor)
-            setPadding(0, 8, 0, 16)
+            setPadding(0, dp(8), 0, dp(16))
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
         root.addView(title)
 
         val description = TextView(this).apply {
-            text = "Videos saved in Movies/Kalize Recorder appear here."
+            text = "Your exported videos, with previews and playback controls."
             textSize = 14f
             setTextColor(mutedColor)
-            setPadding(0, 0, 0, 14)
+            setPadding(0, 0, 0, dp(14))
         }
         root.addView(description)
 
@@ -70,11 +73,12 @@ class SavedVideosActivity : Activity() {
         statusText = TextView(this).apply {
             textSize = 15f
             setTextColor(mutedColor)
-            setPadding(0, 16, 0, 12)
+            setPadding(0, dp(16), 0, dp(12))
         }
         root.addView(statusText)
 
         val scrollView = ScrollView(this)
+
         listContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
         }
@@ -127,13 +131,12 @@ class SavedVideosActivity : Activity() {
                 return
             }
 
-            statusText.text =
-                "${videos.size} video(s) found"
+            statusText.text = "${videos.size} video(s) found"
 
-            for (video in videos) {
+            videos.forEach { video ->
                 addVideoCard(video)
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             statusText.text =
                 "Could not load videos. Please try refreshing."
         }
@@ -141,45 +144,41 @@ class SavedVideosActivity : Activity() {
 
     private fun querySavedVideos(): List<SavedVideo> {
         val results = mutableListOf<SavedVideo>()
-
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
 
-        val projection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.RELATIVE_PATH
-            )
-        } else {
-            arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION
-            )
-        }
+        val projection =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DURATION,
+                    MediaStore.Video.Media.RELATIVE_PATH
+                )
+            } else {
+                arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DURATION
+                )
+            }
 
         val selection: String?
         val selectionArgs: Array<String>?
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            selection =
-                "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
+            selection = "${MediaStore.Video.Media.RELATIVE_PATH} = ?"
             selectionArgs = arrayOf("Movies/Kalize Recorder/")
         } else {
             selection = null
             selectionArgs = null
         }
 
-        val sortOrder =
-            "${MediaStore.Video.Media.DATE_ADDED} DESC"
-
         val cursor: Cursor? = contentResolver.query(
             collection,
             projection,
             selection,
             selectionArgs,
-            sortOrder
+            "${MediaStore.Video.Media.DATE_ADDED} DESC"
         )
 
         cursor?.use {
@@ -198,20 +197,19 @@ class SavedVideosActivity : Activity() {
                 val name = it.getString(nameColumn)
                     ?: "Untitled video"
 
-                val duration = if (durationColumn >= 0) {
-                    it.getLong(durationColumn)
-                } else {
-                    0L
-                }
-
-                val videoUri = ContentUris.withAppendedId(
-                    collection,
-                    id
-                )
+                val duration =
+                    if (durationColumn >= 0) {
+                        it.getLong(durationColumn)
+                    } else {
+                        0L
+                    }
 
                 results.add(
                     SavedVideo(
-                        uri = videoUri,
+                        uri = ContentUris.withAppendedId(
+                            collection,
+                            id
+                        ),
                         name = name,
                         durationMs = duration
                     )
@@ -225,14 +223,61 @@ class SavedVideosActivity : Activity() {
     private fun addVideoCard(video: SavedVideo) {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(14, 12, 14, 12)
+            setPadding(dp(14), dp(12), dp(14), dp(12))
             setBackgroundColor(Color.rgb(21, 30, 49))
         }
+
+        val thumbnail = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            contentDescription = "Thumbnail for ${video.name}"
+            setBackgroundColor(Color.rgb(35, 45, 67))
+        }
+
+        try {
+            val bitmap: Bitmap? =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentResolver.loadThumbnail(
+                        video.uri,
+                        android.util.Size(640, 360),
+                        null
+                    )
+                } else {
+                    val retriever = MediaMetadataRetriever()
+
+                    try {
+                        retriever.setDataSource(
+                            this@SavedVideosActivity,
+                            video.uri
+                        )
+                        retriever.getFrameAtTime(
+                            0,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        )
+                    } finally {
+                        retriever.release()
+                    }
+                }
+
+            if (bitmap != null) {
+                thumbnail.setImageBitmap(bitmap)
+            }
+        } catch (_: Exception) {
+            // Keep the placeholder if a thumbnail cannot be loaded.
+        }
+
+        card.addView(
+            thumbnail,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(180)
+            )
+        )
 
         val nameText = TextView(this).apply {
             text = video.name
             textSize = 16f
             setTextColor(textColor)
+            setPadding(0, dp(10), 0, 0)
             setTypeface(null, android.graphics.Typeface.BOLD)
         }
         card.addView(nameText)
@@ -241,7 +286,7 @@ class SavedVideosActivity : Activity() {
             text = "Duration: ${formatDuration(video.durationMs)}"
             textSize = 13f
             setTextColor(mutedColor)
-            setPadding(0, 6, 0, 8)
+            setPadding(0, dp(6), 0, dp(8))
         }
         card.addView(durationText)
 
@@ -260,6 +305,12 @@ class SavedVideosActivity : Activity() {
             setOnClickListener { shareVideo(video) }
         }
 
+        val deleteButton = Button(this).apply {
+            text = "Delete"
+            setTextColor(Color.RED)
+            setOnClickListener { confirmDelete(video) }
+        }
+
         buttons.addView(
             playButton,
             LinearLayout.LayoutParams(0, -2, 1f)
@@ -270,16 +321,73 @@ class SavedVideosActivity : Activity() {
             LinearLayout.LayoutParams(0, -2, 1f)
         )
 
+        buttons.addView(
+            deleteButton,
+            LinearLayout.LayoutParams(0, -2, 1f)
+        )
+
         card.addView(buttons)
 
         val cardParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             LinearLayout.LayoutParams.WRAP_CONTENT
         ).apply {
-            bottomMargin = 14
+            bottomMargin = dp(14)
         }
 
         listContainer.addView(card, cardParams)
+    }
+
+    private fun confirmDelete(video: SavedVideo) {
+        AlertDialog.Builder(this)
+            .setTitle("Delete saved video?")
+            .setMessage(
+                "Remove \"${video.name}\" from your saved videos? " +
+                    "This cannot be undone."
+            )
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Delete") { _, _ ->
+                deleteVideo(video)
+            }
+            .show()
+    }
+
+    private fun deleteVideo(video: SavedVideo) {
+        try {
+            val deleted = contentResolver.delete(
+                video.uri,
+                null,
+                null
+            )
+
+            if (deleted > 0) {
+                Toast.makeText(
+                    this,
+                    "Video deleted.",
+                    Toast.LENGTH_SHORT
+                ).show()
+
+                loadVideos()
+            } else {
+                Toast.makeText(
+                    this,
+                    "The video could not be deleted.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        } catch (_: SecurityException) {
+            Toast.makeText(
+                this,
+                "Android did not allow deletion. Please try again.",
+                Toast.LENGTH_LONG
+            ).show()
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "Could not delete this video.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     private fun playVideo(video: SavedVideo) {
@@ -346,5 +454,9 @@ class SavedVideosActivity : Activity() {
                 seconds
             )
         }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

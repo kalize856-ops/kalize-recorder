@@ -91,6 +91,7 @@ class ScreenRecordingService : Service() {
             putExtra(EXTRA_IS_RECORDING, recordingStarted)
             putExtra(EXTRA_IS_PAUSED, recordingPaused)
         }
+
         sendBroadcast(stateIntent)
     }
 
@@ -153,12 +154,16 @@ class ScreenRecordingService : Service() {
             intent?.getBooleanExtra(EXTRA_AUDIO_ENABLED, false) ?: false
 
         if (resultData == null || resultCode == 0) {
+            recordingStarted = false
+            recordingPaused = false
+            publishRecordingState()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
-        if (audioEnabled &&
+        if (
+            audioEnabled &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
@@ -167,6 +172,10 @@ class ScreenRecordingService : Service() {
                 "Microphone permission is required for audio recording.",
                 Toast.LENGTH_LONG
             ).show()
+
+            recordingStarted = false
+            recordingPaused = false
+            publishRecordingState()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -184,6 +193,7 @@ class ScreenRecordingService : Service() {
                 }",
                 Toast.LENGTH_LONG
             ).show()
+
             stopRecording(stopProjection = true)
         }
 
@@ -550,6 +560,15 @@ class ScreenRecordingService : Service() {
 
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    override fun onDestroy() {
+        // Keep the saved state accurate if Android destroys this service.
+        recordingStarted = false
+        recordingPaused = false
+        recordingStartTime = 0L
+        publishRecordingState()
+        super.onDestroy()
     }
 
     private fun createNotificationChannel() {

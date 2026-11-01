@@ -6,16 +6,17 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,7 @@ private val Violet = Color(0xFF9874FF)
 private val Muted = Color(0xFF9BA9C7)
 
 class MainActivity : ComponentActivity() {
+
     private lateinit var captureLauncher: ActivityResultLauncher<Intent>
     private var requestedQuality = "1080p"
     private var requestedFps = 30
@@ -46,17 +48,48 @@ class MainActivity : ComponentActivity() {
             ActivityResultContracts.StartActivityForResult()
         ) { result ->
             val data = result.data
+
             if (result.resultCode == Activity.RESULT_OK && data != null) {
-                val serviceIntent = Intent(this, ScreenRecordingService::class.java).apply {
-                    putExtra(ScreenRecordingService.EXTRA_RESULT_CODE, result.resultCode)
-                    putExtra(ScreenRecordingService.EXTRA_RESULT_DATA, data)
-                    putExtra(ScreenRecordingService.EXTRA_QUALITY, requestedQuality)
-                    putExtra(ScreenRecordingService.EXTRA_FPS, requestedFps)
+                val serviceIntent = Intent(
+                    this,
+                    ScreenRecordingService::class.java
+                ).apply {
+                    putExtra(
+                        ScreenRecordingService.EXTRA_RESULT_CODE,
+                        result.resultCode
+                    )
+                    putExtra(
+                        ScreenRecordingService.EXTRA_RESULT_DATA,
+                        data
+                    )
+                    putExtra(
+                        ScreenRecordingService.EXTRA_QUALITY,
+                        requestedQuality
+                    )
+                    putExtra(
+                        ScreenRecordingService.EXTRA_FPS,
+                        requestedFps
+                    )
+
                     requestedFolderUri?.let {
-                        putExtra(ScreenRecordingService.EXTRA_OUTPUT_TREE_URI, it)
+                        putExtra(
+                            ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
+                            it
+                        )
                     }
                 }
-                ContextCompat.startForegroundService(this, serviceIntent)
+
+                ContextCompat.startForegroundService(
+                    this,
+                    serviceIntent
+                )
+
+                if (Settings.canDrawOverlays(this)) {
+                    startService(
+                        Intent(this, FloatingBubbleService::class.java)
+                    )
+                }
+
                 requestResultHandler?.invoke(true)
             } else {
                 requestResultHandler?.invoke(false)
@@ -65,22 +98,49 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KalizeHome(
-                initialFolderUri = getSharedPreferences("kalize_settings", MODE_PRIVATE)
-                    .getString("save_tree_uri", null),
+                initialFolderUri = getSharedPreferences(
+                    "kalize_settings",
+                    MODE_PRIVATE
+                ).getString("save_tree_uri", null),
+
                 onStartRecording = { quality, fps, folderUri, onResult ->
                     requestedQuality = quality
                     requestedFps = fps
                     requestedFolderUri = folderUri
                     requestResultHandler = onResult
 
-                    val manager =
-                        getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                    captureLauncher.launch(manager.createScreenCaptureIntent())
+                    val manager = getSystemService(
+                        MEDIA_PROJECTION_SERVICE
+                    ) as MediaProjectionManager
+
+                    captureLauncher.launch(
+                        manager.createScreenCaptureIntent()
+                    )
                 },
+
                 onStopRecording = {
-                    startService(Intent(this, ScreenRecordingService::class.java).apply {
-                        action = ScreenRecordingService.ACTION_STOP
-                    })
+                    startService(
+                        Intent(
+                            this,
+                            ScreenRecordingService::class.java
+                        ).apply {
+                            action = ScreenRecordingService.ACTION_STOP
+                        }
+                    )
+
+                    stopService(
+                        Intent(this, FloatingBubbleService::class.java)
+                    )
+                },
+
+                onEnableBubble = {
+                    if (!Settings.canDrawOverlays(this)) {
+                        val overlayIntent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            Uri.parse("package:$packageName")
+                        )
+                        startActivity(overlayIntent)
+                    }
                 }
             )
         }
@@ -90,20 +150,33 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KalizeHome(
     initialFolderUri: String?,
-    onStartRecording: (String, Int, String?, (Boolean) -> Unit) -> Unit,
-    onStopRecording: () -> Unit
+    onStartRecording: (
+        String,
+        Int,
+        String?,
+        (Boolean) -> Unit
+    ) -> Unit,
+    onStopRecording: () -> Unit,
+    onEnableBubble: () -> Unit
 ) {
     var recording by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
     var quality by remember { mutableStateOf("1080p") }
     var fps by remember { mutableStateOf("30 FPS") }
+
     var status by remember {
         mutableStateOf("Ready. Approve Android's prompt to begin capture.")
     }
+
     var saveFolderUri by remember { mutableStateOf(initialFolderUri) }
+
     val context = androidx.compose.ui.platform.LocalContext.current
+
     val prefs = remember {
-        context.getSharedPreferences("kalize_settings", android.content.Context.MODE_PRIVATE)
+        context.getSharedPreferences(
+            "kalize_settings",
+            android.content.Context.MODE_PRIVATE
+        )
     }
 
     val folderPicker = rememberLauncherForActivityResult(
@@ -116,10 +189,14 @@ private fun KalizeHome(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
-                prefs.edit().putString("save_tree_uri", uri.toString()).apply()
+
+                prefs.edit()
+                    .putString("save_tree_uri", uri.toString())
+                    .apply()
+
                 saveFolderUri = uri.toString()
                 status = "Save folder selected. New recordings will use it."
-            } catch (error: Exception) {
+            } catch (_: Exception) {
                 status = "Could not access that folder. Please choose it again."
             }
         }
@@ -137,31 +214,59 @@ private fun KalizeHome(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(Color(0xFF171532), Night)))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF171532), Night)
+                    )
+                )
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = RoundedCornerShape(15.dp), color = Violet) {
+                Surface(
+                    shape = RoundedCornerShape(15.dp),
+                    color = Violet
+                ) {
                     Text(
                         "Ƙ",
-                        Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
+                        Modifier.padding(
+                            horizontal = 15.dp,
+                            vertical = 9.dp
+                        ),
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Black
                     )
                 }
+
                 Spacer(Modifier.width(12.dp))
+
                 Column {
-                    Text("Ƙalize Recorder", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                    Text("Screen recording · v0.3.0", color = Muted, fontSize = 12.sp)
+                    Text(
+                        "Ƙalize Recorder",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Screen recording · v0.4.0",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
                 }
             }
 
-            Text("Capture every moment.", fontSize = 29.sp, fontWeight = FontWeight.ExtraBold)
+            Text(
+                "Capture every moment.",
+                fontSize = 29.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
 
-            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Panel
+                )
+            ) {
                 Column(
                     Modifier.padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -188,6 +293,7 @@ private fun KalizeHome(
                             } else {
                                 requesting = true
                                 status = "Approve Android's screen-capture prompt to start."
+
                                 onStartRecording(
                                     quality,
                                     fps.removeSuffix(" FPS").toIntOrNull() ?: 30,
@@ -195,8 +301,9 @@ private fun KalizeHome(
                                 ) { approved ->
                                     requesting = false
                                     recording = approved
+
                                     status = if (approved) {
-                                        "Capture requested. Use Stop to finish recording."
+                                        "Capture requested. Use the floating STOP bubble or this button to finish."
                                     } else {
                                         "Screen capture cancelled. Tap Start to try again."
                                     }
@@ -205,12 +312,39 @@ private fun KalizeHome(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(if (recording || requesting) "■ Stop recording" else "● Start recording")
+                        Text(
+                            if (recording || requesting) {
+                                "■ Stop recording"
+                            } else {
+                                "● Start recording"
+                            }
+                        )
                     }
+
+                    OutlinedButton(
+                        onClick = {
+                            onEnableBubble()
+                            status = "Allow display over other apps in Android Settings, then return here."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Enable floating recording bubble")
+                    }
+
+                    Text(
+                        "Enable the permission above before recording. The movable STOP bubble appears while recording.",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
 
                     Divider(color = Muted.copy(alpha = 0.3f))
 
-                    Text("Save location", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Save location",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
                     Text(
                         if (saveFolderUri == null) {
                             "Current default: phone storage — Movies/Kalize Recorder"
@@ -221,7 +355,11 @@ private fun KalizeHome(
                     )
 
                     Button(
-                        onClick = { folderPicker.launch(saveFolderUri?.let { Uri.parse(it) }) },
+                        onClick = {
+                            folderPicker.launch(
+                                saveFolderUri?.let { Uri.parse(it) }
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Choose phone or SD-card folder")
@@ -238,21 +376,35 @@ private fun KalizeHome(
                         Text("Use default phone storage")
                     }
 
-                    Text("Choose a folder on the SD card if your phone supports one. Android will ask you to grant access.", color = Muted, fontSize = 12.sp)
+                    Text(
+                        "Choose a folder on the SD card if your phone supports one. Android will ask you to grant access.",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
 
                     Divider(color = Muted.copy(alpha = 0.3f))
 
                     Text("Resolution target", color = Muted)
-                    var qualityExpanded by remember { mutableStateOf(false) }
+
+                    var qualityExpanded by remember {
+                        mutableStateOf(false)
+                    }
+
                     Box {
-                        OutlinedButton(onClick = { qualityExpanded = true }) {
+                        OutlinedButton(
+                            onClick = { qualityExpanded = true }
+                        ) {
                             Text(quality)
                         }
+
                         DropdownMenu(
                             expanded = qualityExpanded,
                             onDismissRequest = { qualityExpanded = false }
                         ) {
-                            listOf("360p", "480p", "720p", "1080p", "1440p", "4K").forEach {
+                            listOf(
+                                "360p", "480p", "720p",
+                                "1080p", "1440p", "4K"
+                            ).forEach {
                                 DropdownMenuItem(
                                     text = { Text(it) },
                                     onClick = {
@@ -265,11 +417,18 @@ private fun KalizeHome(
                     }
 
                     Text("Frame-rate target", color = Muted)
-                    var fpsExpanded by remember { mutableStateOf(false) }
+
+                    var fpsExpanded by remember {
+                        mutableStateOf(false)
+                    }
+
                     Box {
-                        OutlinedButton(onClick = { fpsExpanded = true }) {
+                        OutlinedButton(
+                            onClick = { fpsExpanded = true }
+                        ) {
                             Text(fps)
                         }
+
                         DropdownMenu(
                             expanded = fpsExpanded,
                             onDismissRequest = { fpsExpanded = false }
@@ -287,14 +446,18 @@ private fun KalizeHome(
                     }
 
                     Text(
-                        "Video-only recording for now. Audio, floating bubble and editor are planned next.",
+                        "Video-only recording for now. Audio, screenshots and the video editor can be added later.",
                         color = Muted,
                         fontSize = 12.sp
                     )
                 }
             }
 
-            Text("Coming next", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Coming next",
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
 
             listOf(
                 "◉  Floating bubble" to "Draggable recording controls",
@@ -302,7 +465,11 @@ private fun KalizeHome(
                 "✂  Video editor" to "Trim, crop, mute and export",
                 "⚡  Game tools" to "Safe performance checks and benchmark"
             ).forEach { (title, desc) ->
-                Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = Panel
+                    )
+                ) {
                     Column(Modifier.padding(14.dp)) {
                         Text(title, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(4.dp))

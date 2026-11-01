@@ -78,29 +78,66 @@ class FloatingBubbleService : Service() {
             "Hide floating controls without stopping recording"
         )
 
-        panel.addView(openButton)
-        panel.addView(stopButton)
-        panel.addView(hideButton)
+        val minimizeButton = makeControlButton(
+            "MINI",
+            Color.rgb(65, 55, 95),
+            "Minimize floating controls"
+        )
 
-        val overlayType =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
+        val restoreButton = makeControlButton(
+            "K",
+            Color.TRANSPARENT,
+            "Expand floating controls"
+        ).apply {
+            textSize = 18f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setPadding(0, 0, 0, 0)
+        }
+
+        fun showExpanded() {
+            panel.removeAllViews()
+            panel.orientation = LinearLayout.HORIZONTAL
+            panel.gravity = Gravity.CENTER
+            panel.setPadding(6, 6, 6, 6)
+
+            panel.background = GradientDrawable().apply {
+                setColor(Color.rgb(24, 26, 38))
+                cornerRadius = 28f
+                setStroke(2, Color.rgb(150, 125, 255))
             }
 
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            overlayType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = 12
-            y = 250
+            panel.contentDescription = "Floating recording controls"
+
+            panel.addView(openButton)
+            panel.addView(stopButton)
+            panel.addView(hideButton)
+            panel.addView(minimizeButton)
+        }
+
+        fun showCollapsed() {
+            panel.removeAllViews()
+            panel.orientation = LinearLayout.HORIZONTAL
+            panel.gravity = Gravity.CENTER
+            panel.setPadding(0, 0, 0, 0)
+
+            panel.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(45, 35, 85))
+                setStroke(2, Color.rgb(180, 160, 255))
+            }
+
+            panel.contentDescription = "Minimized Kalize Recorder controls"
+
+            val bubbleSize =
+                (48 * resources.displayMetrics.density).toInt()
+
+            panel.addView(
+                restoreButton,
+                LinearLayout.LayoutParams(
+                    bubbleSize,
+                    bubbleSize
+                )
+            )
         }
 
         openButton.setOnClickListener {
@@ -131,16 +168,44 @@ class FloatingBubbleService : Service() {
                     startService(stopIntent)
                 }
             } catch (_: Exception) {
-                // Keep the app from crashing if Android rejects the request.
+                // Avoid crashing if Android rejects the request.
             }
 
             stopSelf()
         }
 
         hideButton.setOnClickListener {
-            // Hide only the floating panel.
-            // The independent recording service keeps running.
+            // Hide only the controls. Recording is handled separately.
             stopSelf()
+        }
+
+        minimizeButton.setOnClickListener {
+            showCollapsed()
+        }
+
+        restoreButton.setOnClickListener {
+            showExpanded()
+        }
+
+        val overlayType =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = 12
+            y = 250
         }
 
         var startX = 0
@@ -209,7 +274,7 @@ class FloatingBubbleService : Service() {
                         try {
                             windowManager.updateViewLayout(view, params)
                         } catch (_: Exception) {
-                            // Ignore layout updates after removal.
+                            // Ignore updates after removal.
                         }
                     }
 
@@ -219,6 +284,8 @@ class FloatingBubbleService : Service() {
                 else -> false
             }
         }
+
+        showExpanded()
 
         try {
             windowManager.addView(panel, params)

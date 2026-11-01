@@ -32,6 +32,11 @@
             android:name=".FloatingBubbleService"
             android:exported="false" />
 
+        <service
+            android:name=".ScreenshotService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
     </application>
 
 </manifest>

@@ -64,6 +64,9 @@ class ScreenRecordingService : Service() {
     private var isStopping = false
     private var recordingStarted = false
 
+    // Used by the notification's elapsed-time counter.
+    private var recordingStartTime = 0L
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(
@@ -241,6 +244,9 @@ class ScreenRecordingService : Service() {
 
         mediaRecorder.start()
         recordingStarted = true
+
+        // Start the timer only after the recorder successfully starts.
+        recordingStartTime = System.currentTimeMillis()
     }
 
     private fun prepareOutput(
@@ -383,6 +389,9 @@ class ScreenRecordingService : Service() {
             recordingStarted = false
         }
 
+        // Clear the timer when recording finishes.
+        recordingStartTime = 0L
+
         try {
             outputDescriptor?.close()
         } catch (_: Exception) {
@@ -488,7 +497,7 @@ class ScreenRecordingService : Service() {
                 PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle("Kalize Recorder")
             .setContentText(message)
@@ -501,7 +510,19 @@ class ScreenRecordingService : Service() {
                 "STOP RECORDING",
                 stopPendingIntent
             )
-            .build()
+
+        // Display a live elapsed-time counter while recording is active.
+        if (recordingStarted && recordingStartTime > 0L) {
+            builder
+                .setWhen(recordingStartTime)
+                .setUsesChronometer(true)
+        } else {
+            builder
+                .setWhen(System.currentTimeMillis())
+                .setUsesChronometer(false)
+        }
+
+        return builder.build()
     }
 
     private fun updateNotification(message: String) {

@@ -51,6 +51,11 @@ class SavedVideosActivity : Activity() {
     private lateinit var sortSpinner: Spinner
 
     private var allVideos: List<SavedVideo> = emptyList()
+    private val favoriteUris = mutableSetOf<String>()
+
+    private val favoritePreferences by lazy {
+        getSharedPreferences("saved_video_favorites", MODE_PRIVATE)
+    }
 
     private val backgroundColor = Color.rgb(9, 13, 27)
     private val cardColor = Color.rgb(20, 28, 48)
@@ -73,11 +78,20 @@ class SavedVideosActivity : Activity() {
         "Longest videos",
         "Shortest videos",
         "Largest files",
-        "Smallest files"
+        "Smallest files",
+        "Favorites first"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        favoriteUris.addAll(
+            favoritePreferences.getStringSet(
+                "favorite_uris",
+                emptySet()
+            ) ?: emptySet()
+        )
+
         buildScreen()
         loadVideos()
     }
@@ -301,7 +315,6 @@ class SavedVideosActivity : Activity() {
             ).coerceIn(0, sortOptions.lastIndex)
 
             setSelection(savedSortPosition)
-
             setPadding(dp(10), dp(4), dp(10), dp(4))
             background = roundedBackground(
                 Color.rgb(24, 32, 51),
@@ -395,13 +408,8 @@ class SavedVideosActivity : Activity() {
     }
 
     private fun loadVideos() {
-        if (::statusText.isInitialized) {
-            statusText.text = "Loading your library..."
-        }
-
-        if (::storageText.isInitialized) {
-            storageText.text = "Storage used: calculating..."
-        }
+        statusText.text = "Loading your library..."
+        storageText.text = "Storage used: calculating..."
 
         try {
             allVideos = querySavedVideos()
@@ -410,14 +418,9 @@ class SavedVideosActivity : Activity() {
             allVideos = emptyList()
             displayVideos()
 
-            if (::statusText.isInitialized) {
-                statusText.text =
-                    "Could not load videos. Tap refresh to retry."
-            }
-
-            if (::storageText.isInitialized) {
-                storageText.text = "Storage used: unavailable"
-            }
+            statusText.text =
+                "Could not load videos. Tap refresh to retry."
+            storageText.text = "Storage used: unavailable"
 
             Toast.makeText(
                 this,
@@ -524,7 +527,6 @@ class SavedVideosActivity : Activity() {
         listContainer.removeAllViews()
 
         val totalBytes = allVideos.sumOf { it.sizeBytes }
-
         storageText.text = "Storage used: ${formatFileSize(totalBytes)}"
 
         val query = searchInput.text.toString().trim()
@@ -549,6 +551,9 @@ class SavedVideosActivity : Activity() {
             4 -> filteredVideos.sortedBy { it.durationMs }
             5 -> filteredVideos.sortedByDescending { it.sizeBytes }
             6 -> filteredVideos.sortedBy { it.sizeBytes }
+            7 -> filteredVideos.sortedByDescending {
+                favoriteUris.contains(it.uri.toString())
+            }
             else -> filteredVideos.sortedByDescending { it.dateAdded }
         }
 
@@ -682,10 +687,31 @@ class SavedVideosActivity : Activity() {
 
         card.addView(buttons)
 
+        val favoriteButton = makeButton(
+            if (favoriteUris.contains(video.uri.toString())) {
+                "★  Remove from favorites"
+            } else {
+                "☆  Add to favorites"
+            },
+            Color.rgb(67, 52, 100)
+        )
+
+        favoriteButton.setOnClickListener {
+            toggleFavorite(video)
+        }
+
+        card.addView(
+            favoriteButton,
+            LinearLayout.LayoutParams(-1, dp(46)).apply {
+                topMargin = dp(8)
+            }
+        )
+
         val detailsButton = makeButton(
             "ⓘ  View video details",
             Color.rgb(39, 48, 70)
         )
+
         detailsButton.setOnClickListener {
             showVideoDetails(video)
         }
@@ -701,7 +727,10 @@ class SavedVideosActivity : Activity() {
             "✎  Rename video",
             Color.rgb(39, 48, 70)
         )
-        renameButton.setOnClickListener { showRenameDialog(video) }
+
+        renameButton.setOnClickListener {
+            showRenameDialog(video)
+        }
 
         card.addView(
             renameButton,
@@ -716,6 +745,34 @@ class SavedVideosActivity : Activity() {
                 bottomMargin = dp(14)
             }
         )
+    }
+
+    private fun toggleFavorite(video: SavedVideo) {
+        val key = video.uri.toString()
+
+        val added = if (favoriteUris.contains(key)) {
+            favoriteUris.remove(key)
+            false
+        } else {
+            favoriteUris.add(key)
+            true
+        }
+
+        favoritePreferences.edit()
+            .putStringSet("favorite_uris", favoriteUris.toSet())
+            .apply()
+
+        Toast.makeText(
+            this,
+            if (added) {
+                "Added to favorites."
+            } else {
+                "Removed from favorites."
+            },
+            Toast.LENGTH_SHORT
+        ).show()
+
+        displayVideos()
     }
 
     private fun showRenameDialog(video: SavedVideo) {
@@ -880,11 +937,17 @@ class SavedVideosActivity : Activity() {
             val deleted = contentResolver.delete(video.uri, null, null)
 
             if (deleted > 0) {
+                favoriteUris.remove(video.uri.toString())
+                favoritePreferences.edit()
+                    .putStringSet("favorite_uris", favoriteUris.toSet())
+                    .apply()
+
                 Toast.makeText(
                     this,
                     "Video deleted.",
                     Toast.LENGTH_SHORT
                 ).show()
+
                 loadVideos()
             } else {
                 Toast.makeText(
@@ -914,6 +977,7 @@ class SavedVideosActivity : Activity() {
                 setDataAndType(video.uri, "video/*")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
+
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(

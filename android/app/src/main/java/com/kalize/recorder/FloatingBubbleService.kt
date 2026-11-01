@@ -51,48 +51,36 @@ class FloatingBubbleService : Service() {
             setPadding(6, 6, 6, 6)
 
             background = GradientDrawable().apply {
-                setColor(Color.rgb(30, 30, 38))
+                setColor(Color.rgb(24, 26, 38))
                 cornerRadius = 28f
-                setStroke(2, Color.WHITE)
+                setStroke(2, Color.rgb(150, 125, 255))
             }
 
             elevation = 12f
             contentDescription = "Floating recording controls"
         }
 
-        val openButton = Button(this).apply {
-            text = "OPEN"
-            textSize = 12f
-            isAllCaps = false
-            contentDescription = "Open Kalize Recorder"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(45, 115, 210))
-        }
-
-        val stopButton = Button(this).apply {
-            text = "■ STOP"
-            textSize = 12f
-            isAllCaps = false
-            contentDescription = "Stop screen recording"
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(210, 45, 60))
-        }
-
-        panel.addView(
-            openButton,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+        val openButton = makeControlButton(
+            "OPEN",
+            Color.rgb(45, 115, 210),
+            "Open Kalize Recorder"
         )
 
-        panel.addView(
-            stopButton,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+        val stopButton = makeControlButton(
+            "■ STOP",
+            Color.rgb(210, 45, 60),
+            "Stop screen recording"
         )
+
+        val hideButton = makeControlButton(
+            "HIDE",
+            Color.rgb(80, 70, 110),
+            "Hide floating controls without stopping recording"
+        )
+
+        panel.addView(openButton)
+        panel.addView(stopButton)
+        panel.addView(hideButton)
 
         val overlayType =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -111,7 +99,7 @@ class FloatingBubbleService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 20
+            x = 12
             y = 250
         }
 
@@ -143,9 +131,15 @@ class FloatingBubbleService : Service() {
                     startService(stopIntent)
                 }
             } catch (_: Exception) {
-                // Avoid crashing if Android rejects the stop request.
+                // Keep the app from crashing if Android rejects the request.
             }
 
+            stopSelf()
+        }
+
+        hideButton.setOnClickListener {
+            // Hide only the floating panel.
+            // The independent recording service keeps running.
             stopSelf()
         }
 
@@ -190,6 +184,7 @@ class FloatingBubbleService : Service() {
                     try {
                         windowManager.updateViewLayout(view, params)
                     } catch (_: Exception) {
+                        // The overlay may already have been removed.
                     }
 
                     true
@@ -214,6 +209,7 @@ class FloatingBubbleService : Service() {
                         try {
                             windowManager.updateViewLayout(view, params)
                         } catch (_: Exception) {
+                            // Ignore layout updates after removal.
                         }
                     }
 
@@ -233,11 +229,30 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    private fun makeControlButton(
+        label: String,
+        color: Int,
+        description: String
+    ): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 10f
+            isAllCaps = false
+            contentDescription = description
+            setTextColor(Color.WHITE)
+            setBackgroundColor(color)
+            minWidth = 0
+            minimumWidth = 0
+            setPadding(8, 4, 8, 4)
+        }
+    }
+
     override fun onDestroy() {
         controlPanel?.let {
             try {
                 windowManager.removeView(it)
             } catch (_: Exception) {
+                // Ignore if Android already removed the overlay.
             }
         }
 

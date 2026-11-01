@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Activity
@@ -39,6 +40,9 @@ class SavedVideosActivity : Activity() {
     private lateinit var searchInput: EditText
     private lateinit var emptyText: TextView
 
+    // FIX: Store the complete list of saved videos.
+    private var allVideos: List<SavedVideo> = emptyList()
+
     private val backgroundColor = Color.rgb(9, 13, 27)
     private val cardColor = Color.rgb(20, 28, 48)
     private val textColor = Color.WHITE
@@ -54,7 +58,6 @@ class SavedVideosActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-
         if (::listContainer.isInitialized) {
             loadVideos()
         }
@@ -76,30 +79,27 @@ class SavedVideosActivity : Activity() {
             orientation = LinearLayout.VERTICAL
         }
 
-        val eyebrow = TextView(this).apply {
+        headingColumn.addView(TextView(this).apply {
             text = "ƘALIZE STUDIO  /  LIBRARY"
             textSize = 11f
             letterSpacing = 0.12f
             setTextColor(accentColor)
             setTypeface(null, Typeface.BOLD)
-        }
-        headingColumn.addView(eyebrow)
+        })
 
-        val title = TextView(this).apply {
+        headingColumn.addView(TextView(this).apply {
             text = "Saved Videos"
             textSize = 27f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             setPadding(0, dp(5), 0, dp(4))
-        }
-        headingColumn.addView(title)
+        })
 
-        val subtitle = TextView(this).apply {
+        headingColumn.addView(TextView(this).apply {
             text = "Your clips. Ready to replay and share."
             textSize = 13f
             setTextColor(mutedColor)
-        }
-        headingColumn.addView(subtitle)
+        })
 
         header.addView(
             headingColumn,
@@ -114,7 +114,6 @@ class SavedVideosActivity : Activity() {
             refreshButton,
             LinearLayout.LayoutParams(dp(52), dp(48))
         )
-
         root.addView(header)
 
         val summaryCard = LinearLayout(this).apply {
@@ -127,14 +126,13 @@ class SavedVideosActivity : Activity() {
             )
         }
 
-        val summaryLabel = TextView(this).apply {
+        summaryCard.addView(TextView(this).apply {
             text = "YOUR VIDEO COLLECTION"
             textSize = 11f
             letterSpacing = 0.08f
             setTextColor(mutedColor)
             setTypeface(null, Typeface.BOLD)
-        }
-        summaryCard.addView(summaryLabel)
+        })
 
         statusText = TextView(this).apply {
             text = "Loading your library..."
@@ -145,19 +143,15 @@ class SavedVideosActivity : Activity() {
         }
         summaryCard.addView(statusText)
 
-        val summaryHint = TextView(this).apply {
+        summaryCard.addView(TextView(this).apply {
             text = "Videos exported to Movies/Kalize Recorder appear here."
             textSize = 12f
             setTextColor(mutedColor)
-        }
-        summaryCard.addView(summaryHint)
+        })
 
         root.addView(
             summaryCard,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
+            LinearLayout.LayoutParams(-1, -2).apply {
                 topMargin = dp(20)
                 bottomMargin = dp(16)
             }
@@ -168,10 +162,7 @@ class SavedVideosActivity : Activity() {
             textSize = 14f
             setTextColor(textColor)
             setHintTextColor(mutedColor)
-
-            // Correct Kotlin property:
             isSingleLine = true
-
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = roundedBackground(
                 Color.rgb(24, 32, 51),
@@ -179,48 +170,38 @@ class SavedVideosActivity : Activity() {
                 Color.rgb(45, 56, 81)
             )
 
-            addTextChangedListener(
-                object : android.text.TextWatcher {
-                    override fun beforeTextChanged(
-                        s: CharSequence?,
-                        start: Int,
-                        count: Int,
-                        after: Int
-                    ) {}
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(
+                    s: CharSequence?, start: Int,
+                    count: Int, after: Int
+                ) {}
 
-                    override fun onTextChanged(
-                        s: CharSequence?,
-                        start: Int,
-                        before: Int,
-                        count: Int
-                    ) {
-                        displayVideos()
-                    }
-
-                    override fun afterTextChanged(
-                        s: android.text.Editable?
-                    ) {}
+                override fun onTextChanged(
+                    s: CharSequence?, start: Int,
+                    before: Int, count: Int
+                ) {
+                    displayVideos()
                 }
-            )
+
+                override fun afterTextChanged(
+                    s: android.text.Editable?
+                ) {}
+            })
         }
 
         root.addView(
             searchInput,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(52)
-            )
+            LinearLayout.LayoutParams(-1, dp(52))
         )
 
-        val sectionTitle = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "YOUR CLIPS"
             textSize = 12f
             letterSpacing = 0.10f
             setTextColor(mutedColor)
             setTypeface(null, Typeface.BOLD)
             setPadding(dp(2), dp(18), 0, dp(10))
-        }
-        root.addView(sectionTitle)
+        })
 
         val scrollView = ScrollView(this).apply {
             isFillViewport = true
@@ -245,19 +226,12 @@ class SavedVideosActivity : Activity() {
 
         scrollView.addView(
             listContainer,
-            ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
+            ViewGroup.LayoutParams(-1, -2)
         )
 
         root.addView(
             scrollView,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-                1f
-            )
+            LinearLayout.LayoutParams(-1, 0, 1f)
         )
 
         val backButton = makeButton(
@@ -268,10 +242,7 @@ class SavedVideosActivity : Activity() {
 
         root.addView(
             backButton,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(50)
-            ).apply {
+            LinearLayout.LayoutParams(-1, dp(50)).apply {
                 topMargin = dp(12)
             }
         )
@@ -288,9 +259,7 @@ class SavedVideosActivity : Activity() {
         } catch (_: Exception) {
             allVideos = emptyList()
             displayVideos()
-
-            statusText.text =
-                "Could not load videos. Tap refresh to try again."
+            statusText.text = "Could not load videos. Tap refresh to retry."
 
             Toast.makeText(
                 this,
@@ -304,21 +273,20 @@ class SavedVideosActivity : Activity() {
         val results = mutableListOf<SavedVideo>()
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
 
-        val projection =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                arrayOf(
-                    MediaStore.Video.Media._ID,
-                    MediaStore.Video.Media.DISPLAY_NAME,
-                    MediaStore.Video.Media.DURATION,
-                    MediaStore.Video.Media.RELATIVE_PATH
-                )
-            } else {
-                arrayOf(
-                    MediaStore.Video.Media._ID,
-                    MediaStore.Video.Media.DISPLAY_NAME,
-                    MediaStore.Video.Media.DURATION
-                )
-            }
+        val projection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.RELATIVE_PATH
+            )
+        } else {
+            arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DURATION
+            )
+        }
 
         val selection: String?
         val selectionArgs: Array<String>?
@@ -342,17 +310,14 @@ class SavedVideosActivity : Activity() {
         cursor?.use {
             val idColumn =
                 it.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-
             val nameColumn =
                 it.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
-
             val durationColumn =
                 it.getColumnIndex(MediaStore.Video.Media.DURATION)
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
                 val name = it.getString(nameColumn) ?: "Untitled video"
-
                 val duration = if (durationColumn >= 0) {
                     it.getLong(durationColumn)
                 } else {
@@ -377,12 +342,7 @@ class SavedVideosActivity : Activity() {
 
         listContainer.removeAllViews()
 
-        val query = if (::searchInput.isInitialized) {
-            searchInput.text.toString().trim()
-        } else {
-            ""
-        }
-
+        val query = searchInput.text.toString().trim()
         val filteredVideos = if (query.isBlank()) {
             allVideos
         } else {
@@ -405,22 +365,15 @@ class SavedVideosActivity : Activity() {
             }
 
             emptyText.visibility = View.VISIBLE
-
             listContainer.addView(
                 emptyText,
-                LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                )
+                LinearLayout.LayoutParams(-1, -2)
             )
             return
         }
 
         emptyText.visibility = View.GONE
-
-        filteredVideos.forEach { video ->
-            addVideoCard(video)
-        }
+        filteredVideos.forEach { video -> addVideoCard(video) }
     }
 
     private fun addVideoCard(video: SavedVideo) {
@@ -428,16 +381,6 @@ class SavedVideosActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), dp(12), dp(12), dp(12))
             background = roundedBackground(cardColor, dp(18))
-        }
-
-        val thumbnailFrame = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            background = roundedBackground(
-                Color.rgb(31, 41, 65),
-                dp(13)
-            )
-            clipToOutline = true
         }
 
         val thumbnail = ImageView(this).apply {
@@ -456,13 +399,11 @@ class SavedVideosActivity : Activity() {
                     )
                 } else {
                     val retriever = MediaMetadataRetriever()
-
                     try {
                         retriever.setDataSource(
                             this@SavedVideosActivity,
                             video.uri
                         )
-
                         retriever.getFrameAtTime(
                             0,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC
@@ -472,46 +413,31 @@ class SavedVideosActivity : Activity() {
                     }
                 }
 
-            if (bitmap != null) {
-                thumbnail.setImageBitmap(bitmap)
-            }
+            if (bitmap != null) thumbnail.setImageBitmap(bitmap)
         } catch (_: Exception) {
-            // Keep the placeholder if the thumbnail cannot be loaded.
+            // Keep the placeholder if a thumbnail cannot be loaded.
         }
 
-        thumbnailFrame.addView(
-            thumbnail,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(185)
-            )
-        )
-
         card.addView(
-            thumbnailFrame,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(185)
-            )
+            thumbnail,
+            LinearLayout.LayoutParams(-1, dp(185))
         )
 
-        val nameText = TextView(this).apply {
+        card.addView(TextView(this).apply {
             text = video.name
             textSize = 16f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             maxLines = 2
             setPadding(dp(2), dp(12), dp(2), dp(3))
-        }
-        card.addView(nameText)
+        })
 
-        val details = TextView(this).apply {
+        card.addView(TextView(this).apply {
             text = "VIDEO  •  ${formatDuration(video.durationMs)}"
             textSize = 12f
             setTextColor(mutedColor)
             setPadding(dp(2), dp(2), 0, dp(12))
-        }
-        card.addView(details)
+        })
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -537,14 +463,12 @@ class SavedVideosActivity : Activity() {
                 marginEnd = dp(5)
             }
         )
-
         buttons.addView(
             shareButton,
             LinearLayout.LayoutParams(0, dp(46), 1f).apply {
                 marginEnd = dp(5)
             }
         )
-
         buttons.addView(
             deleteButton,
             LinearLayout.LayoutParams(0, dp(46), 1f)
@@ -554,10 +478,7 @@ class SavedVideosActivity : Activity() {
 
         listContainer.addView(
             card,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
+            LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = dp(14)
             }
         )
@@ -571,19 +492,13 @@ class SavedVideosActivity : Activity() {
                     "This cannot be undone."
             )
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Delete") { _, _ ->
-                deleteVideo(video)
-            }
+            .setPositiveButton("Delete") { _, _ -> deleteVideo(video) }
             .show()
     }
 
     private fun deleteVideo(video: SavedVideo) {
         try {
-            val deleted = contentResolver.delete(
-                video.uri,
-                null,
-                null
-            )
+            val deleted = contentResolver.delete(video.uri, null, null)
 
             if (deleted > 0) {
                 Toast.makeText(
@@ -591,7 +506,6 @@ class SavedVideosActivity : Activity() {
                     "Video deleted.",
                     Toast.LENGTH_SHORT
                 ).show()
-
                 loadVideos()
             } else {
                 Toast.makeText(
@@ -621,7 +535,6 @@ class SavedVideosActivity : Activity() {
                 setDataAndType(video.uri, "video/*")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(
@@ -637,13 +550,11 @@ class SavedVideosActivity : Activity() {
             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "video/*"
                 putExtra(Intent.EXTRA_STREAM, video.uri)
-
                 clipData = android.content.ClipData.newUri(
                     contentResolver,
                     video.name,
                     video.uri
                 )
-
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
@@ -659,10 +570,7 @@ class SavedVideosActivity : Activity() {
         }
     }
 
-    private fun makeButton(
-        label: String,
-        color: Int
-    ): Button {
+    private fun makeButton(label: String, color: Int): Button {
         return Button(this).apply {
             text = label
             textSize = 12f
@@ -685,7 +593,6 @@ class SavedVideosActivity : Activity() {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = radius.toFloat()
-
             if (strokeColor != null) {
                 setStroke(dp(1), strokeColor)
             }

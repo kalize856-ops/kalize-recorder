@@ -47,6 +47,8 @@ class ScreenRecordingService : Service() {
 
         private const val CHANNEL_ID = "kalize_recording"
         private const val NOTIFICATION_ID = 7401
+        private const val STOP_REQUEST_CODE = 7402
+        private const val OPEN_REQUEST_CODE = 7403
     }
 
     private var projection: MediaProjection? = null
@@ -86,7 +88,9 @@ class ScreenRecordingService : Service() {
 
         createNotificationChannel()
 
-        val notification = buildNotification("Preparing screen recording…")
+        val notification = buildNotification(
+            "Preparing screen recording…"
+        )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
@@ -123,7 +127,7 @@ class ScreenRecordingService : Service() {
         try {
             startRecording(resultCode, resultData, quality, fps)
             updateNotification(
-                "Recording screen — return to Kalize Recorder to stop"
+                "Recording screen — tap STOP RECORDING to finish"
             )
         } catch (error: Exception) {
             Toast.makeText(
@@ -200,7 +204,9 @@ class ScreenRecordingService : Service() {
             mediaRecorder.setOutputFile(outputFileDescriptor.fileDescriptor)
         } else {
             val file = legacyOutputFile
-                ?: throw IllegalStateException("Could not prepare the output file")
+                ?: throw IllegalStateException(
+                    "Could not prepare the output file"
+                )
             mediaRecorder.setOutputFile(file.absolutePath)
         }
 
@@ -241,7 +247,6 @@ class ScreenRecordingService : Service() {
         displayName: String
     ): android.os.ParcelFileDescriptor? {
 
-        // A folder selected by the user can be on phone storage or an SD card.
         val treeUri = requestedTreeUri
 
         if (treeUri != null) {
@@ -291,7 +296,6 @@ class ScreenRecordingService : Service() {
             }
         }
 
-        // Default save location on Android 10 and newer.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
@@ -323,7 +327,6 @@ class ScreenRecordingService : Service() {
             }
         }
 
-        // Default location for older Android versions.
         val movies = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
             ?: throw IllegalStateException("Phone storage is unavailable")
 
@@ -406,7 +409,6 @@ class ScreenRecordingService : Service() {
                     }
                 }
             } else if (!saved) {
-                // Remove an incomplete recording from a custom phone/SD-card folder.
                 try {
                     DocumentsContract.deleteDocument(contentResolver, uri)
                 } catch (_: Exception) {
@@ -453,7 +455,8 @@ class ScreenRecordingService : Service() {
                 "Screen recording",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows when Kalize Recorder is capturing the screen."
+                description =
+                    "Shows when Kalize Recorder is capturing the screen."
             }
 
             getSystemService(NotificationManager::class.java)
@@ -464,9 +467,25 @@ class ScreenRecordingService : Service() {
     private fun buildNotification(message: String): Notification {
         val openApp = PendingIntent.getActivity(
             this,
-            0,
+            OPEN_REQUEST_CODE,
             Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val stopIntent = Intent(
+            this,
+            ScreenRecordingService::class.java
+        ).apply {
+            action = ACTION_STOP
+        }
+
+        val stopPendingIntent = PendingIntent.getService(
+            this,
+            STOP_REQUEST_CODE,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
@@ -477,6 +496,11 @@ class ScreenRecordingService : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(
+                android.R.drawable.ic_media_pause,
+                "STOP RECORDING",
+                stopPendingIntent
+            )
             .build()
     }
 

@@ -19,6 +19,8 @@ import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.text.Editable
+import android.text.TextWatcher
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -61,6 +63,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var exportStatus: TextView
     private lateinit var exportProgressBar: ProgressBar
     private lateinit var exportNameInput: EditText
+    private lateinit var trimSummaryLabel: TextView
 
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -229,6 +232,39 @@ class VideoEditorActivity : Activity() {
 
         endInput = makeTimeInput("End time", "")
         trimCard.addView(endInput, matchWrap())
+
+        // NEW: LIVE TRIM SUMMARY
+        trimSummaryLabel = TextView(this).apply {
+            text = "Clip length: choose a video and set your trim range."
+            textSize = 12f
+            setTextColor(Color.rgb(190, 174, 255))
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+            setBackgroundColor(Color.rgb(34, 29, 57))
+        }
+        trimCard.addView(trimSummaryLabel, matchWrap())
+
+        val trimWatcher = object : TextWatcher {
+            override fun beforeTextChanged(
+                s: CharSequence?,
+                start: Int,
+                count: Int,
+                after: Int
+            ) {}
+
+            override fun onTextChanged(
+                s: CharSequence?,
+                start: Int,
+                before: Int,
+                count: Int
+            ) {
+                refreshTrimSummary()
+            }
+
+            override fun afterTextChanged(s: Editable?) {}
+        }
+
+        startInput.addTextChangedListener(trimWatcher)
+        endInput.addTextChangedListener(trimWatcher)
 
         val fullClipButton = makeButton("Use full clip duration", false)
         fullClipButton.setOnClickListener {
@@ -399,6 +435,35 @@ class VideoEditorActivity : Activity() {
         )
 
         setContentView(root)
+    }
+
+    // NEW: Updates the selected clip length as the times change.
+    private fun refreshTrimSummary() {
+        val durationMs = durationLabel.tag as? Long ?: 0L
+        val start = startInput.text.toString().toDoubleOrNull()
+        val end = endInput.text.toString().toDoubleOrNull()
+
+        trimSummaryLabel.text = when {
+            selectedVideo == null || durationMs <= 0L ->
+                "Clip length: choose a video first."
+
+            start == null || end == null ->
+                "Clip length: enter start and end times."
+
+            start < 0.0 || end <= start ->
+                "Clip length: check that the end time is after the start time."
+
+            end * 1000.0 > durationMs + 100 ->
+                "Clip length: the end time exceeds the video duration."
+
+            else -> {
+                val clipMs = ((end - start) * 1000.0).toLong()
+                val startText = String.format(Locale.US, "%.2f", start)
+                val endText = String.format(Locale.US, "%.2f", end)
+
+                "Selected clip: ${formatDuration(clipMs)}  •  From ${startText}s to ${endText}s"
+            }
+        }
     }
 
     private fun applyTrimPreset(seconds: Int) {
@@ -577,6 +642,8 @@ class VideoEditorActivity : Activity() {
                         exportButton.isEnabled = durationMs > 0L
                         exportButton.alpha =
                             if (durationMs > 0L) 1f else 0.5f
+
+                        refreshTrimSummary()
                     }
                 }
             }

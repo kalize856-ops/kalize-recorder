@@ -492,10 +492,13 @@ class SavedVideosActivity : Activity() {
             else -> filteredVideos.sortedByDescending { it.dateAdded }
         }
 
-        statusText.text = if (allVideos.size == 1) {
-            "1 video in your library"
+        statusText.text = if (query.isNotBlank()) {
+            "Showing ${sortedVideos.size} of ${allVideos.size} videos"
         } else {
-            "${allVideos.size} videos in your library"
+            when (allVideos.size) {
+                1 -> "1 video in your library"
+                else -> "${allVideos.size} videos in your library"
+            }
         }
 
         if (sortedVideos.isEmpty()) {

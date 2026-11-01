@@ -133,12 +133,25 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        val settings = getSharedPreferences(
+            "kalize_settings",
+            MODE_PRIVATE
+        )
+
         setContent {
             KalizeHome(
-                initialFolderUri = getSharedPreferences(
-                    "kalize_settings",
-                    MODE_PRIVATE
-                ).getString("save_tree_uri", null),
+                initialFolderUri = settings.getString(
+                    "save_tree_uri",
+                    null
+                ),
+                initialQuality = settings.getString(
+                    "recording_quality",
+                    "1080p"
+                ) ?: "1080p",
+                initialFps = settings.getString(
+                    "recording_fps",
+                    "30 FPS"
+                ) ?: "30 FPS",
 
                 onStartRecording = { quality, fps, folderUri, onResult ->
                     requestedQuality = quality
@@ -203,6 +216,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KalizeHome(
     initialFolderUri: String?,
+    initialQuality: String,
+    initialFps: String,
     onStartRecording: (
         String,
         Int,
@@ -215,8 +230,23 @@ private fun KalizeHome(
 ) {
     var recording by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
-    var quality by remember { mutableStateOf("1080p") }
-    var fps by remember { mutableStateOf("30 FPS") }
+
+    var quality by remember {
+        mutableStateOf(
+            initialQuality.takeIf {
+                it in listOf("360p", "480p", "720p", "1080p", "1440p", "4K")
+            } ?: "1080p"
+        )
+    }
+
+    var fps by remember {
+        mutableStateOf(
+            initialFps.takeIf {
+                it in listOf("30 FPS", "60 FPS")
+            } ?: "30 FPS"
+        )
+    }
+
     var showAboutDialog by remember { mutableStateOf(false) }
 
     var status by remember {
@@ -288,7 +318,6 @@ private fun KalizeHome(
                 .padding(horizontal = 20.dp, vertical = 22.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            // Premium brand header.
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -363,7 +392,6 @@ private fun KalizeHome(
                 }
             }
 
-            // Hero section.
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -384,7 +412,6 @@ private fun KalizeHome(
                 )
             }
 
-            // Recording studio card.
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(26.dp),
@@ -446,9 +473,7 @@ private fun KalizeHome(
                         }
                     }
 
-                    HorizontalDivider(
-                        color = Border
-                    )
+                    HorizontalDivider(color = Border)
 
                     Text(
                         status,
@@ -541,7 +566,6 @@ private fun KalizeHome(
                 }
             }
 
-            // Capture settings.
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -578,7 +602,13 @@ private fun KalizeHome(
                                 "1440p",
                                 "4K"
                             ),
-                            onSelect = { quality = it }
+                            onSelect = {
+                                quality = it
+                                prefs.edit()
+                                    .putString("recording_quality", it)
+                                    .apply()
+                                status = "Resolution saved: $it"
+                            }
                         )
 
                         HorizontalDivider(color = Border)
@@ -588,7 +618,13 @@ private fun KalizeHome(
                             description = "Target frames per second",
                             value = fps,
                             options = listOf("30 FPS", "60 FPS"),
-                            onSelect = { fps = it }
+                            onSelect = {
+                                fps = it
+                                prefs.edit()
+                                    .putString("recording_fps", it)
+                                    .apply()
+                                status = "Frame rate saved: $it"
+                            }
                         )
 
                         Text(
@@ -601,7 +637,6 @@ private fun KalizeHome(
                 }
             }
 
-            // Storage controls.
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -695,7 +730,6 @@ private fun KalizeHome(
                 }
             }
 
-            // Video tools.
             Column(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
@@ -744,7 +778,6 @@ private fun KalizeHome(
                 )
             }
 
-            // About card.
             Card(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(

@@ -3,6 +3,9 @@ name: Extract Android Source
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/extract-source.yml'
 
 permissions:
   contents: write
@@ -15,7 +18,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Extract editable Android project
+      - name: Check source ZIP exists
+        run: |
+          test -f kalize_recorder_source_download.zip
+
+      - name: Extract Android project
         run: |
           mkdir -p /tmp/kalize-source
           unzip -o kalize_recorder_source_download.zip -d /tmp/kalize-source
@@ -23,7 +30,7 @@ jobs:
           mkdir -p android
           cp -R /tmp/kalize-source/android/. android/
 
-      - name: Commit source files to GitHub
+      - name: Commit extracted source
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

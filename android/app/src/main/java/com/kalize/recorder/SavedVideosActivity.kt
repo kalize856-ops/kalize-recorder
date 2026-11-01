@@ -57,6 +57,13 @@ class SavedVideosActivity : Activity() {
     private val accentColor = Color.rgb(139, 92, 246)
     private val accentBlue = Color.rgb(65, 105, 225)
 
+    private val sortPreferences by lazy {
+        getSharedPreferences(
+            "saved_videos_preferences",
+            MODE_PRIVATE
+        )
+    }
+
     private val sortOptions = arrayOf(
         "Newest first",
         "Oldest first",
@@ -129,6 +136,7 @@ class SavedVideosActivity : Activity() {
             refreshButton,
             LinearLayout.LayoutParams(dp(52), dp(48))
         )
+
         root.addView(header)
 
         val summaryCard = LinearLayout(this).apply {
@@ -156,6 +164,7 @@ class SavedVideosActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
             setPadding(0, dp(6), 0, dp(3))
         }
+
         summaryCard.addView(statusText)
 
         summaryCard.addView(TextView(this).apply {
@@ -272,6 +281,14 @@ class SavedVideosActivity : Activity() {
                 )
             }
 
+            // Restore the user's previous sorting choice.
+            val savedSortPosition = sortPreferences.getInt(
+                "sort_position",
+                0
+            ).coerceIn(0, sortOptions.lastIndex)
+
+            setSelection(savedSortPosition)
+
             setPadding(dp(10), dp(4), dp(10), dp(4))
             background = roundedBackground(
                 Color.rgb(24, 32, 51),
@@ -287,6 +304,11 @@ class SavedVideosActivity : Activity() {
                         position: Int,
                         id: Long
                     ) {
+                        // Save the chosen sorting option for next time.
+                        sortPreferences.edit()
+                            .putInt("sort_position", position)
+                            .apply()
+
                         displayVideos()
                     }
 
@@ -347,6 +369,7 @@ class SavedVideosActivity : Activity() {
             "←  Back to Video Editor",
             Color.rgb(39, 48, 70)
         )
+
         backButton.setOnClickListener { finish() }
 
         root.addView(

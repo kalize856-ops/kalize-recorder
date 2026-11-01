@@ -4,6 +4,7 @@ package com.kalize.recorder
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Bitmap
@@ -589,12 +590,131 @@ class SavedVideosActivity : Activity() {
             }
         )
 
+        val renameButton = makeButton(
+            "✎  Rename video",
+            Color.rgb(39, 48, 70)
+        )
+        renameButton.setOnClickListener { showRenameDialog(video) }
+
+        card.addView(
+            renameButton,
+            LinearLayout.LayoutParams(-1, dp(46)).apply {
+                topMargin = dp(8)
+            }
+        )
+
         listContainer.addView(
             card,
             LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = dp(14)
             }
         )
+    }
+
+    private fun showRenameDialog(video: SavedVideo) {
+        val nameInput = EditText(this).apply {
+            setText(video.name.substringBeforeLast('.', video.name))
+            hint = "Enter a new video name"
+            isSingleLine = true
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+        }
+
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), 0)
+
+            addView(
+                nameInput,
+                LinearLayout.LayoutParams(-1, dp(52))
+            )
+
+            addView(TextView(this@SavedVideosActivity).apply {
+                text = ".mp4 will be added automatically."
+                textSize = 12f
+                setTextColor(mutedColor)
+                setPadding(0, dp(6), 0, 0)
+            })
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Rename video")
+            .setView(container)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Save", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener {
+                    val typedName = nameInput.text.toString().trim()
+
+                    val safeName = typedName
+                        .substringBeforeLast('.', typedName)
+                        .replace(Regex("[^A-Za-z0-9 _-]"), "")
+                        .trim()
+                        .replace(Regex("\\s+"), "_")
+                        .take(60)
+
+                    if (safeName.isBlank()) {
+                        nameInput.error = "Enter a valid file name"
+                        return@setOnClickListener
+                    }
+
+                    val newName = "$safeName.mp4"
+
+                    if (newName.equals(video.name, ignoreCase = true)) {
+                        dialog.dismiss()
+                        return@setOnClickListener
+                    }
+
+                    try {
+                        val values = ContentValues().apply {
+                            put(
+                                MediaStore.Video.Media.DISPLAY_NAME,
+                                newName
+                            )
+                        }
+
+                        val updated = contentResolver.update(
+                            video.uri,
+                            values,
+                            null,
+                            null
+                        )
+
+                        if (updated > 0) {
+                            Toast.makeText(
+                                this,
+                                "Video renamed.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                            dialog.dismiss()
+                            loadVideos()
+                        } else {
+                            Toast.makeText(
+                                this,
+                                "Could not rename this video.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    } catch (_: SecurityException) {
+                        Toast.makeText(
+                            this,
+                            "Android did not allow this rename. Try renaming a video saved by Kalize Recorder.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    } catch (_: Exception) {
+                        Toast.makeText(
+                            this,
+                            "Could not rename this video.",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+        }
+
+        dialog.show()
     }
 
     private fun showVideoDetails(video: SavedVideo) {
@@ -639,7 +759,9 @@ class SavedVideosActivity : Activity() {
                     "This cannot be undone."
             )
             .setNegativeButton("Cancel", null)
-            .setPositiveButton("Delete") { _, _ -> deleteVideo(video) }
+            .setPositiveButton("Delete") { _, _ ->
+                deleteVideo(video)
+            }
             .show()
     }
 

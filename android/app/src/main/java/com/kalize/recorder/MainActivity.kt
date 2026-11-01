@@ -3,8 +3,9 @@ package com.kalize.recorder
 
 import android.Manifest
 import android.app.Activity
-import android.content.Intent
 import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 
 private val Night = Color(0xFF080A12)
 private val Panel = Color(0xFF141827)
@@ -43,6 +45,7 @@ private val Muted = Color(0xFF9AA4BC)
 private val Border = Color(0xFF2B3146)
 
 class MainActivity : ComponentActivity() {
+
     private lateinit var captureLauncher: ActivityResultLauncher<Intent>
     private lateinit var microphoneLauncher: ActivityResultLauncher<String>
 
@@ -82,8 +85,10 @@ class MainActivity : ComponentActivity() {
             if (result.resultCode == Activity.RESULT_OK && data != null) {
                 if (screenshotRequested) {
                     screenshotRequested = false
+
                     val screenshotIntent = Intent(
-                        this, ScreenshotService::class.java
+                        this,
+                        ScreenshotService::class.java
                     ).apply {
                         putExtra(
                             ScreenshotService.EXTRA_RESULT_CODE,
@@ -94,6 +99,7 @@ class MainActivity : ComponentActivity() {
                             data
                         )
                     }
+
                     ContextCompat.startForegroundService(
                         this,
                         screenshotIntent
@@ -128,6 +134,7 @@ class MainActivity : ComponentActivity() {
                                 ScreenRecordingService.EXTRA_AUDIO_ENABLED,
                                 requestedAudio
                             )
+
                             requestedFolderUri?.let {
                                 putExtra(
                                     ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
@@ -243,6 +250,7 @@ class MainActivity : ComponentActivity() {
                     pendingRecordingStart?.let {
                         countdownHandler.removeCallbacks(it)
                     }
+
                     pendingRecordingStart = null
                     waitingForMicrophone = false
                     requestResultHandler = null
@@ -257,7 +265,10 @@ class MainActivity : ComponentActivity() {
                     )
 
                     stopService(
-                        Intent(this, FloatingBubbleService::class.java)
+                        Intent(
+                            this,
+                            FloatingBubbleService::class.java
+                        )
                     )
                 },
                 onEnableBubble = {
@@ -270,7 +281,10 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         startService(
-                            Intent(this, FloatingBubbleService::class.java)
+                            Intent(
+                                this,
+                                FloatingBubbleService::class.java
+                            )
                         )
                     }
                 }
@@ -312,17 +326,29 @@ private fun KalizeHome(
     onEnableBubble: () -> Unit
 ) {
     var recording by remember { mutableStateOf(false) }
+    var paused by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+
+    var elapsedSeconds by remember { mutableIntStateOf(0) }
+
     var quality by remember { mutableStateOf(initialQuality) }
     var fps by remember { mutableStateOf(initialFps) }
+
     var countdown by remember {
         mutableIntStateOf(initialCountdownSeconds)
     }
-    var audioEnabled by remember { mutableStateOf(initialAudio) }
-    var status by remember {
-        mutableStateOf("Ready when you are. Start a capture to begin.")
+
+    var audioEnabled by remember {
+        mutableStateOf(initialAudio)
     }
+
+    var status by remember {
+        mutableStateOf(
+            "Ready when you are. Start a capture to begin."
+        )
+    }
+
     var saveFolderUri by remember {
         mutableStateOf(initialFolderUri)
     }
@@ -332,15 +358,32 @@ private fun KalizeHome(
     val prefs = remember {
         context.getSharedPreferences(
             "kalize_settings",
-            android.content.Context.MODE_PRIVATE
+            Context.MODE_PRIVATE
         )
     }
 
     val recordingPrefs = remember {
         context.getSharedPreferences(
             "kalize_recording_state",
-            android.content.Context.MODE_PRIVATE
+            Context.MODE_PRIVATE
         )
+    }
+
+    // Live timer: counts only while recording is active and not paused.
+    LaunchedEffect(recording, paused) {
+        while (recording && !paused) {
+            delay(1000L)
+            elapsedSeconds += 1
+        }
+    }
+
+    // Format elapsed time as HH:MM:SS.
+    val formattedTime = remember(elapsedSeconds) {
+        val hours = elapsedSeconds / 3600
+        val minutes = (elapsedSeconds % 3600) / 60
+        val seconds = elapsedSeconds % 60
+
+        "%02d:%02d:%02d".format(hours, minutes, seconds)
     }
 
     DisposableEffect(context) {
@@ -348,7 +391,12 @@ private fun KalizeHome(
             isRecording: Boolean,
             isPaused: Boolean
         ) {
+            if (isRecording && !recording) {
+                elapsedSeconds = 0
+            }
+
             recording = isRecording
+            paused = isPaused
             requesting = false
 
             status = when {
@@ -370,7 +418,7 @@ private fun KalizeHome(
 
         val stateReceiver = object : BroadcastReceiver() {
             override fun onReceive(
-                receiverContext: android.content.Context?,
+                receiverContext: Context?,
                 intent: Intent?
             ) {
                 if (
@@ -428,7 +476,8 @@ private fun KalizeHome(
                 saveFolderUri = uri.toString()
                 status = "Your new recording folder is selected."
             } catch (_: Exception) {
-                status = "Could not access that folder. Please try again."
+                status =
+                    "Could not access that folder. Please try again."
             }
         }
     }
@@ -495,6 +544,7 @@ private fun KalizeHome(
                 ) {
                     Text(
                         when {
+                            recording && paused -> "Recording paused"
                             recording -> "Recording active"
                             requesting -> "Waiting for approval or countdown"
                             else -> "Ready to record"
@@ -503,6 +553,65 @@ private fun KalizeHome(
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Bold
                     )
+
+                    // Live recording timer display.
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFF0B0D17)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (recording && !paused) {
+                                Violet
+                            } else {
+                                Border
+                            }
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "RECORDING TIME",
+                                color = Muted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                formattedTime,
+                                color = if (recording && !paused) {
+                                    VioletBright
+                                } else {
+                                    Color.White
+                                },
+                                fontSize = 34.sp,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+
+                            Text(
+                                when {
+                                    paused -> "PAUSED"
+                                    recording -> "● LIVE"
+                                    requesting -> "STARTING"
+                                    else -> "00:00:00 READY"
+                                },
+                                color = when {
+                                    paused -> Color(0xFFFFC857)
+                                    recording -> Color(0xFFFF6B78)
+                                    else -> Muted
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
 
                     Text(
                         status,
@@ -515,10 +624,15 @@ private fun KalizeHome(
                             if (recording || requesting) {
                                 onStopRecording()
                                 recording = false
+                                paused = false
                                 requesting = false
-                                status = "Stop requested. Check your save folder."
+                                elapsedSeconds = 0
+                                status =
+                                    "Stop requested. Check your save folder."
                             } else {
+                                elapsedSeconds = 0
                                 requesting = true
+
                                 status = if (audioEnabled) {
                                     "Approve microphone access if asked, then approve screen capture."
                                 } else {
@@ -527,13 +641,16 @@ private fun KalizeHome(
 
                                 onStartRecording(
                                     quality,
-                                    fps.removeSuffix(" FPS").toIntOrNull() ?: 30,
+                                    fps.removeSuffix(" FPS")
+                                        .toIntOrNull() ?: 30,
                                     saveFolderUri,
                                     countdown,
                                     audioEnabled
                                 ) { approved ->
                                     requesting = false
                                     recording = approved
+                                    paused = false
+
                                     status = if (approved) {
                                         "Recording started. Use STOP to finish."
                                     } else {
@@ -547,11 +664,12 @@ private fun KalizeHome(
                             .height(54.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (recording || requesting) {
-                                Color(0xFFB9475B)
-                            } else {
-                                Violet
-                            }
+                            containerColor =
+                                if (recording || requesting) {
+                                    Color(0xFFB9475B)
+                                } else {
+                                    Violet
+                                }
                         )
                     ) {
                         Text(
@@ -567,7 +685,8 @@ private fun KalizeHome(
                     OutlinedButton(
                         onClick = {
                             onTakeScreenshot()
-                            status = "Approve Android's prompt to capture a screenshot."
+                            status =
+                                "Approve Android's prompt to capture a screenshot."
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -600,7 +719,10 @@ private fun KalizeHome(
                             onCheckedChange = {
                                 audioEnabled = it
                                 prefs.edit()
-                                    .putBoolean("recording_audio_enabled", it)
+                                    .putBoolean(
+                                        "recording_audio_enabled",
+                                        it
+                                    )
                                     .apply()
 
                                 status = if (it) {
@@ -628,7 +750,9 @@ private fun KalizeHome(
 
             Card(
                 shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = Panel),
+                colors = CardDefaults.cardColors(
+                    containerColor = Panel
+                ),
                 border = BorderStroke(1.dp, Border)
             ) {
                 Column(
@@ -639,10 +763,15 @@ private fun KalizeHome(
                         "Resolution",
                         "Target recording resolution",
                         quality,
-                        listOf("360p", "480p", "720p", "1080p", "1440p", "4K")
+                        listOf(
+                            "360p", "480p", "720p",
+                            "1080p", "1440p", "4K"
+                        )
                     ) {
                         quality = it
-                        prefs.edit().putString("recording_quality", it).apply()
+                        prefs.edit()
+                            .putString("recording_quality", it)
+                            .apply()
                         status = "Resolution saved: $it"
                     }
 
@@ -655,7 +784,9 @@ private fun KalizeHome(
                         listOf("30 FPS", "60 FPS")
                     ) {
                         fps = it
-                        prefs.edit().putString("recording_fps", it).apply()
+                        prefs.edit()
+                            .putString("recording_fps", it)
+                            .apply()
                         status = "Frame rate saved: $it"
                     }
 
@@ -664,7 +795,11 @@ private fun KalizeHome(
                     SettingDropdown(
                         "Recording countdown",
                         "Delay after Android approval",
-                        if (countdown == 0) "Off" else "$countdown seconds",
+                        if (countdown == 0) {
+                            "Off"
+                        } else {
+                            "$countdown seconds"
+                        },
                         listOf(
                             "Off", "3 seconds", "5 seconds",
                             "10 seconds", "15 seconds", "30 seconds"
@@ -678,7 +813,10 @@ private fun KalizeHome(
                         }
 
                         prefs.edit()
-                            .putInt("recording_countdown_seconds", countdown)
+                            .putInt(
+                                "recording_countdown_seconds",
+                                countdown
+                            )
                             .apply()
 
                         status = if (countdown == 0) {
@@ -703,7 +841,9 @@ private fun KalizeHome(
 
             Card(
                 shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = Panel),
+                colors = CardDefaults.cardColors(
+                    containerColor = Panel
+                ),
                 border = BorderStroke(1.dp, Border)
             ) {
                 Column(
@@ -744,7 +884,9 @@ private fun KalizeHome(
                     OutlinedButton(
                         onClick = {
                             saveFolderUri = null
-                            prefs.edit().remove("save_tree_uri").apply()
+                            prefs.edit()
+                                .remove("save_tree_uri")
+                                .apply()
                             status = "Default phone storage selected."
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -857,13 +999,16 @@ private fun SectionTitle(
     title: String,
     subtitle: String
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
         Text(
             title,
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
+
         Text(
             subtitle,
             color = Muted,
@@ -886,14 +1031,18 @@ private fun SettingDropdown(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
             Text(
                 title,
                 color = Color.White,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold
             )
+
             Spacer(Modifier.height(4.dp))
+
             Text(
                 description,
                 color = Muted,
@@ -942,7 +1091,9 @@ private fun ToolButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = Panel),
+        colors = CardDefaults.cardColors(
+            containerColor = Panel
+        ),
         border = BorderStroke(1.dp, Border)
     ) {
         Column(
@@ -955,6 +1106,7 @@ private fun ToolButton(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
+
             Text(
                 subtitle,
                 color = Muted,

@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +53,7 @@ private val ToolsPanel = Color(0xFF171727)
 private val ToolsPurple = Color(0xFF8B5CF6)
 private val ToolsText = Color(0xFFF5F3FF)
 private val ToolsMuted = Color(0xFFB7B4CC)
+private val ToolsBlue = Color(0xFF365DD8)
 
 class PerformanceToolsActivity : ComponentActivity() {
 
@@ -68,80 +68,62 @@ class PerformanceToolsActivity : ComponentActivity() {
                 ) {
                     PerformanceToolsScreen(
                         onBack = { finish() },
+                        batteryInfo = getBatteryInfo(),
+                        deviceInfo = getDeviceInfo(),
                         onBatterySettings = {
-                            openSettings(
-                                Settings.ACTION_BATTERY_SAVER_SETTINGS
-                            )
+                            openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS)
                         },
                         onDisplaySettings = {
-                            openSettings(
-                                Settings.ACTION_DISPLAY_SETTINGS
-                            )
+                            openSettings(Settings.ACTION_DISPLAY_SETTINGS)
+                        },
+                        onWifiSettings = {
+                            openSettings(Settings.ACTION_WIFI_SETTINGS)
                         },
                         onAppSettings = {
                             openSettings(
                                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                                 Uri.parse("package:$packageName")
                             )
-                        },
-                        onWifiSettings = {
-                            openSettings(
-                                Settings.ACTION_WIFI_SETTINGS
-                            )
-                        },
-                        deviceInfo = getDeviceInfo(),
-                        batteryInfo = getBatteryInfo()
+                        }
                     )
                 }
             }
         }
     }
 
-    private fun openSettings(
-        action: String,
-        uri: Uri? = null
-    ) {
+    private fun openSettings(action: String, uri: Uri? = null) {
         try {
             val intent = Intent(action)
-            if (uri != null) {
-                intent.data = uri
-            }
+            if (uri != null) intent.data = uri
             startActivity(intent)
         } catch (_: Exception) {
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (_: Exception) {
-                // Settings could not be opened.
+                // Settings are unavailable on this device.
             }
         }
     }
 
     private fun getDeviceInfo(): String {
-        val memoryManager =
-            getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val manager = getSystemService(ACTIVITY_SERVICE) as ActivityManager
+        val memory = ActivityManager.MemoryInfo()
+        manager.getMemoryInfo(memory)
 
-        val memoryInfo = ActivityManager.MemoryInfo()
-        memoryManager.getMemoryInfo(memoryInfo)
-
-        val totalRamGb =
-            memoryInfo.totalMem / (1024.0 * 1024.0 * 1024.0)
-
-        val availableRamGb =
-            memoryInfo.availMem / (1024.0 * 1024.0 * 1024.0)
+        val totalRam = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
+        val availableRam = memory.availMem / (1024.0 * 1024.0 * 1024.0)
 
         return buildString {
             appendLine("Manufacturer: ${Build.MANUFACTURER}")
-            appendLine("Model: ${Build.MODEL}")
-            appendLine("Android version: ${Build.VERSION.RELEASE}")
+            appendLine("Device: ${Build.MODEL}")
+            appendLine("Android: ${Build.VERSION.RELEASE}")
             appendLine("SDK level: ${Build.VERSION.SDK_INT}")
             appendLine(
-                "Total RAM: ${
-                    String.format(Locale.US, "%.2f", totalRamGb)
-                } GB"
+                "Total RAM: ${String.format(Locale.US, "%.2f", totalRam)} GB"
             )
             append(
                 "Available RAM: ${
-                    String.format(Locale.US, "%.2f", availableRamGb)
+                    String.format(Locale.US, "%.2f", availableRam)
                 } GB"
             )
         }
@@ -149,101 +131,63 @@ class PerformanceToolsActivity : ComponentActivity() {
 
     private fun getBatteryInfo(): String {
         return try {
-            val batteryIntent = registerReceiver(
+            val intent = registerReceiver(
                 null,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            )
+            ) ?: return "Battery information is unavailable."
 
-            if (batteryIntent == null) {
-                return "Battery information is unavailable."
-            }
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val percent = if (level >= 0 && scale > 0) {
+                level * 100 / scale
+            } else -1
 
-            val level = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_LEVEL,
-                -1
-            )
-            val scale = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_SCALE,
-                -1
-            )
-
-            val percentage = if (level >= 0 && scale > 0) {
-                (level * 100) / scale
-            } else {
-                -1
-            }
-
-            val status = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_STATUS,
-                -1
-            )
-
-            val chargingStatus = when (status) {
+            val status = when (
+                intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            ) {
                 BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
                 BatteryManager.BATTERY_STATUS_FULL -> "Fully charged"
                 BatteryManager.BATTERY_STATUS_DISCHARGING -> "Discharging"
-                BatteryManager.BATTERY_STATUS_NOT_CHARGING ->
-                    "Not charging"
-                else -> "Status unavailable"
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING -> "Not charging"
+                else -> "Unknown"
             }
 
-            val plugged = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_PLUGGED,
-                0
+            val temperature = intent.getIntExtra(
+                BatteryManager.EXTRA_TEMPERATURE, -1
             )
 
-            val powerSource = when (plugged) {
-                BatteryManager.BATTERY_PLUGGED_AC -> "AC charger"
-                BatteryManager.BATTERY_PLUGGED_USB -> "USB"
-                BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless charger"
-                else -> "Not connected or unknown"
-            }
-
-            val temperatureTenths = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_TEMPERATURE,
-                -1
-            )
-
-            val temperature = if (temperatureTenths >= 0) {
-                String.format(
-                    Locale.US,
-                    "%.1f°C",
-                    temperatureTenths / 10.0
-                )
-            } else {
-                "Unavailable"
-            }
-
-            val healthCode = batteryIntent.getIntExtra(
-                BatteryManager.EXTRA_HEALTH,
-                -1
-            )
-
-            val health = when (healthCode) {
+            val health = when (
+                intent.getIntExtra(BatteryManager.EXTRA_HEALTH, -1)
+            ) {
                 BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
                 BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheating"
-                BatteryManager.BATTERY_HEALTH_DEAD -> "Battery failure reported"
+                BatteryManager.BATTERY_HEALTH_DEAD -> "Failure reported"
+                BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
                 BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE ->
                     "Over-voltage reported"
-                BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
                 BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE ->
-                    "Issue reported by Android"
+                    "Issue reported"
                 else -> "Not reported"
             }
 
             buildString {
                 appendLine(
-                    "Battery level: ${
-                        if (percentage >= 0) "$percentage%" else "Unavailable"
+                    "Charge: ${if (percent >= 0) "$percent%" else "Unavailable"}"
+                )
+                appendLine("Status: $status")
+                appendLine(
+                    "Temperature: ${
+                        if (temperature >= 0) {
+                            String.format(
+                                Locale.US, "%.1f°C", temperature / 10.0
+                            )
+                        } else "Unavailable"
                     }"
                 )
-                appendLine("Charging status: $chargingStatus")
-                appendLine("Power source: $powerSource")
-                appendLine("Battery temperature: $temperature")
-                append("Reported battery condition: $health")
+                append("Reported condition: $health")
             }
         } catch (_: Exception) {
-            "Could not read battery information on this device."
+            "Could not read battery information."
         }
     }
 }
@@ -251,34 +195,24 @@ class PerformanceToolsActivity : ComponentActivity() {
 @Composable
 private fun PerformanceToolsScreen(
     onBack: () -> Unit,
+    batteryInfo: String,
+    deviceInfo: String,
     onBatterySettings: () -> Unit,
     onDisplaySettings: () -> Unit,
-    onAppSettings: () -> Unit,
     onWifiSettings: () -> Unit,
-    deviceInfo: String,
-    batteryInfo: String
+    onAppSettings: () -> Unit
 ) {
     var networkRunning by remember { mutableStateOf(false) }
     var networkResult by remember {
-        mutableStateOf(
-            "Run a test to check connection latency and download speed."
-        )
+        mutableStateOf("Run a test to estimate network latency and speed.")
     }
 
     var cpuRunning by remember { mutableStateOf(false) }
     var cpuResult by remember {
-        mutableStateOf(
-            "Run the benchmark to measure a short CPU workload."
-        )
+        mutableStateOf("Run a short calculation benchmark.")
     }
 
-    var boosterMessage by remember {
-        mutableStateOf(
-            "Choose a shortcut to open your phone's performance settings."
-        )
-    }
-
-    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val handler = remember { Handler(Looper.getMainLooper()) }
 
     Column(
         modifier = Modifier
@@ -288,21 +222,30 @@ private fun PerformanceToolsScreen(
             .padding(18.dp)
     ) {
         Text(
-            text = "Performance Tools",
-            color = ToolsText,
-            fontSize = 27.sp,
+            "KALIZE STUDIO  /  DEVICE TOOLS",
+            color = ToolsPurple,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(6.dp))
+        Spacer(Modifier.height(8.dp))
 
         Text(
-            text = "Game Booster • Network Tester • CPU Benchmark",
-            color = ToolsMuted,
-            fontSize = 13.sp
+            "Performance Tools",
+            color = ToolsText,
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            "Battery • Game settings • Network • CPU",
+            color = ToolsMuted,
+            fontSize = 14.sp
+        )
+
+        Spacer(Modifier.height(16.dp))
 
         Button(
             onClick = onBack,
@@ -314,364 +257,216 @@ private fun PerformanceToolsScreen(
             Text("← Back")
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(Modifier.height(16.dp))
 
-        ToolPanel(
-            title = "🔋 Battery Status",
-            subtitle = "Battery details reported by Android"
-        ) {
-            Text(
-                text = batteryInfo,
-                color = ToolsText,
-                fontSize = 15.sp,
-                lineHeight = 24.sp
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = "This screen shows available battery readings. " +
-                    "The reported condition is not a professional battery " +
-                    "health or remaining-lifespan test.",
-                color = ToolsMuted,
-                fontSize = 12.sp
+        ToolPanel("🔋 Battery Status", "Information reported by Android") {
+            InfoText(batteryInfo)
+            Spacer(Modifier.height(8.dp))
+            InfoText(
+                "Battery readings are estimates from Android, not a " +
+                    "professional battery-health or lifespan test.",
+                muted = true
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            title = "🎮 Game Booster",
-            subtitle = "Quick access to useful phone settings"
-        ) {
-            Text(
-                text = "Use these shortcuts to prepare your phone for gaming.",
-                color = ToolsMuted,
-                fontSize = 14.sp
+        ToolPanel("🎮 Game Booster", "Quick access to phone settings") {
+            InfoText(
+                "Use these shortcuts to adjust your phone before gaming. " +
+                    "Available options depend on your device."
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
-            ToolButton(
-                text = "Battery and power settings",
-                onClick = onBatterySettings
-            )
+            ToolButton("Battery and power settings", onBatterySettings)
+            ToolButton("Display settings", onDisplaySettings)
+            ToolButton("Wi-Fi settings", onWifiSettings)
+            ToolButton("Kalize Recorder app settings", onAppSettings)
 
-            ToolButton(
-                text = "Display and refresh settings",
-                onClick = onDisplaySettings
-            )
+            Spacer(Modifier.height(6.dp))
 
-            ToolButton(
-                text = "Wi-Fi settings",
-                onClick = onWifiSettings
-            )
-
-            ToolButton(
-                text = "Kalize Recorder app settings",
-                onClick = onAppSettings
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = boosterMessage,
-                color = ToolsMuted,
-                fontSize = 12.sp
-            )
-
-            Text(
-                text = "Note: Android controls many performance options. " +
-                    "These shortcuts do not overclock the CPU or forcibly " +
-                    "close other apps.",
-                color = ToolsMuted,
-                fontSize = 12.sp
+            InfoText(
+                "These shortcuts do not overclock your processor or " +
+                    "forcibly close other apps.",
+                muted = true
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            title = "🌐 Network Speed Tester",
-            subtitle = "Estimate latency and download speed"
-        ) {
-            Text(
-                text = networkResult,
-                color = ToolsText,
-                fontSize = 14.sp
-            )
+        ToolPanel("🌐 Network Speed Test", "Estimate connection performance") {
+            InfoText(networkResult)
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
             Button(
                 onClick = {
-                    if (!networkRunning) {
-                        networkRunning = true
-                        networkResult = "Testing connection…"
+                    networkRunning = true
+                    networkResult = "Testing connection…"
 
-                        Thread {
-                            var result: String
+                    Thread {
+                        val result = try {
+                            val pingStart = SystemClock.elapsedRealtime()
+                            val ping = URL(
+                                "https://www.google.com/generate_204"
+                            ).openConnection() as HttpURLConnection
 
-                            try {
-                                val pingStart =
-                                    SystemClock.elapsedRealtime()
+                            ping.connectTimeout = 8000
+                            ping.readTimeout = 8000
+                            ping.useCaches = false
 
-                                val pingConnection =
-                                    URL(
-                                        "https://www.google.com/generate_204"
-                                    ).openConnection()
-                                        as HttpURLConnection
+                            val code = ping.responseCode
+                            val latency =
+                                SystemClock.elapsedRealtime() - pingStart
+                            ping.disconnect()
 
-                                pingConnection.requestMethod = "GET"
-                                pingConnection.connectTimeout = 8000
-                                pingConnection.readTimeout = 8000
-                                pingConnection.useCaches = false
-
-                                val responseCode =
-                                    pingConnection.responseCode
-
-                                val latency =
-                                    SystemClock.elapsedRealtime() - pingStart
-
-                                pingConnection.disconnect()
-
-                                if (responseCode !in 200..399) {
-                                    throw Exception(
-                                        "Connection returned HTTP $responseCode"
-                                    )
-                                }
-
-                                val downloadUrl =
-                                    URL(
-                                        "https://speed.cloudflare.com/" +
-                                            "__down?bytes=1000000"
-                                    )
-
-                                val downloadConnection =
-                                    downloadUrl.openConnection()
-                                        as HttpURLConnection
-
-                                downloadConnection.requestMethod = "GET"
-                                downloadConnection.connectTimeout = 10000
-                                downloadConnection.readTimeout = 15000
-                                downloadConnection.useCaches = false
-
-                                val downloadStart =
-                                    SystemClock.elapsedRealtime()
-
-                                var bytesReadTotal = 0L
-
-                                downloadConnection.inputStream.use { input ->
-                                    val buffer = ByteArray(8192)
-                                    var count: Int
-
-                                    while (
-                                        input.read(buffer).also {
-                                            count = it
-                                        } != -1
-                                    ) {
-                                        bytesReadTotal += count
-                                    }
-                                }
-
-                                val elapsedMs = (
-                                    SystemClock.elapsedRealtime() -
-                                        downloadStart
-                                    ).coerceAtLeast(1L)
-
-                                downloadConnection.disconnect()
-
-                                val seconds = elapsedMs / 1000.0
-                                val mbps =
-                                    (bytesReadTotal * 8.0) /
-                                        seconds / 1_000_000.0
-
-                                result = buildString {
-                                    appendLine("Latency: ${latency} ms")
-                                    appendLine(
-                                        "Download speed: ${
-                                            String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                mbps
-                                            )
-                                        } Mbps"
-                                    )
-                                    append(
-                                        "Data received: ${
-                                            String.format(
-                                                Locale.US,
-                                                "%.2f",
-                                                bytesReadTotal / 1_000_000.0
-                                            )
-                                        } MB"
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                result =
-                                    "Test failed. Check your internet " +
-                                        "connection and try again.\n" +
-                                        "Details: ${
-                                            e.localizedMessage
-                                                ?: "Connection error"
-                                        }"
+                            if (code !in 200..399) {
+                                throw Exception("Connection unavailable")
                             }
 
-                            mainHandler.post {
-                                networkResult = result
-                                networkRunning = false
+                            val connection = URL(
+                                "https://speed.cloudflare.com/__down?bytes=1000000"
+                            ).openConnection() as HttpURLConnection
+
+                            connection.connectTimeout = 10000
+                            connection.readTimeout = 15000
+                            connection.useCaches = false
+
+                            val start = SystemClock.elapsedRealtime()
+                            var total = 0L
+
+                            connection.inputStream.use { input ->
+                                val buffer = ByteArray(8192)
+                                while (true) {
+                                    val count = input.read(buffer)
+                                    if (count == -1) break
+                                    total += count
+                                }
                             }
-                        }.start()
-                    }
+
+                            connection.disconnect()
+
+                            val elapsed = (
+                                SystemClock.elapsedRealtime() - start
+                            ).coerceAtLeast(1L)
+
+                            val mbps = total * 8.0 / (elapsed / 1000.0) /
+                                1_000_000.0
+
+                            "Latency: ${latency} ms\n" +
+                                "Estimated download: ${
+                                    String.format(Locale.US, "%.2f", mbps)
+                                } Mbps\n" +
+                                "Data received: ${
+                                    String.format(
+                                        Locale.US, "%.2f", total / 1_000_000.0
+                                    )
+                                } MB"
+                        } catch (_: Exception) {
+                            "The test failed. Check your internet connection " +
+                                "and try again."
+                        }
+
+                        handler.post {
+                            networkResult = result
+                            networkRunning = false
+                        }
+                    }.start()
                 },
                 enabled = !networkRunning,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ToolsPurple,
-                    contentColor = Color.White
+                    containerColor = ToolsPurple
                 )
             ) {
-                Text(
-                    if (networkRunning) "Testing…" else "Start Network Test"
-                )
+                Text(if (networkRunning) "Testing…" else "Start Network Test")
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
 
-            Text(
-                text = "Results depend on your connection, signal, " +
-                    "server response and network conditions. " +
-                    "This is an estimate, not a guaranteed maximum speed.",
-                color = ToolsMuted,
-                fontSize = 12.sp
+            InfoText(
+                "Results vary with signal strength, network traffic and " +
+                    "server response.",
+                muted = true
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            title = "⚡ CPU Speed Tester",
-            subtitle = "Run a short calculation benchmark"
-        ) {
-            Text(
-                text = cpuResult,
-                color = ToolsText,
-                fontSize = 14.sp
-            )
+        ToolPanel("⚡ CPU Benchmark", "A short local calculation test") {
+            InfoText(cpuResult)
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(Modifier.height(12.dp))
 
             Button(
                 onClick = {
-                    if (!cpuRunning) {
-                        cpuRunning = true
-                        cpuResult = "Running CPU benchmark…"
+                    cpuRunning = true
+                    cpuResult = "Running benchmark…"
 
-                        Thread {
-                            val start =
-                                SystemClock.elapsedRealtimeNanos()
+                    Thread {
+                        val start = SystemClock.elapsedRealtimeNanos()
+                        val limit = 500_000_000L
+                        var operations = 0L
+                        var value = 1.0
 
-                            val durationNs = 500_000_000L
-                            var operations = 0L
-                            var value = 1.0
+                        while (
+                            SystemClock.elapsedRealtimeNanos() - start < limit
+                        ) {
+                            value += sqrt((operations % 1000L + 1L).toDouble())
+                            operations++
+                        }
 
-                            while (
-                                SystemClock.elapsedRealtimeNanos() - start <
-                                durationNs
-                            ) {
-                                value += sqrt(
-                                    (operations % 1000L + 1L).toDouble()
-                                )
-                                operations++
-                            }
+                        val elapsed = (
+                            SystemClock.elapsedRealtimeNanos() - start
+                        ).coerceAtLeast(1L)
 
-                            val elapsedNs = (
-                                SystemClock.elapsedRealtimeNanos() - start
-                                ).coerceAtLeast(1L)
+                        val perSecond =
+                            operations * 1_000_000_000.0 / elapsed
 
-                            val operationsPerSecond =
-                                operations * 1_000_000_000.0 / elapsedNs
+                        val result =
+                            "Operations per second: ${
+                                String.format(Locale.US, "%,.0f", perSecond)
+                            }\nBenchmark score: ${
+                                String.format(Locale.US, "%.1f", perSecond / 1000)
+                            }\nCalculation result: ${
+                                String.format(Locale.US, "%.2f", value)
+                            }"
 
-                            val score = operationsPerSecond / 1000.0
-
-                            val result = buildString {
-                                appendLine(
-                                    "Operations per second: ${
-                                        String.format(
-                                            Locale.US,
-                                            "%,.0f",
-                                            operationsPerSecond
-                                        )
-                                    }"
-                                )
-                                appendLine(
-                                    "Benchmark score: ${
-                                        String.format(
-                                            Locale.US,
-                                            "%.1f",
-                                            score
-                                        )
-                                    }"
-                                )
-                                append(
-                                    "Calculation result: ${
-                                        String.format(
-                                            Locale.US,
-                                            "%.2f",
-                                            value
-                                        )
-                                    }"
-                                )
-                            }
-
-                            mainHandler.post {
-                                cpuResult = result
-                                cpuRunning = false
-                            }
-                        }.start()
-                    }
+                        handler.post {
+                            cpuResult = result
+                            cpuRunning = false
+                        }
+                    }.start()
                 },
                 enabled = !cpuRunning,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ToolsPurple,
-                    contentColor = Color.White
+                    containerColor = ToolsBlue
                 )
             ) {
-                Text(
-                    if (cpuRunning) "Benchmarking…" else "Start CPU Test"
-                )
+                Text(if (cpuRunning) "Benchmarking…" else "Start CPU Test")
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(Modifier.height(8.dp))
 
-            Text(
-                text = "This is a simple local benchmark, not an official " +
-                    "processor rating. Scores vary with temperature, " +
-                    "battery level and background activity.",
-                color = ToolsMuted,
-                fontSize = 12.sp
+            InfoText(
+                "This is a simple benchmark, not an official processor rating. " +
+                    "Results vary with device temperature and background activity.",
+                muted = true
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            title = "📱 Device Information",
-            subtitle = "Basic information reported by Android"
-        ) {
-            Text(
-                text = deviceInfo,
-                color = ToolsText,
-                fontSize = 14.sp,
-                lineHeight = 22.sp
-            )
+        ToolPanel("📱 Device Information", "Device details reported by Android") {
+            InfoText(deviceInfo)
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(22.dp))
 
         Text(
-            text = "Kalize Recorder • Performance Tools",
+            "Kalize Recorder • Performance Tools",
             color = ToolsMuted,
             fontSize = 12.sp,
             modifier = Modifier.fillMaxWidth()
@@ -688,9 +483,7 @@ private fun ToolPanel(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = ToolsPanel
-        )
+        colors = CardDefaults.cardColors(containerColor = ToolsPanel)
     ) {
         Column(
             modifier = Modifier
@@ -698,21 +491,17 @@ private fun ToolPanel(
                 .padding(16.dp)
         ) {
             Text(
-                text = title,
+                title,
                 color = ToolsText,
                 fontSize = 19.sp,
                 fontWeight = FontWeight.Bold
             )
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(Modifier.height(4.dp))
 
-            Text(
-                text = subtitle,
-                color = ToolsMuted,
-                fontSize = 12.sp
-            )
+            Text(subtitle, color = ToolsMuted, fontSize = 12.sp)
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(Modifier.height(14.dp))
 
             content()
         }
@@ -720,20 +509,27 @@ private fun ToolPanel(
 }
 
 @Composable
-private fun ToolButton(
-    text: String,
-    onClick: () -> Unit
-) {
+private fun InfoText(text: String, muted: Boolean = false) {
+    Text(
+        text = text,
+        color = if (muted) ToolsMuted else ToolsText,
+        fontSize = 14.sp,
+        lineHeight = 22.sp
+    )
+}
+
+@Composable
+private fun ToolButton(text: String, onClick: () -> Unit) {
     Button(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = 8.dp),
+            .padding(bottom = 7.dp),
+        shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = Color(0xFF292642),
             contentColor = ToolsText
-        ),
-        shape = RoundedCornerShape(12.dp)
+        )
     ) {
         Text(text)
     }

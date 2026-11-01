@@ -6,6 +6,8 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
@@ -15,7 +17,6 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -31,21 +32,24 @@ import androidx.core.content.ContextCompat
 
 private val Night = Color(0xFF080A12)
 private val Panel = Color(0xFF141827)
-private val PanelLight = Color(0xFF1B2135)
 private val Violet = Color(0xFF9B7BFF)
 private val VioletBright = Color(0xFFB4A0FF)
 private val Muted = Color(0xFF9AA4BC)
 private val Border = Color(0xFF2B3146)
-private val Green = Color(0xFF6DE2B0)
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var captureLauncher: ActivityResultLauncher<Intent>
+
     private var requestedQuality = "1080p"
     private var requestedFps = 30
     private var requestedFolderUri: String? = null
+    private var requestedCountdownSeconds = 0
     private var requestResultHandler: ((Boolean) -> Unit)? = null
     private var screenshotRequested = false
+
+    private val countdownHandler = Handler(Looper.getMainLooper())
+    private var pendingRecordingStart: Runnable? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,56 +82,74 @@ class MainActivity : ComponentActivity() {
                         screenshotIntent
                     )
                 } else {
-                    val serviceIntent = Intent(
-                        this,
-                        ScreenRecordingService::class.java
-                    ).apply {
-                        putExtra(
-                            ScreenRecordingService.EXTRA_RESULT_CODE,
-                            result.resultCode
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_RESULT_DATA,
-                            data
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_QUALITY,
-                            requestedQuality
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_FPS,
-                            requestedFps
+                    val approvedResultCode = result.resultCode
+                    val approvedData = data
+                    val countdown = requestedCountdownSeconds
+
+                    val startRecording = Runnable {
+                        val serviceIntent = Intent(
+                            this,
+                            ScreenRecordingService::class.java
+                        ).apply {
+                            putExtra(
+                                ScreenRecordingService.EXTRA_RESULT_CODE,
+                                approvedResultCode
+                            )
+                            putExtra(
+                                ScreenRecordingService.EXTRA_RESULT_DATA,
+                                approvedData
+                            )
+                            putExtra(
+                                ScreenRecordingService.EXTRA_QUALITY,
+                                requestedQuality
+                            )
+                            putExtra(
+                                ScreenRecordingService.EXTRA_FPS,
+                                requestedFps
+                            )
+
+                            requestedFolderUri?.let {
+                                putExtra(
+                                    ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
+                                    it
+                                )
+                            }
+                        }
+
+                        ContextCompat.startForegroundService(
+                            this,
+                            serviceIntent
                         )
 
-                        requestedFolderUri?.let {
-                            putExtra(
-                                ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
-                                it
+                        if (Settings.canDrawOverlays(this)) {
+                            startService(
+                                Intent(
+                                    this,
+                                    FloatingBubbleService::class.java
+                                )
                             )
                         }
+
+                        pendingRecordingStart = null
+                        requestResultHandler?.invoke(true)
                     }
 
-                    ContextCompat.startForegroundService(
-                        this,
-                        serviceIntent
-                    )
-
-                    if (Settings.canDrawOverlays(this)) {
-                        startService(
-                            Intent(
-                                this,
-                                FloatingBubbleService::class.java
-                            )
+                    if (countdown > 0) {
+                        pendingRecordingStart = startRecording
+                        countdownHandler.postDelayed(
+                            startRecording,
+                            countdown * 1000L
                         )
+                    } else {
+                        startRecording.run()
                     }
-
-                    requestResultHandler?.invoke(true)
                 }
             } else {
                 val wasScreenshot = screenshotRequested
                 screenshotRequested = false
 
                 if (!wasScreenshot) {
+                    pendingRecordingStart = null
                     requestResultHandler?.invoke(false)
                 }
             }
@@ -152,11 +174,18 @@ class MainActivity : ComponentActivity() {
                     "recording_fps",
                     "30 FPS"
                 ) ?: "30 FPS",
+                initialCountdownSeconds = settings.getInt(
+                    "recording_countdown_seconds",
+                    0
+                ),
 
-                onStartRecording = { quality, fps, folderUri, onResult ->
+                onStartRecording = {
+                        quality, fps, folderUri, countdown, onResult ->
+
                     requestedQuality = quality
                     requestedFps = fps
                     requestedFolderUri = folderUri
+                    requestedCountdownSeconds = countdown
                     requestResultHandler = onResult
                     screenshotRequested = false
 
@@ -182,6 +211,13 @@ class MainActivity : ComponentActivity() {
                 },
 
                 onStopRecording = {
+                    pendingRecordingStart?.let {
+                        countdownHandler.removeCallbacks(it)
+                    }
+
+                    pendingRecordingStart = null
+                    requestResultHandler = null
+
                     startService(
                         Intent(
                             this,
@@ -211,6 +247,14 @@ class MainActivity : ComponentActivity() {
             )
         }
     }
+
+    override fun onDestroy() {
+        pendingRecordingStart?.let {
+            countdownHandler.removeCallbacks(it)
+        }
+        pendingRecordingStart = null
+        super.onDestroy()
+    }
 }
 
 @Composable
@@ -218,10 +262,12 @@ private fun KalizeHome(
     initialFolderUri: String?,
     initialQuality: String,
     initialFps: String,
+    initialCountdownSeconds: Int,
     onStartRecording: (
         String,
         Int,
         String?,
+        Int,
         (Boolean) -> Unit
     ) -> Unit,
     onTakeScreenshot: () -> Unit,
@@ -230,11 +276,15 @@ private fun KalizeHome(
 ) {
     var recording by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
 
     var quality by remember {
         mutableStateOf(
             initialQuality.takeIf {
-                it in listOf("360p", "480p", "720p", "1080p", "1440p", "4K")
+                it in listOf(
+                    "360p", "480p", "720p",
+                    "1080p", "1440p", "4K"
+                )
             } ?: "1080p"
         )
     }
@@ -247,12 +297,16 @@ private fun KalizeHome(
         )
     }
 
-    var showAboutDialog by remember { mutableStateOf(false) }
+    var countdown by remember {
+        mutableIntStateOf(
+            initialCountdownSeconds.takeIf {
+                it in listOf(0, 3, 5, 10, 15, 30)
+            } ?: 0
+        )
+    }
 
     var status by remember {
-        mutableStateOf(
-            "Ready when you are. Start a capture to begin."
-        )
+        mutableStateOf("Ready when you are. Start a capture to begin.")
     }
 
     var saveFolderUri by remember {
@@ -307,7 +361,7 @@ private fun KalizeHome(
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        colors = listOf(
+                        listOf(
                             Color(0xFF17132D),
                             Night,
                             Color(0xFF090D17)
@@ -315,171 +369,59 @@ private fun KalizeHome(
                     )
                 )
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 22.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp)
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = Violet,
-                    shadowElevation = 8.dp
-                ) {
-                    Box(
-                        modifier = Modifier.size(58.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            "Ƙ",
-                            color = Color.White,
-                            fontSize = 30.sp,
-                            fontWeight = FontWeight.Black
-                        )
-                    }
-                }
+            Text(
+                "ƘALIZE RECORDER",
+                color = VioletBright,
+                fontSize = 24.sp,
+                fontWeight = FontWeight.Black
+            )
 
-                Spacer(Modifier.width(14.dp))
+            Text(
+                "YOUR SCREEN. YOUR STORY.",
+                color = Color.White,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "ƘALIZE",
-                        color = Color.White,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 2.sp
-                    )
-                    Text(
-                        "RECORDER STUDIO",
-                        color = Muted,
-                        fontSize = 10.sp,
-                        letterSpacing = 2.sp
-                    )
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = PanelLight,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        Border
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(
-                            horizontal = 11.dp,
-                            vertical = 8.dp
-                        ),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(7.dp)
-                                .background(
-                                    if (recording) Green else VioletBright,
-                                    CircleShape
-                                )
-                        )
-                        Text(
-                            if (recording) "LIVE" else "READY",
-                            color = Color.White,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    "YOUR SCREEN.\nYOUR STORY.",
-                    color = Color.White,
-                    fontSize = 32.sp,
-                    lineHeight = 37.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    letterSpacing = (-0.7).sp
-                )
-
-                Text(
-                    "Capture gameplay, tutorials and the moments worth keeping.",
-                    color = Muted,
-                    fontSize = 14.sp,
-                    lineHeight = 21.sp
-                )
-            }
+            Text(
+                "Capture gameplay, tutorials and moments worth keeping.",
+                color = Muted,
+                fontSize = 14.sp
+            )
 
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
+                shape = RoundedCornerShape(24.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = Panel
                 ),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
                     Border
-                ),
-                elevation = CardDefaults.cardElevation(
-                    defaultElevation = 5.dp
                 )
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "CAPTURE STUDIO",
-                                color = VioletBright,
-                                fontSize = 10.sp,
-                                letterSpacing = 1.8.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                when {
-                                    recording -> "Recording active"
-                                    requesting -> "Waiting for approval"
-                                    else -> "Ready to record"
-                                },
-                                color = Color.White,
-                                fontSize = 21.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = Color(0xFF27213F)
-                        ) {
-                            Box(
-                                modifier = Modifier.size(48.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "◉",
-                                    color = VioletBright,
-                                    fontSize = 28.sp
-                                )
-                            }
-                        }
-                    }
-
-                    HorizontalDivider(color = Border)
+                    Text(
+                        when {
+                            recording -> "Recording active"
+                            requesting -> "Waiting for approval or countdown"
+                            else -> "Ready to record"
+                        },
+                        color = Color.White,
+                        fontSize = 21.sp,
+                        fontWeight = FontWeight.Bold
+                    )
 
                     Text(
                         status,
                         color = Muted,
-                        fontSize = 13.sp,
-                        lineHeight = 19.sp
+                        fontSize = 13.sp
                     )
 
                     Button(
@@ -488,33 +430,35 @@ private fun KalizeHome(
                                 onStopRecording()
                                 recording = false
                                 requesting = false
-                                status =
-                                    "Stop requested. Check your save folder for the recording."
+                                status = "Stop requested. Check your save folder."
                             } else {
                                 requesting = true
-                                status =
-                                    "Approve Android's screen-capture prompt to start."
+                                status = if (countdown == 0) {
+                                    "Approve Android's screen-capture prompt to start immediately."
+                                } else {
+                                    "Approve Android's prompt. Recording will start after $countdown seconds."
+                                }
 
                                 onStartRecording(
                                     quality,
-                                    fps.removeSuffix(" FPS")
-                                        .toIntOrNull() ?: 30,
-                                    saveFolderUri
+                                    fps.removeSuffix(" FPS").toIntOrNull() ?: 30,
+                                    saveFolderUri,
+                                    countdown
                                 ) { approved ->
                                     requesting = false
                                     recording = approved
                                     status = if (approved) {
-                                        "Capture requested. Use the floating STOP bubble or this button to finish."
+                                        "Recording started. Use STOP to finish."
                                     } else {
-                                        "Capture was cancelled. You can try again whenever you're ready."
+                                        "Capture cancelled. You can try again."
                                     }
                                 }
                             }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(56.dp),
-                        shape = RoundedCornerShape(17.dp),
+                            .height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (recording || requesting) {
                                 Color(0xFFB9475B)
@@ -525,360 +469,259 @@ private fun KalizeHome(
                     ) {
                         Text(
                             if (recording || requesting) {
-                                "■   STOP CAPTURE"
+                                "■  STOP CAPTURE"
                             } else {
-                                "●   START RECORDING"
+                                "●  START RECORDING"
                             },
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp
+                            fontWeight = FontWeight.Bold
                         )
                     }
 
                     OutlinedButton(
                         onClick = {
                             onTakeScreenshot()
-                            status =
-                                "Approve Android's prompt to capture a screenshot."
+                            status = "Approve Android's prompt to capture a screenshot."
                         },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(50.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            Border
-                        )
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Text(
-                            "▣   TAKE SCREENSHOT",
-                            fontWeight = FontWeight.SemiBold,
-                            letterSpacing = 0.4.sp
-                        )
+                        Text("▣  TAKE SCREENSHOT")
                     }
 
                     Text(
-                        "Android will ask for screen-capture approval before capturing.",
+                        "Android asks for screen-capture approval before recording or taking a screenshot.",
                         color = Muted,
-                        fontSize = 11.sp,
-                        lineHeight = 16.sp
+                        fontSize = 11.sp
                     )
                 }
             }
 
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeading(
-                    title = "Capture settings",
-                    subtitle = "Fine-tune your next recording"
-                )
-
-                Card(
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Panel
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        Border
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(18.dp)
-                    ) {
-                        PremiumDropdown(
-                            title = "Resolution",
-                            description = "Target recording resolution",
-                            value = quality,
-                            options = listOf(
-                                "360p",
-                                "480p",
-                                "720p",
-                                "1080p",
-                                "1440p",
-                                "4K"
-                            ),
-                            onSelect = {
-                                quality = it
-                                prefs.edit()
-                                    .putString("recording_quality", it)
-                                    .apply()
-                                status = "Resolution saved: $it"
-                            }
-                        )
-
-                        HorizontalDivider(color = Border)
-
-                        PremiumDropdown(
-                            title = "Frame rate",
-                            description = "Target frames per second",
-                            value = fps,
-                            options = listOf("30 FPS", "60 FPS"),
-                            onSelect = {
-                                fps = it
-                                prefs.edit()
-                                    .putString("recording_fps", it)
-                                    .apply()
-                                status = "Frame rate saved: $it"
-                            }
-                        )
-
-                        Text(
-                            "Actual quality depends on your phone's display and hardware.",
-                            color = Muted,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp
-                        )
-                    }
-                }
-            }
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeading(
-                    title = "Storage",
-                    subtitle = "Choose where new recordings go"
-                )
-
-                Card(
-                    shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Panel
-                    ),
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        Border
-                    )
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            if (saveFolderUri == null) {
-                                "Default save location"
-                            } else {
-                                "Custom folder selected"
-                            },
-                            color = Color.White,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Text(
-                            if (saveFolderUri == null) {
-                                "Videos: Movies/Kalize Recorder\nScreenshots: Pictures/Kalize Recorder"
-                            } else {
-                                "Recordings use your selected folder. Screenshots are saved separately in Pictures/Kalize Recorder."
-                            },
-                            color = Muted,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp
-                        )
-
-                        Button(
-                            onClick = {
-                                folderPicker.launch(
-                                    saveFolderUri?.let { Uri.parse(it) }
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp),
-                            shape = RoundedCornerShape(15.dp)
-                        ) {
-                            Text(
-                                "CHOOSE PHONE OR SD-CARD FOLDER",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = {
-                                saveFolderUri = null
-                                prefs.edit()
-                                    .remove("save_tree_uri")
-                                    .apply()
-                                status = "Default phone storage selected."
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(15.dp),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Border
-                            )
-                        ) {
-                            Text("USE DEFAULT STORAGE")
-                        }
-
-                        Text(
-                            "Android will ask you to grant access to a folder you choose.",
-                            color = Muted,
-                            fontSize = 11.sp
-                        )
-                    }
-                }
-            }
-
-            Column(
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeading(
-                    title = "Your creative tools",
-                    subtitle = "Everything you need, in one place"
-                )
-
-                PremiumToolCard(
-                    symbol = "▣",
-                    title = "Saved videos",
-                    subtitle = "Browse, play, share or delete recordings",
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                context,
-                                SavedVideosActivity::class.java
-                            )
-                        )
-                    }
-                )
-
-                PremiumToolCard(
-                    symbol = "✂",
-                    title = "Video editor",
-                    subtitle = "Trim clips and export your edits",
-                    onClick = {
-                        context.startActivity(
-                            Intent(
-                                context,
-                                VideoEditorActivity::class.java
-                            )
-                        )
-                    }
-                )
-
-                PremiumToolCard(
-                    symbol = "◉",
-                    title = "Floating controls",
-                    subtitle = "Enable the on-screen recording bubble",
-                    onClick = {
-                        onEnableBubble()
-                        status =
-                            "If needed, allow display over other apps in Android Settings, then return here."
-                    }
-                )
-            }
+            SectionTitle(
+                "Capture settings",
+                "Choose how recording starts and looks"
+            )
 
             Card(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF17142B)
+                    containerColor = Panel
                 ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Color(0xFF3B315F)
-                )
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(17.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            "ƘALIZE RECORDER",
-                            color = VioletBright,
-                            fontSize = 10.sp,
-                            letterSpacing = 1.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(Modifier.height(5.dp))
-                        Text(
-                            "Made for your screen-capture needs.",
-                            color = Color.White,
-                            fontSize = 13.sp
-                        )
+                    SettingDropdown(
+                        title = "Resolution",
+                        description = "Target recording resolution",
+                        value = quality,
+                        options = listOf(
+                            "360p", "480p", "720p",
+                            "1080p", "1440p", "4K"
+                        ),
+                        onSelect = {
+                            quality = it
+                            prefs.edit()
+                                .putString("recording_quality", it)
+                                .apply()
+                            status = "Resolution saved: $it"
+                        }
+                    )
+
+                    HorizontalDivider(color = Border)
+
+                    SettingDropdown(
+                        title = "Frame rate",
+                        description = "Target frames per second",
+                        value = fps,
+                        options = listOf("30 FPS", "60 FPS"),
+                        onSelect = {
+                            fps = it
+                            prefs.edit()
+                                .putString("recording_fps", it)
+                                .apply()
+                            status = "Frame rate saved: $it"
+                        }
+                    )
+
+                    HorizontalDivider(color = Border)
+
+                    SettingDropdown(
+                        title = "Recording countdown",
+                        description = "Delay after Android approval",
+                        value = if (countdown == 0) {
+                            "Off"
+                        } else {
+                            "$countdown seconds"
+                        },
+                        options = listOf(
+                            "Off",
+                            "3 seconds",
+                            "5 seconds",
+                            "10 seconds",
+                            "15 seconds",
+                            "30 seconds"
+                        ),
+                        onSelect = { selected ->
+                            countdown = if (selected == "Off") {
+                                0
+                            } else {
+                                selected.substringBefore(" ")
+                                    .toIntOrNull() ?: 0
+                            }
+
+                            prefs.edit()
+                                .putInt(
+                                    "recording_countdown_seconds",
+                                    countdown
+                                )
+                                .apply()
+
+                            status = if (countdown == 0) {
+                                "Countdown turned off. Recording starts immediately after approval."
+                            } else {
+                                "Countdown saved: $countdown seconds."
+                            }
+                        }
+                    )
+
+                    Text(
+                        "Your selected settings are saved for next time. Actual quality depends on your phone.",
+                        color = Muted,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+
+            SectionTitle(
+                "Storage",
+                "Choose where recordings are saved"
+            )
+
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Panel
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        if (saveFolderUri == null) {
+                            "Default save location"
+                        } else {
+                            "Custom folder selected"
+                        },
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        if (saveFolderUri == null) {
+                            "Videos: Movies/Kalize Recorder\nScreenshots: Pictures/Kalize Recorder"
+                        } else {
+                            "Recordings use your selected folder. Screenshots are saved separately."
+                        },
+                        color = Muted,
+                        fontSize = 13.sp
+                    )
+
+                    Button(
+                        onClick = {
+                            folderPicker.launch(
+                                saveFolderUri?.let { Uri.parse(it) }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("CHOOSE PHONE OR SD-CARD FOLDER")
                     }
 
-                    TextButton(
-                        onClick = { showAboutDialog = true }
+                    OutlinedButton(
+                        onClick = {
+                            saveFolderUri = null
+                            prefs.edit()
+                                .remove("save_tree_uri")
+                                .apply()
+                            status = "Default phone storage selected."
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("ABOUT")
+                        Text("USE DEFAULT STORAGE")
                     }
                 }
+            }
+
+            SectionTitle(
+                "Your creative tools",
+                "Open your saved content and controls"
+            )
+
+            ToolButton(
+                "▣  Saved videos",
+                "Browse, play, share or delete recordings"
+            ) {
+                context.startActivity(
+                    Intent(context, SavedVideosActivity::class.java)
+                )
+            }
+
+            ToolButton(
+                "✂  Video editor",
+                "Trim clips and export edits"
+            ) {
+                context.startActivity(
+                    Intent(context, VideoEditorActivity::class.java)
+                )
+            }
+
+            ToolButton(
+                "◉  Floating controls",
+                "Enable the on-screen recording bubble"
+            ) {
+                onEnableBubble()
+                status = "If needed, allow display over other apps in Android Settings."
+            }
+
+            OutlinedButton(
+                onClick = { showAbout = true },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("ABOUT KALIZE RECORDER")
             }
 
             Text(
                 "Capture responsibly. Respect other people's privacy.",
                 color = Muted,
-                fontSize = 11.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 12.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                fontSize = 11.sp
             )
         }
 
-        if (showAboutDialog) {
+        if (showAbout) {
             AlertDialog(
-                onDismissRequest = {
-                    showAboutDialog = false
-                },
-                title = {
+                onDismissRequest = { showAbout = false },
+                title = { Text("About Kalize Recorder") },
+                text = {
                     Text(
-                        "About Ƙalize Recorder",
-                        fontWeight = FontWeight.Bold
+                        "Features\n" +
+                            "• Screen recording\n" +
+                            "• Screenshot capture\n" +
+                            "• Saved video library\n" +
+                            "• Video trimming and export\n" +
+                            "• Resolution and frame-rate settings\n" +
+                            "• Optional recording countdown\n" +
+                            "• Custom recording folders\n\n" +
+                            "Android asks for screen-capture approval before capturing."
                     )
                 },
-                text = {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            "YOUR SCREEN-CAPTURE STUDIO",
-                            color = VioletBright,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
-                        )
-
-                        Text(
-                            "Features\n" +
-                                "• Screen recording\n" +
-                                "• Screenshot capture\n" +
-                                "• Saved video library\n" +
-                                "• Video trimming and export\n" +
-                                "• Resolution and frame-rate targets\n" +
-                                "• Custom recording folders"
-                        )
-
-                        HorizontalDivider(color = Border)
-
-                        Text(
-                            "Privacy\n" +
-                                "Android asks for screen-capture permission before capture begins. Review the system prompt before approving it. Your recordings are saved to the configured device folder."
-                        )
-
-                        Text(
-                            "Use screen capture responsibly and respect other people's privacy.",
-                            color = Muted,
-                            fontSize = 12.sp
-                        )
-                    }
-                },
                 confirmButton = {
-                    TextButton(
-                        onClick = { showAboutDialog = false }
-                    ) {
+                    TextButton(onClick = { showAbout = false }) {
                         Text("CLOSE")
                     }
                 },
@@ -891,7 +734,7 @@ private fun KalizeHome(
 }
 
 @Composable
-private fun SectionHeading(
+private fun SectionTitle(
     title: String,
     subtitle: String
 ) {
@@ -913,7 +756,7 @@ private fun SectionHeading(
 }
 
 @Composable
-private fun PremiumDropdown(
+private fun SettingDropdown(
     title: String,
     description: String,
     value: String,
@@ -926,7 +769,9 @@ private fun PremiumDropdown(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
             Text(
                 title,
                 color = Color.White,
@@ -944,23 +789,14 @@ private fun PremiumDropdown(
         Box {
             OutlinedButton(
                 onClick = { expanded = true },
-                shape = RoundedCornerShape(13.dp),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Violet.copy(alpha = 0.7f)
-                ),
-                contentPadding = PaddingValues(
-                    horizontal = 14.dp,
-                    vertical = 8.dp
-                )
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
                     value,
                     color = VioletBright,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.width(5.dp))
-                Text("⌄", color = VioletBright)
+                Text("  ⌄", color = VioletBright)
             }
 
             DropdownMenu(
@@ -969,16 +805,7 @@ private fun PremiumDropdown(
             ) {
                 options.forEach { option ->
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                option,
-                                fontWeight = if (option == value) {
-                                    FontWeight.Bold
-                                } else {
-                                    FontWeight.Normal
-                                }
-                            )
-                        },
+                        text = { Text(option) },
                         onClick = {
                             onSelect(option)
                             expanded = false
@@ -991,8 +818,7 @@ private fun PremiumDropdown(
 }
 
 @Composable
-private fun PremiumToolCard(
-    symbol: String,
+private fun ToolButton(
     title: String,
     subtitle: String,
     onClick: () -> Unit
@@ -1004,60 +830,22 @@ private fun PremiumToolCard(
         colors = CardDefaults.cardColors(
             containerColor = Panel
         ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            Border
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        border = androidx.compose.foundation.BorderStroke(1.dp, Border)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(15.dp),
-                color = Color(0xFF29213F)
-            ) {
-                Box(
-                    modifier = Modifier.size(48.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        symbol,
-                        color = VioletBright,
-                        fontSize = 23.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    title,
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    subtitle,
-                    color = Muted,
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                )
-            }
-
             Text(
-                "›",
-                color = VioletBright,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Light
+                title,
+                color = Color.White,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                subtitle,
+                color = Muted,
+                fontSize = 12.sp
             )
         }
     }

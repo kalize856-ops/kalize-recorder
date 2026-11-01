@@ -39,6 +39,7 @@ class ScreenshotService : Service() {
 
         private const val CHANNEL_ID = "kalize_screenshot_channel"
         private const val NOTIFICATION_ID = 2201
+        private const val RESULT_NOTIFICATION_ID = 2202
         private const val TAG = "ScreenshotService"
     }
 
@@ -61,9 +62,12 @@ class ScreenshotService : Service() {
         super.onCreate()
         createNotificationChannel()
 
-        workerThread = HandlerThread("KalizeScreenshotWorker").also {
+        workerThread = HandlerThread(
+            "KalizeScreenshotWorker"
+        ).also {
             it.start()
         }
+
         workerHandler = Handler(workerThread!!.looper)
     }
 
@@ -94,6 +98,7 @@ class ScreenshotService : Service() {
 
         if (resultCode == Int.MIN_VALUE || resultData == null) {
             Log.e(TAG, "Missing screen-capture permission data.")
+            postResultNotification(false)
             stopSelf(startId)
             return START_NOT_STICKY
         }
@@ -112,6 +117,7 @@ class ScreenshotService : Service() {
 
             if (projection == null) {
                 Log.e(TAG, "Unable to obtain MediaProjection.")
+                postResultNotification(false)
                 stopSelf(startId)
                 return START_NOT_STICKY
             }
@@ -126,6 +132,7 @@ class ScreenshotService : Service() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Screenshot capture failed to start.", e)
+            postResultNotification(false)
             stopSelf(startId)
         }
 
@@ -153,12 +160,14 @@ class ScreenshotService : Service() {
                 "Kalize Screenshot Capture",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows when screenshot capture is active."
+                description =
+                    "Shows screenshot capture status and results."
             }
 
             val manager = getSystemService(
                 NotificationManager::class.java
             )
+
             manager.createNotificationChannel(channel)
         }
     }
@@ -180,6 +189,54 @@ class ScreenshotService : Service() {
             .build()
     }
 
+    private fun postResultNotification(saved: Boolean) {
+        try {
+            val builder =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Notification.Builder(this, CHANNEL_ID)
+                } else {
+                    @Suppress("DEPRECATION")
+                    Notification.Builder(this)
+                }
+
+            val notification = builder
+                .setContentTitle(
+                    if (saved) {
+                        "Screenshot saved"
+                    } else {
+                        "Screenshot could not be saved"
+                    }
+                )
+                .setContentText(
+                    if (saved) {
+                        "Saved to Pictures/Kalize Recorder."
+                    } else {
+                        "Capture failed. Please try again."
+                    }
+                )
+                .setSmallIcon(
+                    if (saved) {
+                        android.R.drawable.ic_menu_camera
+                    } else {
+                        android.R.drawable.ic_dialog_alert
+                    }
+                )
+                .setAutoCancel(true)
+                .build()
+
+            val manager = getSystemService(
+                NotificationManager::class.java
+            )
+
+            manager.notify(
+                RESULT_NOTIFICATION_ID,
+                notification
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Could not show screenshot result.", e)
+        }
+    }
+
     private fun getScreenMetrics(): DisplayMetrics {
         val metrics = DisplayMetrics()
 
@@ -187,6 +244,7 @@ class ScreenshotService : Service() {
             val manager = getSystemService(
                 WINDOW_SERVICE
             ) as WindowManager
+
             val bounds = manager.currentWindowMetrics.bounds
 
             metrics.widthPixels = bounds.width()
@@ -255,13 +313,26 @@ class ScreenshotService : Service() {
                     bitmap.recycle()
 
                     if (saved) {
-                        Log.i(TAG, "Screenshot saved successfully.")
+                        Log.i(
+                            TAG,
+                            "Screenshot saved successfully."
+                        )
                     } else {
-                        Log.e(TAG, "Unable to save screenshot.")
+                        Log.e(
+                            TAG,
+                            "Unable to save screenshot."
+                        )
                     }
 
+                    postResultNotification(saved)
+
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error processing screenshot.", e)
+                    Log.e(
+                        TAG,
+                        "Error processing screenshot.",
+                        e
+                    )
+                    postResultNotification(false)
                 } finally {
                     image.close()
                     projection?.stop()
@@ -293,8 +364,14 @@ class ScreenshotService : Service() {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val values = ContentValues().apply {
-                    put(MediaStore.Images.Media.DISPLAY_NAME, filename)
-                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(
+                        MediaStore.Images.Media.DISPLAY_NAME,
+                        filename
+                    )
+                    put(
+                        MediaStore.Images.Media.MIME_TYPE,
+                        "image/png"
+                    )
                     put(
                         MediaStore.Images.Media.RELATIVE_PATH,
                         Environment.DIRECTORY_PICTURES +
@@ -308,7 +385,6 @@ class ScreenshotService : Service() {
 
                 val resolver = contentResolver
 
-                // FIX: uri is non-null after the null check.
                 val uri: Uri = resolver.insert(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     values
@@ -331,7 +407,14 @@ class ScreenshotService : Service() {
                         MediaStore.Images.Media.IS_PENDING,
                         0
                     )
-                    resolver.update(uri, values, null, null)
+
+                    resolver.update(
+                        uri,
+                        values,
+                        null,
+                        null
+                    )
+
                     true
 
                 } catch (e: Exception) {
@@ -341,11 +424,16 @@ class ScreenshotService : Service() {
 
             } else {
                 @Suppress("DEPRECATION")
-                val pictures = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_PICTURES
+                val pictures =
+                    Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_PICTURES
+                    )
+
+                val folder = File(
+                    pictures,
+                    "Kalize Recorder"
                 )
 
-                val folder = File(pictures, "Kalize Recorder")
                 if (!folder.exists() && !folder.mkdirs()) {
                     return false
                 }

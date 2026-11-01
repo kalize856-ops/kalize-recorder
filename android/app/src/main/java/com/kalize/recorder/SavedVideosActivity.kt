@@ -39,8 +39,6 @@ class SavedVideosActivity : Activity() {
     private lateinit var searchInput: EditText
     private lateinit var emptyText: TextView
 
-    private var allVideos: List<SavedVideo> = emptyList()
-
     private val backgroundColor = Color.rgb(9, 13, 27)
     private val cardColor = Color.rgb(20, 28, 48)
     private val textColor = Color.WHITE
@@ -50,7 +48,6 @@ class SavedVideosActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         buildScreen()
         loadVideos()
     }
@@ -112,6 +109,7 @@ class SavedVideosActivity : Activity() {
         val refreshButton = makeButton("↻", accentColor)
         refreshButton.contentDescription = "Refresh saved videos"
         refreshButton.setOnClickListener { loadVideos() }
+
         header.addView(
             refreshButton,
             LinearLayout.LayoutParams(dp(52), dp(48))
@@ -154,27 +152,33 @@ class SavedVideosActivity : Activity() {
         }
         summaryCard.addView(summaryHint)
 
-        val summaryParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = dp(20)
-            bottomMargin = dp(16)
-        }
-        root.addView(summaryCard, summaryParams)
+        root.addView(
+            summaryCard,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = dp(20)
+                bottomMargin = dp(16)
+            }
+        )
 
         searchInput = EditText(this).apply {
             hint = "Search your videos..."
             textSize = 14f
             setTextColor(textColor)
             setHintTextColor(mutedColor)
-            singleLine = true
+
+            // Correct Kotlin property:
+            isSingleLine = true
+
             setPadding(dp(14), dp(10), dp(14), dp(10))
             background = roundedBackground(
                 Color.rgb(24, 32, 51),
                 dp(14),
                 Color.rgb(45, 56, 81)
             )
+
             addTextChangedListener(
                 object : android.text.TextWatcher {
                     override fun beforeTextChanged(
@@ -239,14 +243,6 @@ class SavedVideosActivity : Activity() {
             background = roundedBackground(cardColor, dp(18))
         }
 
-        listContainer.addView(
-            emptyText,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-        )
-
         scrollView.addView(
             listContainer,
             ViewGroup.LayoutParams(
@@ -293,7 +289,8 @@ class SavedVideosActivity : Activity() {
             allVideos = emptyList()
             displayVideos()
 
-            statusText.text = "Could not load videos. Tap refresh to try again."
+            statusText.text =
+                "Could not load videos. Tap refresh to try again."
 
             Toast.makeText(
                 this,
@@ -307,20 +304,21 @@ class SavedVideosActivity : Activity() {
         val results = mutableListOf<SavedVideo>()
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
 
-        val projection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.RELATIVE_PATH
-            )
-        } else {
-            arrayOf(
-                MediaStore.Video.Media._ID,
-                MediaStore.Video.Media.DISPLAY_NAME,
-                MediaStore.Video.Media.DURATION
-            )
-        }
+        val projection =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DURATION,
+                    MediaStore.Video.Media.RELATIVE_PATH
+                )
+            } else {
+                arrayOf(
+                    MediaStore.Video.Media._ID,
+                    MediaStore.Video.Media.DISPLAY_NAME,
+                    MediaStore.Video.Media.DURATION
+                )
+            }
 
         val selection: String?
         val selectionArgs: Array<String>?
@@ -354,6 +352,7 @@ class SavedVideosActivity : Activity() {
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
                 val name = it.getString(nameColumn) ?: "Untitled video"
+
                 val duration = if (durationColumn >= 0) {
                     it.getLong(durationColumn)
                 } else {
@@ -457,11 +456,13 @@ class SavedVideosActivity : Activity() {
                     )
                 } else {
                     val retriever = MediaMetadataRetriever()
+
                     try {
                         retriever.setDataSource(
                             this@SavedVideosActivity,
                             video.uri
                         )
+
                         retriever.getFrameAtTime(
                             0,
                             MediaMetadataRetriever.OPTION_CLOSEST_SYNC
@@ -475,7 +476,7 @@ class SavedVideosActivity : Activity() {
                 thumbnail.setImageBitmap(bitmap)
             }
         } catch (_: Exception) {
-            // The placeholder remains visible if a thumbnail is unavailable.
+            // Keep the placeholder if the thumbnail cannot be loaded.
         }
 
         thumbnailFrame.addView(
@@ -636,11 +637,13 @@ class SavedVideosActivity : Activity() {
             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = "video/*"
                 putExtra(Intent.EXTRA_STREAM, video.uri)
+
                 clipData = android.content.ClipData.newUri(
                     contentResolver,
                     video.name,
                     video.uri
                 )
+
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
 
@@ -656,7 +659,10 @@ class SavedVideosActivity : Activity() {
         }
     }
 
-    private fun makeButton(label: String, color: Int): Button {
+    private fun makeButton(
+        label: String,
+        color: Int
+    ): Button {
         return Button(this).apply {
             text = label
             textSize = 12f

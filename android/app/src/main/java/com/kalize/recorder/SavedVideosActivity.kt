@@ -71,7 +71,9 @@ class SavedVideosActivity : Activity() {
         "Oldest first",
         "Name A–Z",
         "Longest videos",
-        "Shortest videos"
+        "Shortest videos",
+        "Largest files",
+        "Smallest files"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -545,6 +547,8 @@ class SavedVideosActivity : Activity() {
             }
             3 -> filteredVideos.sortedByDescending { it.durationMs }
             4 -> filteredVideos.sortedBy { it.durationMs }
+            5 -> filteredVideos.sortedByDescending { it.sizeBytes }
+            6 -> filteredVideos.sortedBy { it.sizeBytes }
             else -> filteredVideos.sortedByDescending { it.dateAdded }
         }
 

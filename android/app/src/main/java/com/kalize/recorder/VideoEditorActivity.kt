@@ -2,9 +2,9 @@
 package com.kalize.recorder
 
 import android.app.Activity
-import android.app.AlertDialog
 import android.content.ContentValues
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.media.MediaExtractor
@@ -84,47 +84,45 @@ class VideoEditorActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        val brand = TextView(this).apply {
-            text = "ƘALIZE  /  STUDIO"
-            textSize = 12f
-            letterSpacing = 0.12f
-            setTextColor(accentColor)
-            setTypeface(null, Typeface.BOLD)
-        }
         topRow.addView(
-            brand,
+            TextView(this).apply {
+                text = "ƘALIZE  /  STUDIO"
+                textSize = 12f
+                letterSpacing = 0.12f
+                setTextColor(accentColor)
+                setTypeface(null, Typeface.BOLD)
+            },
             LinearLayout.LayoutParams(0, dp(42), 1f)
         )
 
-        val version = TextView(this).apply {
+        topRow.addView(TextView(this).apply {
             text = "VIDEO EDITOR"
             textSize = 10f
             setTextColor(mutedColor)
             letterSpacing = 0.08f
-        }
-        topRow.addView(version)
+        })
+
         content.addView(topRow)
 
-        val title = TextView(this).apply {
-            text = "Make every\\nframe count."
+        content.addView(TextView(this).apply {
+            text = "Make every\nframe count."
             textSize = 32f
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
             setPadding(0, dp(14), 0, dp(8))
-        }
-        content.addView(title)
+        })
 
-        val subtitle = TextView(this).apply {
+        content.addView(TextView(this).apply {
             text = "Your clips. Your style. Your story."
             textSize = 14f
             setTextColor(mutedColor)
             setPadding(0, 0, 0, dp(22))
-        }
-        content.addView(subtitle)
+        })
 
-        // Video selection card
+        // VIDEO SELECTION
         val sourceCard = createCard()
         addSectionTitle(sourceCard, "01  /  YOUR VIDEO")
+
         selectedLabel = TextView(this).apply {
             text = "No video selected yet"
             textSize = 15f
@@ -164,22 +162,69 @@ class VideoEditorActivity : Activity() {
         sourceCard.addView(previewButton, matchWrap())
         content.addView(sourceCard)
 
-        // Trim card
+        // TRIM CONTROLS
         val trimCard = createCard()
         addSectionTitle(trimCard, "02  /  TRIM YOUR CLIP")
 
-        val trimDescription = TextView(this).apply {
-            text = "Choose the start and end times in seconds. Example: start 5, end 20."
+        trimCard.addView(TextView(this).apply {
+            text = "Choose a quick preset or enter the exact start and end times in seconds."
             textSize = 13f
             setTextColor(mutedColor)
             setPadding(0, dp(4), 0, dp(12))
-        }
-        trimCard.addView(trimDescription)
+        })
 
-        startInput = makeTimeInput("Start time in seconds", "0")
+        val presetRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val preset15 = makeButton("15 sec", false)
+        preset15.setOnClickListener { applyTrimPreset(15) }
+
+        val preset30 = makeButton("30 sec", false)
+        preset30.setOnClickListener { applyTrimPreset(30) }
+
+        val preset60 = makeButton("60 sec", false)
+        preset60.setOnClickListener { applyTrimPreset(60) }
+
+        presetRow.addView(
+            preset15,
+            LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                marginEnd = dp(5)
+            }
+        )
+        presetRow.addView(
+            preset30,
+            LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+                marginEnd = dp(5)
+            }
+        )
+        presetRow.addView(
+            preset60,
+            LinearLayout.LayoutParams(0, dp(48), 1f)
+        )
+        trimCard.addView(presetRow)
+
+        trimCard.addView(TextView(this).apply {
+            text = "START TIME (SECONDS)"
+            textSize = 10f
+            letterSpacing = 0.08f
+            setTextColor(mutedColor)
+            setPadding(0, dp(14), 0, dp(4))
+        })
+
+        startInput = makeTimeInput("Start time", "0")
         trimCard.addView(startInput, matchWrap())
 
-        endInput = makeTimeInput("End time in seconds", "")
+        trimCard.addView(TextView(this).apply {
+            text = "END TIME (SECONDS)"
+            textSize = 10f
+            letterSpacing = 0.08f
+            setTextColor(mutedColor)
+            setPadding(0, dp(8), 0, dp(4))
+        })
+
+        endInput = makeTimeInput("End time", "")
         trimCard.addView(endInput, matchWrap())
 
         val fullClipButton = makeButton("Use full clip duration", false)
@@ -190,45 +235,52 @@ class VideoEditorActivity : Activity() {
                 endInput.setText(
                     String.format(Locale.US, "%.2f", duration / 1000.0)
                 )
+                showMessage("Full clip selected.")
             } else {
                 showMessage("Choose a video first.")
             }
         }
         trimCard.addView(fullClipButton, matchWrap())
+
+        trimCard.addView(TextView(this).apply {
+            text = "Quick presets start at 0 seconds. For a custom section, enter your own start and end times."
+            textSize = 11f
+            setTextColor(mutedColor)
+            setPadding(0, dp(8), 0, 0)
+        })
+
         content.addView(trimCard)
 
-        // Audio card
+        // AUDIO
         val audioCard = createCard()
         addSectionTitle(audioCard, "03  /  AUDIO")
 
-        val audioDescription = TextView(this).apply {
+        audioCard.addView(TextView(this).apply {
             text = "Keep the original audio or remove it from the exported clip."
             textSize = 13f
             setTextColor(mutedColor)
             setPadding(0, dp(4), 0, dp(10))
-        }
-        audioCard.addView(audioDescription)
+        })
 
         muteAudio = CheckBox(this).apply {
             text = "Mute original audio"
             textSize = 14f
             setTextColor(textColor)
-            buttonTintList = android.content.res.ColorStateList.valueOf(accentColor)
+            buttonTintList = ColorStateList.valueOf(accentColor)
         }
         audioCard.addView(muteAudio)
         content.addView(audioCard)
 
-        // Export card
+        // EXPORT
         val exportCard = createCard()
         addSectionTitle(exportCard, "04  /  EXPORT")
 
-        val exportDescription = TextView(this).apply {
-            text = "Export a trimmed MP4 clip to your Movies/Kalize Recorder folder. The original file stays unchanged."
+        exportCard.addView(TextView(this).apply {
+            text = "Export a trimmed MP4 to Movies/Kalize Recorder. Your original file stays unchanged."
             textSize = 13f
             setTextColor(mutedColor)
             setPadding(0, dp(4), 0, dp(12))
-        }
-        exportCard.addView(exportDescription)
+        })
 
         exportStatus = TextView(this).apply {
             text = "Ready when you are."
@@ -254,15 +306,11 @@ class VideoEditorActivity : Activity() {
             }
         }
         exportCard.addView(shareButton, matchWrap())
-
         content.addView(exportCard)
 
-        // Library and navigation
         val libraryButton = makeButton("Open saved video library", false)
         libraryButton.setOnClickListener {
-            startActivity(
-                Intent(this, SavedVideosActivity::class.java)
-            )
+            startActivity(Intent(this, SavedVideosActivity::class.java))
         }
         content.addView(libraryButton, matchWrap())
 
@@ -270,15 +318,14 @@ class VideoEditorActivity : Activity() {
         backButton.setOnClickListener { finish() }
         content.addView(backButton, matchWrap())
 
-        val footer = TextView(this).apply {
+        content.addView(TextView(this).apply {
             text = "ƘALIZE RECORDER  •  CREATOR STUDIO"
             textSize = 10f
             letterSpacing = 0.08f
             gravity = Gravity.CENTER
             setTextColor(mutedColor)
             setPadding(0, dp(20), 0, dp(10))
-        }
-        content.addView(footer)
+        })
 
         scroll.addView(
             content,
@@ -287,6 +334,7 @@ class VideoEditorActivity : Activity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         )
+
         root.addView(
             scroll,
             LinearLayout.LayoutParams(
@@ -299,17 +347,44 @@ class VideoEditorActivity : Activity() {
         setContentView(root)
     }
 
+    private fun applyTrimPreset(seconds: Int) {
+        val durationMs = durationLabel.tag as? Long
+
+        if (selectedVideo == null || durationMs == null || durationMs <= 0L) {
+            showMessage("Choose a video first.")
+            return
+        }
+
+        val durationSeconds = durationMs / 1000.0
+        val chosenSeconds = minOf(seconds.toDouble(), durationSeconds)
+
+        if (chosenSeconds <= 0.0) {
+            showMessage("This video has no usable duration.")
+            return
+        }
+
+        startInput.setText("0")
+        endInput.setText(
+            String.format(Locale.US, "%.2f", chosenSeconds)
+        )
+
+        showMessage(
+            "${formatDuration((chosenSeconds * 1000).toLong())} clip selected."
+        )
+    }
+
     private fun createCard(): LinearLayout {
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(16))
             setBackgroundColor(cardColor)
-            val params = LinearLayout.LayoutParams(
+
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            params.bottomMargin = dp(16)
-            layoutParams = params
+            ).apply {
+                bottomMargin = dp(16)
+            }
         }
     }
 
@@ -330,17 +405,13 @@ class VideoEditorActivity : Activity() {
             isAllCaps = false
             setTextColor(textColor)
             setTypeface(null, Typeface.BOLD)
-            setPadding(dp(12), dp(9), dp(12), dp(9))
-            backgroundTintList =
-                android.content.res.ColorStateList.valueOf(
-                    if (primary) accentColor else Color.rgb(42, 47, 68)
-                )
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+            setPadding(dp(8), dp(9), dp(8), dp(9))
+            backgroundTintList = ColorStateList.valueOf(
+                if (primary) accentColor else Color.rgb(42, 47, 68)
             )
-            params.topMargin = dp(8)
-            layoutParams = params
+            minHeight = dp(44)
+            minimumHeight = dp(44)
+            stateListAnimator = null
         }
     }
 
@@ -349,21 +420,14 @@ class VideoEditorActivity : Activity() {
             hint = hintText
             setText(initial)
             textSize = 14f
-            setSingleLine(true)
+            isSingleLine = true
             inputType =
                 android.text.InputType.TYPE_CLASS_NUMBER or
                     android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             setTextColor(textColor)
             setHintTextColor(mutedColor)
-            backgroundTintList =
-                android.content.res.ColorStateList.valueOf(accentColor)
+            backgroundTintList = ColorStateList.valueOf(accentColor)
             setPadding(dp(10), dp(10), dp(10), dp(10))
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            params.bottomMargin = dp(8)
-            layoutParams = params
         }
     }
 
@@ -395,7 +459,7 @@ class VideoEditorActivity : Activity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: Exception) {
-                // Some document providers do not grant persistent access.
+                // Some providers do not support persistent permissions.
             }
 
             selectedLabel.text = "Video selected successfully"
@@ -413,17 +477,20 @@ class VideoEditorActivity : Activity() {
                 val retriever = MediaMetadataRetriever()
                 try {
                     retriever.setDataSource(this, uri)
+
                     durationMs = retriever.extractMetadata(
                         MediaMetadataRetriever.METADATA_KEY_DURATION
                     )?.toLongOrNull() ?: 0L
+
                     width = retriever.extractMetadata(
                         MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH
                     )?.toIntOrNull() ?: 0
+
                     height = retriever.extractMetadata(
                         MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
                     )?.toIntOrNull() ?: 0
                 } catch (_: Exception) {
-                    // Keep safe defaults if metadata is unavailable.
+                    // Metadata may be unavailable for some files.
                 } finally {
                     retriever.release()
                 }
@@ -431,14 +498,18 @@ class VideoEditorActivity : Activity() {
                 runOnUiThread {
                     if (selectedVideo == uri) {
                         durationLabel.tag = durationMs
+
                         val dimensions = if (width > 0 && height > 0) {
                             " • ${width}×${height}"
                         } else {
                             ""
                         }
+
                         durationLabel.text =
                             "Duration: ${formatDuration(durationMs)}$dimensions"
+
                         selectedLabel.text = "Ready to edit"
+
                         if (durationMs > 0L) {
                             endInput.setText(
                                 String.format(
@@ -448,6 +519,7 @@ class VideoEditorActivity : Activity() {
                                 )
                             )
                         }
+
                         exportButton.isEnabled = durationMs > 0L
                         exportButton.alpha =
                             if (durationMs > 0L) 1f else 0.5f
@@ -535,6 +607,7 @@ class VideoEditorActivity : Activity() {
                         exportStatus.text = "Export could not be saved."
                         showMessage("Export failed while saving the file.")
                     }
+
                     exportButton.isEnabled = true
                     exportButton.text = "Export edited video"
                 }
@@ -592,6 +665,7 @@ class VideoEditorActivity : Activity() {
             )
 
             val outputTracks = mutableMapOf<Int, Int>()
+
             for (inputTrack in selectedTracks) {
                 outputTracks[inputTrack] =
                     muxer.addTrack(extractor.getTrackFormat(inputTrack))
@@ -615,6 +689,7 @@ class VideoEditorActivity : Activity() {
                 if (sampleTime < 0 || sampleTime >= endUs) break
 
                 val outputTrack = outputTracks[inputTrack]
+
                 if (outputTrack != null && sampleTime >= startUs) {
                     buffer.clear()
                     val size = extractor.readSampleData(buffer, 0)
@@ -624,6 +699,7 @@ class VideoEditorActivity : Activity() {
                         info.size = size
                         info.presentationTimeUs = sampleTime - startUs
                         info.flags = extractor.sampleFlags
+
                         muxer.writeSampleData(outputTrack, buffer, info)
                         samplesWritten++
                     }
@@ -644,10 +720,12 @@ class VideoEditorActivity : Activity() {
                 } catch (_: Exception) {
                 }
             }
+
             try {
                 muxer?.release()
             } catch (_: Exception) {
             }
+
             extractor.release()
         }
     }
@@ -657,6 +735,7 @@ class VideoEditorActivity : Activity() {
             "yyyyMMdd_HHmmss",
             Locale.US
         ).format(Date())
+
         val name = "Kalize_Edit_$timestamp.mp4"
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -685,6 +764,7 @@ class VideoEditorActivity : Activity() {
                 val completedValues = ContentValues().apply {
                     put(MediaStore.Video.Media.IS_PENDING, 0)
                 }
+
                 contentResolver.update(uri, completedValues, null, null)
                 uri
             } catch (e: Exception) {
@@ -696,16 +776,19 @@ class VideoEditorActivity : Activity() {
                 getExternalFilesDir(Environment.DIRECTORY_MOVIES),
                 "Kalize Recorder"
             )
+
             if (!directory.exists() && !directory.mkdirs()) {
                 throw IllegalStateException("Could not create export folder.")
             }
 
             val destination = File(directory, name)
+
             FileInputStream(file).use { input ->
                 FileOutputStream(destination).use { output ->
                     input.copyTo(output)
                 }
             }
+
             Uri.fromFile(destination)
         }
     }
@@ -717,9 +800,20 @@ class VideoEditorActivity : Activity() {
         val seconds = totalSeconds % 60
 
         return if (hours > 0) {
-            String.format(Locale.US, "%d:%02d:%02d", hours, minutes, seconds)
+            String.format(
+                Locale.US,
+                "%d:%02d:%02d",
+                hours,
+                minutes,
+                seconds
+            )
         } else {
-            String.format(Locale.US, "%02d:%02d", minutes, seconds)
+            String.format(
+                Locale.US,
+                "%02d:%02d",
+                minutes,
+                seconds
+            )
         }
     }
 

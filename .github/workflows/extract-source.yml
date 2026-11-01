@@ -1,0 +1,36 @@
+
+name: Extract Android Source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract editable Android project
+        run: |
+          mkdir -p /tmp/kalize-source
+          unzip -o kalize_recorder_source_download.zip -d /tmp/kalize-source
+          test -f /tmp/kalize-source/android/app/src/main/AndroidManifest.xml
+          mkdir -p android
+          cp -R /tmp/kalize-source/android/. android/
+
+      - name: Commit source files to GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "Extract editable Android source"
+            git push
+          fi

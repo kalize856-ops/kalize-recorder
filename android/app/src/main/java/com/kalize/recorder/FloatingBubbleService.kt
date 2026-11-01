@@ -32,10 +32,7 @@ class FloatingBubbleService : Service() {
             return START_NOT_STICKY
         }
 
-        if (bubble == null) {
-            showBubble()
-        }
-
+        if (bubble == null) showBubble()
         return START_NOT_STICKY
     }
 
@@ -49,6 +46,7 @@ class FloatingBubbleService : Service() {
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             setPadding(18, 12, 18, 12)
+            contentDescription = "Stop screen recording"
 
             background = GradientDrawable().apply {
                 setColor(Color.rgb(220, 45, 65))
@@ -105,8 +103,18 @@ class FloatingBubbleService : Service() {
                         moved = true
                     }
 
-                    params.x = startX + dx
-                    params.y = startY + dy
+                    val screenWidth =
+                        resources.displayMetrics.widthPixels
+                    val screenHeight =
+                        resources.displayMetrics.heightPixels
+
+                    val maxX =
+                        (screenWidth - view.width).coerceAtLeast(0)
+                    val maxY =
+                        (screenHeight - view.height).coerceAtLeast(0)
+
+                    params.x = (startX + dx).coerceIn(0, maxX)
+                    params.y = (startY + dy).coerceIn(0, maxY)
 
                     try {
                         windowManager.updateViewLayout(view, params)
@@ -117,16 +125,31 @@ class FloatingBubbleService : Service() {
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    if (!moved) {
+                    if (moved) {
+                        val screenWidth =
+                            resources.displayMetrics.widthPixels
+                        val maxX =
+                            (screenWidth - view.width).coerceAtLeast(0)
+
+                        params.x =
+                            if (params.x + view.width / 2 <
+                                screenWidth / 2) 0 else maxX
+
+                        try {
+                            windowManager.updateViewLayout(view, params)
+                        } catch (_: Exception) {
+                        }
+                    } else {
                         val stopIntent = Intent(
                             this,
                             ScreenRecordingService::class.java
                         ).apply {
-                            action =
-                                ScreenRecordingService.ACTION_STOP
+                            action = ScreenRecordingService.ACTION_STOP
                         }
 
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        if (Build.VERSION.SDK_INT >=
+                            Build.VERSION_CODES.O
+                        ) {
                             startForegroundService(stopIntent)
                         } else {
                             startService(stopIntent)
@@ -134,6 +157,7 @@ class FloatingBubbleService : Service() {
 
                         stopSelf()
                     }
+
                     true
                 }
 

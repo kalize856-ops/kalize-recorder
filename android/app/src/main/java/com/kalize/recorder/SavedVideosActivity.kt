@@ -44,6 +44,7 @@ class SavedVideosActivity : Activity() {
     private lateinit var listContainer: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var searchInput: EditText
+    private lateinit var clearSearchButton: Button
     private lateinit var emptyText: TextView
     private lateinit var sortSpinner: Spinner
 
@@ -186,14 +187,27 @@ class SavedVideosActivity : Activity() {
 
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(
-                    s: CharSequence?, start: Int,
-                    count: Int, after: Int
+                    s: CharSequence?,
+                    start: Int,
+                    count: Int,
+                    after: Int
                 ) {}
 
                 override fun onTextChanged(
-                    s: CharSequence?, start: Int,
-                    before: Int, count: Int
+                    s: CharSequence?,
+                    start: Int,
+                    before: Int,
+                    count: Int
                 ) {
+                    if (::clearSearchButton.isInitialized) {
+                        clearSearchButton.visibility =
+                            if (s.isNullOrEmpty()) {
+                                View.GONE
+                            } else {
+                                View.VISIBLE
+                            }
+                    }
+
                     displayVideos()
                 }
 
@@ -203,8 +217,38 @@ class SavedVideosActivity : Activity() {
             })
         }
 
-        root.addView(
+        clearSearchButton = makeButton(
+            "×",
+            Color.rgb(39, 48, 70)
+        ).apply {
+            contentDescription = "Clear video search"
+            visibility = View.GONE
+
+            setOnClickListener {
+                searchInput.text.clear()
+                searchInput.requestFocus()
+            }
+        }
+
+        val searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        searchRow.addView(
             searchInput,
+            LinearLayout.LayoutParams(0, dp(52), 1f).apply {
+                marginEnd = dp(8)
+            }
+        )
+
+        searchRow.addView(
+            clearSearchButton,
+            LinearLayout.LayoutParams(dp(52), dp(52))
+        )
+
+        root.addView(
+            searchRow,
             LinearLayout.LayoutParams(-1, dp(52))
         )
 

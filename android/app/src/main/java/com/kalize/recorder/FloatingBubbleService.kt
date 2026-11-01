@@ -25,12 +25,14 @@ class FloatingBubbleService : Service() {
     private var controlPanel: LinearLayout? = null
     private lateinit var layoutParams: WindowManager.LayoutParams
     private var isMinimized = false
+    private var isPaused = false
 
     private val backgroundColor = Color.rgb(20, 19, 37)
     private val purpleColor = Color.rgb(139, 92, 246)
     private val lightPurple = Color.rgb(190, 170, 255)
     private val redColor = Color.rgb(190, 48, 66)
     private val blueColor = Color.rgb(45, 105, 200)
+    private val greenColor = Color.rgb(35, 130, 90)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -90,6 +92,21 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    private fun sendRecordingAction(action: String) {
+        val serviceIntent = Intent(
+            this,
+            ScreenRecordingService::class.java
+        ).apply {
+            this.action = action
+        }
+
+        try {
+            startService(serviceIntent)
+        } catch (_: Exception) {
+            // The notification controls remain available as a fallback.
+        }
+    }
+
     private fun showControls() {
         windowManager =
             getSystemService(WINDOW_SERVICE) as WindowManager
@@ -111,6 +128,12 @@ class FloatingBubbleService : Service() {
             "OPEN",
             blueColor,
             "Open Kalize Recorder"
+        )
+
+        val pauseButton = makeControlButton(
+            "Ⅱ PAUSE",
+            greenColor,
+            "Pause screen recording"
         )
 
         val stopButton = makeControlButton(
@@ -156,6 +179,22 @@ class FloatingBubbleService : Service() {
             panel.addView(button, params)
         }
 
+        fun updatePauseButton() {
+            if (isPaused) {
+                pauseButton.text = "▶ RESUME"
+                pauseButton.background =
+                    roundedBackground(greenColor, 12)
+                pauseButton.contentDescription =
+                    "Resume screen recording"
+            } else {
+                pauseButton.text = "Ⅱ PAUSE"
+                pauseButton.background =
+                    roundedBackground(Color.rgb(75, 53, 125), 12)
+                pauseButton.contentDescription =
+                    "Pause screen recording"
+            }
+        }
+
         fun showExpanded() {
             isMinimized = false
             panel.removeAllViews()
@@ -169,7 +208,9 @@ class FloatingBubbleService : Service() {
             )
             panel.contentDescription = "Floating recording controls"
 
+            updatePauseButton()
             addControlButton(openButton)
+            addControlButton(pauseButton)
             addControlButton(stopButton)
             addControlButton(hideButton)
             addControlButton(minimizeButton)
@@ -188,14 +229,12 @@ class FloatingBubbleService : Service() {
                 setColor(Color.rgb(65, 42, 125))
                 setStroke(dp(2), lightPurple)
             }
-            panel.contentDescription = "Minimized Kalize Recorder controls"
+            panel.contentDescription =
+                "Minimized Kalize Recorder controls"
 
             panel.addView(
                 restoreButton,
-                LinearLayout.LayoutParams(
-                    dp(52),
-                    dp(52)
-                )
+                LinearLayout.LayoutParams(dp(52), dp(52))
             )
 
             updatePanelPosition()
@@ -214,34 +253,29 @@ class FloatingBubbleService : Service() {
             }
         }
 
+        pauseButton.setOnClickListener {
+            if (isPaused) {
+                sendRecordingAction(
+                    ScreenRecordingService.ACTION_RESUME
+                )
+                isPaused = false
+            } else {
+                sendRecordingAction(
+                    ScreenRecordingService.ACTION_PAUSE
+                )
+                isPaused = true
+            }
+
+            updatePauseButton()
+        }
+
         stopButton.setOnClickListener {
-            val stopIntent = Intent(
-                this,
-                ScreenRecordingService::class.java
-            ).apply {
-                action = ScreenRecordingService.ACTION_STOP
-            }
-
-            try {
-                startService(stopIntent)
-            } catch (_: Exception) {
-                try {
-                    stopService(
-                        Intent(
-                            this,
-                            ScreenRecordingService::class.java
-                        )
-                    )
-                } catch (_: Exception) {
-                    // Android may reject a service request.
-                }
-            }
-
+            sendRecordingAction(ScreenRecordingService.ACTION_STOP)
             stopSelf()
         }
 
         hideButton.setOnClickListener {
-            // Hiding the bubble does not stop the recording.
+            // Hiding the bubble does not stop recording.
             stopSelf()
         }
 
@@ -369,7 +403,7 @@ class FloatingBubbleService : Service() {
         try {
             windowManager.updateViewLayout(panel, layoutParams)
         } catch (_: Exception) {
-            // The panel may not have been attached yet.
+            // The panel may not be attached yet.
         }
     }
 
@@ -387,6 +421,7 @@ class FloatingBubbleService : Service() {
     }
 
     private object ViewGroupSize {
-        const val WRAP = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+        const val WRAP =
+            android.view.ViewGroup.LayoutParams.WRAP_CONTENT
     }
 }

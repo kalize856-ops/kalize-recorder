@@ -10,10 +10,11 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -162,25 +163,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             KalizeHome(
-                initialFolderUri = settings.getString(
-                    "save_tree_uri",
-                    null
-                ),
+                initialFolderUri = settings.getString("save_tree_uri", null),
                 initialQuality = settings.getString(
-                    "recording_quality",
-                    "1080p"
+                    "recording_quality", "1080p"
                 ) ?: "1080p",
                 initialFps = settings.getString(
-                    "recording_fps",
-                    "30 FPS"
+                    "recording_fps", "30 FPS"
                 ) ?: "30 FPS",
                 initialCountdownSeconds = settings.getInt(
-                    "recording_countdown_seconds",
-                    0
+                    "recording_countdown_seconds", 0
                 ),
-                onStartRecording = {
-                        quality, fps, folderUri, countdown, onResult ->
-
+                onStartRecording = { quality, fps, folderUri, countdown, onResult ->
                     requestedQuality = quality
                     requestedFps = fps
                     requestedFolderUri = folderUri
@@ -196,7 +189,6 @@ class MainActivity : ComponentActivity() {
                         manager.createScreenCaptureIntent()
                     )
                 },
-
                 onTakeScreenshot = {
                     screenshotRequested = true
 
@@ -208,7 +200,6 @@ class MainActivity : ComponentActivity() {
                         manager.createScreenCaptureIntent()
                     )
                 },
-
                 onStopRecording = {
                     pendingRecordingStart?.let {
                         countdownHandler.removeCallbacks(it)
@@ -233,14 +224,14 @@ class MainActivity : ComponentActivity() {
                         )
                     )
                 },
-
                 onEnableBubble = {
                     if (!Settings.canDrawOverlays(this)) {
-                        val overlayIntent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName")
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
                         )
-                        startActivity(overlayIntent)
                     }
                 }
             )
@@ -263,11 +254,7 @@ private fun KalizeHome(
     initialFps: String,
     initialCountdownSeconds: Int,
     onStartRecording: (
-        String,
-        Int,
-        String?,
-        Int,
-        (Boolean) -> Unit
+        String, Int, String?, Int, (Boolean) -> Unit
     ) -> Unit,
     onTakeScreenshot: () -> Unit,
     onStopRecording: () -> Unit,
@@ -280,19 +267,15 @@ private fun KalizeHome(
     var quality by remember {
         mutableStateOf(
             initialQuality.takeIf {
-                it in listOf(
-                    "360p", "480p", "720p",
-                    "1080p", "1440p", "4K"
-                )
+                it in listOf("360p", "480p", "720p", "1080p", "1440p", "4K")
             } ?: "1080p"
         )
     }
 
     var fps by remember {
         mutableStateOf(
-            initialFps.takeIf {
-                it in listOf("30 FPS", "60 FPS")
-            } ?: "30 FPS"
+            initialFps.takeIf { it in listOf("30 FPS", "60 FPS") }
+                ?: "30 FPS"
         )
     }
 
@@ -308,9 +291,7 @@ private fun KalizeHome(
         mutableStateOf("Ready when you are. Start a capture to begin.")
     }
 
-    var saveFolderUri by remember {
-        mutableStateOf(initialFolderUri)
-    }
+    var saveFolderUri by remember { mutableStateOf(initialFolderUri) }
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -332,10 +313,7 @@ private fun KalizeHome(
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
 
-                prefs.edit()
-                    .putString("save_tree_uri", uri.toString())
-                    .apply()
-
+                prefs.edit().putString("save_tree_uri", uri.toString()).apply()
                 saveFolderUri = uri.toString()
                 status = "Your new recording folder is selected."
             } catch (_: Exception) {
@@ -379,9 +357,10 @@ private fun KalizeHome(
             )
 
             Text(
-                "YOUR SCREEN. YOUR STORY.",
+                "YOUR SCREEN.\nYOUR STORY.",
                 color = Color.White,
-                fontSize = 28.sp,
+                fontSize = 30.sp,
+                lineHeight = 36.sp,
                 fontWeight = FontWeight.ExtraBold
             )
 
@@ -394,13 +373,8 @@ private fun KalizeHome(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Panel
-                ),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.dp,
-                    Border
-                )
+                colors = CardDefaults.cardColors(containerColor = Panel),
+                border = BorderStroke(1.dp, Border)
             ) {
                 Column(
                     modifier = Modifier.padding(18.dp),
@@ -417,11 +391,7 @@ private fun KalizeHome(
                         fontWeight = FontWeight.Bold
                     )
 
-                    Text(
-                        status,
-                        color = Muted,
-                        fontSize = 13.sp
-                    )
+                    Text(status, color = Muted, fontSize = 13.sp)
 
                     Button(
                         onClick = {
@@ -433,9 +403,9 @@ private fun KalizeHome(
                             } else {
                                 requesting = true
                                 status = if (countdown == 0) {
-                                    "Approve Android's screen-capture prompt to start immediately."
+                                    "Approve Android's screen-capture prompt to start."
                                 } else {
-                                    "Approve Android's prompt. Recording will start after $countdown seconds."
+                                    "Approve Android's prompt. Recording starts after $countdown seconds."
                                 }
 
                                 onStartRecording(
@@ -467,11 +437,8 @@ private fun KalizeHome(
                         )
                     ) {
                         Text(
-                            if (recording || requesting) {
-                                "■  STOP CAPTURE"
-                            } else {
-                                "●  START RECORDING"
-                            },
+                            if (recording || requesting) "■  STOP CAPTURE"
+                            else "●  START RECORDING",
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -497,17 +464,12 @@ private fun KalizeHome(
                 }
             }
 
-            SectionTitle(
-                "Capture settings",
-                "Choose how recording starts and looks"
-            )
+            SectionTitle("Capture settings", "Choose how recording starts and looks")
 
             Card(
                 shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Panel
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+                colors = CardDefaults.cardColors(containerColor = Panel),
+                border = BorderStroke(1.dp, Border)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -518,17 +480,13 @@ private fun KalizeHome(
                         description = "Target recording resolution",
                         value = quality,
                         options = listOf(
-                            "360p", "480p", "720p",
-                            "1080p", "1440p", "4K"
-                        ),
-                        onSelect = {
-                            quality = it
-                            prefs.edit()
-                                .putString("recording_quality", it)
-                                .apply()
-                            status = "Resolution saved: $it"
-                        }
-                    )
+                            "360p", "480p", "720p", "1080p", "1440p", "4K"
+                        )
+                    ) {
+                        quality = it
+                        prefs.edit().putString("recording_quality", it).apply()
+                        status = "Resolution saved: $it"
+                    }
 
                     HorizontalDivider(color = Border)
 
@@ -536,87 +494,63 @@ private fun KalizeHome(
                         title = "Frame rate",
                         description = "Target frames per second",
                         value = fps,
-                        options = listOf("30 FPS", "60 FPS"),
-                        onSelect = {
-                            fps = it
-                            prefs.edit()
-                                .putString("recording_fps", it)
-                                .apply()
-                            status = "Frame rate saved: $it"
-                        }
-                    )
+                        options = listOf("30 FPS", "60 FPS")
+                    ) {
+                        fps = it
+                        prefs.edit().putString("recording_fps", it).apply()
+                        status = "Frame rate saved: $it"
+                    }
 
                     HorizontalDivider(color = Border)
 
                     SettingDropdown(
                         title = "Recording countdown",
                         description = "Delay after Android approval",
-                        value = if (countdown == 0) {
-                            "Off"
-                        } else {
-                            "$countdown seconds"
-                        },
+                        value = if (countdown == 0) "Off" else "$countdown seconds",
                         options = listOf(
-                            "Off",
-                            "3 seconds",
-                            "5 seconds",
-                            "10 seconds",
-                            "15 seconds",
-                            "30 seconds"
-                        ),
-                        onSelect = { selected ->
-                            countdown = if (selected == "Off") {
-                                0
-                            } else {
-                                selected.substringBefore(" ")
-                                    .toIntOrNull() ?: 0
-                            }
-
-                            prefs.edit()
-                                .putInt(
-                                    "recording_countdown_seconds",
-                                    countdown
-                                )
-                                .apply()
-
-                            status = if (countdown == 0) {
-                                "Countdown turned off. Recording starts immediately after approval."
-                            } else {
-                                "Countdown saved: $countdown seconds."
-                            }
+                            "Off", "3 seconds", "5 seconds",
+                            "10 seconds", "15 seconds", "30 seconds"
+                        )
+                    ) { selected ->
+                        countdown = if (selected == "Off") {
+                            0
+                        } else {
+                            selected.substringBefore(" ").toIntOrNull() ?: 0
                         }
-                    )
+
+                        prefs.edit()
+                            .putInt("recording_countdown_seconds", countdown)
+                            .apply()
+
+                        status = if (countdown == 0) {
+                            "Countdown turned off."
+                        } else {
+                            "Countdown saved: $countdown seconds."
+                        }
+                    }
 
                     Text(
-                        "Your selected settings are saved for next time. Actual quality depends on your phone.",
+                        "Settings are saved for next time. Actual quality depends on your phone.",
                         color = Muted,
                         fontSize = 11.sp
                     )
                 }
             }
 
-            SectionTitle(
-                "Storage",
-                "Choose where recordings are saved"
-            )
+            SectionTitle("Storage", "Choose where recordings are saved")
 
             Card(
                 shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = Panel
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+                colors = CardDefaults.cardColors(containerColor = Panel),
+                border = BorderStroke(1.dp, Border)
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        if (saveFolderUri == null) {
-                            "Default save location"
-                        } else {
-                            "Custom folder selected"
-                        },
+                        if (saveFolderUri == null) "Default save location"
+                        else "Custom folder selected",
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -645,9 +579,7 @@ private fun KalizeHome(
                     OutlinedButton(
                         onClick = {
                             saveFolderUri = null
-                            prefs.edit()
-                                .remove("save_tree_uri")
-                                .apply()
+                            prefs.edit().remove("save_tree_uri").apply()
                             status = "Default phone storage selected."
                         },
                         modifier = Modifier.fillMaxWidth()
@@ -657,45 +589,34 @@ private fun KalizeHome(
                 }
             }
 
-            SectionTitle(
-                "Your creative tools",
-                "Open your saved content and controls"
-            )
+            SectionTitle("Your creative tools", "Open your saved content and controls")
 
             ToolButton(
                 "▣  Saved videos",
                 "Browse, play, share or delete recordings"
             ) {
-                context.startActivity(
-                    Intent(context, SavedVideosActivity::class.java)
-                )
+                context.startActivity(Intent(context, SavedVideosActivity::class.java))
             }
 
             ToolButton(
                 "▧  Screenshot Gallery",
                 "Find, view, share or delete screenshots"
             ) {
-                context.startActivity(
-                    Intent(context, ScreenshotGalleryActivity::class.java)
-                )
+                context.startActivity(Intent(context, ScreenshotGalleryActivity::class.java))
             }
 
             ToolButton(
                 "✂  Video editor",
                 "Trim clips and export edits"
             ) {
-                context.startActivity(
-                    Intent(context, VideoEditorActivity::class.java)
-                )
+                context.startActivity(Intent(context, VideoEditorActivity::class.java))
             }
 
             ToolButton(
                 "⚡  Performance Tools",
                 "Game Booster, network test and CPU benchmark"
             ) {
-                context.startActivity(
-                    Intent(context, PerformanceToolsActivity::class.java)
-                )
+                context.startActivity(Intent(context, PerformanceToolsActivity::class.java))
             }
 
             ToolButton(
@@ -752,24 +673,15 @@ private fun KalizeHome(
 }
 
 @Composable
-private fun SectionTitle(
-    title: String,
-    subtitle: String
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
+private fun SectionTitle(title: String, subtitle: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             title,
             color = Color.White,
             fontSize = 20.sp,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            subtitle,
-            color = Muted,
-            fontSize = 12.sp
-        )
+        Text(subtitle, color = Muted, fontSize = 12.sp)
     }
 }
 
@@ -787,9 +699,7 @@ private fun SettingDropdown(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.weight(1f)
-        ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 title,
                 color = Color.White,
@@ -797,11 +707,7 @@ private fun SettingDropdown(
                 fontWeight = FontWeight.SemiBold
             )
             Spacer(Modifier.height(4.dp))
-            Text(
-                description,
-                color = Muted,
-                fontSize = 11.sp
-            )
+            Text(description, color = Muted, fontSize = 11.sp)
         }
 
         Box {
@@ -809,11 +715,7 @@ private fun SettingDropdown(
                 onClick = { expanded = true },
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text(
-                    value,
-                    color = VioletBright,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(value, color = VioletBright, fontWeight = FontWeight.Bold)
                 Text("  ⌄", color = VioletBright)
             }
 
@@ -845,10 +747,8 @@ private fun ToolButton(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = Panel
-        ),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Border)
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        border = BorderStroke(1.dp, Border)
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -860,11 +760,7 @@ private fun ToolButton(
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
-            Text(
-                subtitle,
-                color = Muted,
-                fontSize = 12.sp
-            )
+            Text(subtitle, color = Muted, fontSize = 12.sp)
         }
     }
 }

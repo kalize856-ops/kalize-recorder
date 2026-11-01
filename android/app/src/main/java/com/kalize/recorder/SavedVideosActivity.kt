@@ -27,6 +27,8 @@ import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 class SavedVideosActivity : Activity() {
@@ -205,15 +207,14 @@ class SavedVideosActivity : Activity() {
             LinearLayout.LayoutParams(-1, dp(52))
         )
 
-        val sortLabel = TextView(this).apply {
+        root.addView(TextView(this).apply {
             text = "SORT YOUR CLIPS"
             textSize = 11f
             letterSpacing = 0.08f
             setTextColor(mutedColor)
             setTypeface(null, Typeface.BOLD)
             setPadding(dp(2), dp(14), 0, dp(6))
-        }
-        root.addView(sortLabel)
+        })
 
         sortSpinner = Spinner(this).apply {
             adapter = ArrayAdapter(
@@ -225,6 +226,7 @@ class SavedVideosActivity : Activity() {
                     android.R.layout.simple_spinner_dropdown_item
                 )
             }
+
             setPadding(dp(10), dp(4), dp(10), dp(4))
             background = roundedBackground(
                 Color.rgb(24, 32, 51),
@@ -390,11 +392,13 @@ class SavedVideosActivity : Activity() {
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
                 val name = it.getString(nameColumn) ?: "Untitled video"
+
                 val duration = if (durationColumn >= 0) {
                     it.getLong(durationColumn)
                 } else {
                     0L
                 }
+
                 val dateAdded = if (dateColumn >= 0) {
                     it.getLong(dateColumn)
                 } else {
@@ -555,12 +559,14 @@ class SavedVideosActivity : Activity() {
                 marginEnd = dp(5)
             }
         )
+
         buttons.addView(
             shareButton,
             LinearLayout.LayoutParams(0, dp(46), 1f).apply {
                 marginEnd = dp(5)
             }
         )
+
         buttons.addView(
             deleteButton,
             LinearLayout.LayoutParams(0, dp(46), 1f)
@@ -568,12 +574,61 @@ class SavedVideosActivity : Activity() {
 
         card.addView(buttons)
 
+        val detailsButton = makeButton(
+            "ⓘ  View video details",
+            Color.rgb(39, 48, 70)
+        )
+        detailsButton.setOnClickListener {
+            showVideoDetails(video)
+        }
+
+        card.addView(
+            detailsButton,
+            LinearLayout.LayoutParams(-1, dp(46)).apply {
+                topMargin = dp(8)
+            }
+        )
+
         listContainer.addView(
             card,
             LinearLayout.LayoutParams(-1, -2).apply {
                 bottomMargin = dp(14)
             }
         )
+    }
+
+    private fun showVideoDetails(video: SavedVideo) {
+        val savedDate = if (video.dateAdded > 0L) {
+            SimpleDateFormat(
+                "dd MMM yyyy, hh:mm a",
+                Locale.getDefault()
+            ).format(Date(video.dateAdded * 1000L))
+        } else {
+            "Date unavailable"
+        }
+
+        val details = """
+            File name:
+            ${video.name}
+
+            Duration:
+            ${formatDuration(video.durationMs)}
+
+            Saved date:
+            $savedDate
+
+            File location:
+            Movies/Kalize Recorder/
+        """.trimIndent()
+
+        AlertDialog.Builder(this)
+            .setTitle("Video details")
+            .setMessage(details)
+            .setPositiveButton("Done", null)
+            .setNeutralButton("Share video") { _, _ ->
+                shareVideo(video)
+            }
+            .show()
     }
 
     private fun confirmDelete(video: SavedVideo) {

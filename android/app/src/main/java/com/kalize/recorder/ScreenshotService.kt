@@ -307,7 +307,9 @@ class ScreenshotService : Service() {
                 }
 
                 val resolver = contentResolver
-                val uri: Uri? = resolver.insert(
+
+                // FIX: uri is non-null after the null check.
+                val uri: Uri = resolver.insert(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     values
                 ) ?: return false

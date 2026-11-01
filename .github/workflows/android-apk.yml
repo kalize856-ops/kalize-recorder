@@ -1,3 +1,4 @@
+
 name: Build Android APK
 
 on:
@@ -20,15 +21,17 @@ jobs:
 
       - name: Check source ZIP exists
         run: |
-          test -f kalize_recorder_source_download.zip || {
-            echo "Source ZIP not found in repository root."
-            exit 1
-          }
+          test -f kalize_recorder_source_download.zip
 
       - name: Extract project
         run: |
           mkdir -p source
           unzip -o kalize_recorder_source_download.zip -d source
+
+      - name: Verify Android source
+        run: |
+          test -f source/android/app/src/main/AndroidManifest.xml
+          find source/android/app/src/main -type f
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -49,7 +52,6 @@ jobs:
 
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-
           old = "    buildFeatures { compose = true }"
           new = """    compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
@@ -60,12 +62,8 @@ jobs:
               }
               buildFeatures { compose = true }"""
 
-          if old not in s:
-              raise SystemExit(
-                  "Could not find expected buildFeatures line"
-              )
-
-          p.write_text(s.replace(old, new, 1))
+          if old in s and "jvmTarget = \"17\"" not in s:
+              p.write_text(s.replace(old, new, 1))
           PY
 
       - name: Build debug APK

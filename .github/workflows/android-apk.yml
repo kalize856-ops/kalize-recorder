@@ -19,12 +19,28 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Verify editable Android source
+      - name: Verify Android source files
         run: |
           test -f android/app/src/main/AndroidManifest.xml
           test -f android/app/src/main/java/com/kalize/recorder/MainActivity.kt
           test -f android/app/src/main/java/com/kalize/recorder/ScreenRecordingService.kt
+          test -f android/app/src/main/java/com/kalize/recorder/FloatingBubbleService.kt
           find android/app/src/main -type f
+
+      - name: Validate Android manifest XML
+        run: |
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+
+          path = "android/app/src/main/AndroidManifest.xml"
+
+          try:
+              ET.parse(path)
+              print("Manifest XML syntax is valid.")
+          except ET.ParseError as error:
+              print(f"Manifest XML syntax error: {error}")
+              raise
+          PY
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -45,8 +61,17 @@ jobs:
 
           p = Path("app/build.gradle.kts")
           s = p.read_text()
-          old = "    buildFeatures { compose = true }"
-          new = """    compileOptions {
+
+          if 'jvmTarget = "17"' not in s:
+              old = "    buildFeatures { compose = true }"
+
+              if old not in s:
+                  raise SystemExit(
+                      "Could not find the expected buildFeatures line "
+                      "in app/build.gradle.kts"
+                  )
+
+              new = """    compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
               }
@@ -55,15 +80,12 @@ jobs:
               }
               buildFeatures { compose = true }"""
 
-          if old in s and 'jvmTarget = "17"' not in s:
-              if old not in s:
-                  raise SystemExit("Could not find the expected buildFeatures line.")
               p.write_text(s.replace(old, new, 1))
           PY
 
       - name: Build debug APK
         working-directory: android
-        run: gradle --no-daemon assembleDebug
+        run: gradle --no-daemon assembleDebug --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

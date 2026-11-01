@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
@@ -15,12 +16,21 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.TextView
 import kotlin.math.abs
 
 class FloatingBubbleService : Service() {
 
     private lateinit var windowManager: WindowManager
     private var controlPanel: LinearLayout? = null
+    private lateinit var layoutParams: WindowManager.LayoutParams
+    private var isMinimized = false
+
+    private val backgroundColor = Color.rgb(20, 19, 37)
+    private val purpleColor = Color.rgb(139, 92, 246)
+    private val lightPurple = Color.rgb(190, 170, 255)
+    private val redColor = Color.rgb(190, 48, 66)
+    private val blueColor = Color.rgb(45, 105, 200)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -41,6 +51,45 @@ class FloatingBubbleService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
+    private fun roundedBackground(
+        color: Int,
+        radiusDp: Int = 16,
+        strokeColor: Int? = null
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radiusDp).toFloat()
+            if (strokeColor != null) {
+                setStroke(dp(1), strokeColor)
+            }
+        }
+    }
+
+    private fun makeControlButton(
+        label: String,
+        color: Int,
+        description: String
+    ): Button {
+        return Button(this).apply {
+            text = label
+            textSize = 11f
+            isAllCaps = false
+            contentDescription = description
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            background = roundedBackground(color, 12)
+            stateListAnimator = null
+            minWidth = 0
+            minimumWidth = 0
+            minHeight = dp(42)
+            minimumHeight = dp(42)
+            setPadding(dp(9), dp(4), dp(9), dp(4))
+        }
+    }
+
     private fun showControls() {
         windowManager =
             getSystemService(WINDOW_SERVICE) as WindowManager
@@ -48,96 +97,108 @@ class FloatingBubbleService : Service() {
         val panel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(6, 6, 6, 6)
-
-            background = GradientDrawable().apply {
-                setColor(Color.rgb(24, 26, 38))
-                cornerRadius = 28f
-                setStroke(2, Color.rgb(150, 125, 255))
-            }
-
-            elevation = 12f
+            setPadding(dp(7), dp(7), dp(7), dp(7))
+            background = roundedBackground(
+                backgroundColor,
+                22,
+                purpleColor
+            )
+            elevation = dp(8).toFloat()
             contentDescription = "Floating recording controls"
         }
 
         val openButton = makeControlButton(
             "OPEN",
-            Color.rgb(45, 115, 210),
+            blueColor,
             "Open Kalize Recorder"
         )
 
         val stopButton = makeControlButton(
             "■ STOP",
-            Color.rgb(210, 45, 60),
+            redColor,
             "Stop screen recording"
         )
 
         val hideButton = makeControlButton(
             "HIDE",
-            Color.rgb(80, 70, 110),
+            Color.rgb(69, 60, 95),
             "Hide floating controls without stopping recording"
         )
 
         val minimizeButton = makeControlButton(
             "MINI",
-            Color.rgb(65, 55, 95),
+            Color.rgb(75, 53, 125),
             "Minimize floating controls"
         )
 
-        val restoreButton = makeControlButton(
-            "K",
-            Color.TRANSPARENT,
-            "Expand floating controls"
-        ).apply {
-            textSize = 18f
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            setPadding(0, 0, 0, 0)
+        val restoreButton = TextView(this).apply {
+            text = "K"
+            textSize = 20f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Expand floating controls"
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.rgb(88, 55, 170))
+                setStroke(dp(2), lightPurple)
+            }
+        }
+
+        fun addControlButton(button: Button) {
+            val params = LinearLayout.LayoutParams(
+                ViewGroupSize.WRAP,
+                dp(42)
+            ).apply {
+                marginStart = dp(3)
+                marginEnd = dp(3)
+            }
+            panel.addView(button, params)
         }
 
         fun showExpanded() {
+            isMinimized = false
             panel.removeAllViews()
             panel.orientation = LinearLayout.HORIZONTAL
             panel.gravity = Gravity.CENTER
-            panel.setPadding(6, 6, 6, 6)
-
-            panel.background = GradientDrawable().apply {
-                setColor(Color.rgb(24, 26, 38))
-                cornerRadius = 28f
-                setStroke(2, Color.rgb(150, 125, 255))
-            }
-
+            panel.setPadding(dp(7), dp(7), dp(7), dp(7))
+            panel.background = roundedBackground(
+                backgroundColor,
+                22,
+                purpleColor
+            )
             panel.contentDescription = "Floating recording controls"
 
-            panel.addView(openButton)
-            panel.addView(stopButton)
-            panel.addView(hideButton)
-            panel.addView(minimizeButton)
+            addControlButton(openButton)
+            addControlButton(stopButton)
+            addControlButton(hideButton)
+            addControlButton(minimizeButton)
+
+            updatePanelPosition()
         }
 
         fun showCollapsed() {
+            isMinimized = true
             panel.removeAllViews()
             panel.orientation = LinearLayout.HORIZONTAL
             panel.gravity = Gravity.CENTER
             panel.setPadding(0, 0, 0, 0)
-
             panel.background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(Color.rgb(45, 35, 85))
-                setStroke(2, Color.rgb(180, 160, 255))
+                setColor(Color.rgb(65, 42, 125))
+                setStroke(dp(2), lightPurple)
             }
-
             panel.contentDescription = "Minimized Kalize Recorder controls"
-
-            val bubbleSize =
-                (48 * resources.displayMetrics.density).toInt()
 
             panel.addView(
                 restoreButton,
                 LinearLayout.LayoutParams(
-                    bubbleSize,
-                    bubbleSize
+                    dp(52),
+                    dp(52)
                 )
             )
+
+            updatePanelPosition()
         }
 
         openButton.setOnClickListener {
@@ -162,20 +223,25 @@ class FloatingBubbleService : Service() {
             }
 
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    startForegroundService(stopIntent)
-                } else {
-                    startService(stopIntent)
-                }
+                startService(stopIntent)
             } catch (_: Exception) {
-                // Avoid crashing if Android rejects the request.
+                try {
+                    stopService(
+                        Intent(
+                            this,
+                            ScreenRecordingService::class.java
+                        )
+                    )
+                } catch (_: Exception) {
+                    // Android may reject a service request.
+                }
             }
 
             stopSelf()
         }
 
         hideButton.setOnClickListener {
-            // Hide only the controls. Recording is handled separately.
+            // Hiding the bubble does not stop the recording.
             stopSelf()
         }
 
@@ -195,7 +261,7 @@ class FloatingBubbleService : Service() {
                 WindowManager.LayoutParams.TYPE_PHONE
             }
 
-        val params = WindowManager.LayoutParams(
+        layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
@@ -204,8 +270,8 @@ class FloatingBubbleService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 12
-            y = 250
+            x = dp(12)
+            y = dp(220)
         }
 
         var startX = 0
@@ -217,8 +283,8 @@ class FloatingBubbleService : Service() {
         panel.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startX = params.x
-                    startY = params.y
+                    startX = layoutParams.x
+                    startY = layoutParams.y
                     touchX = event.rawX
                     touchY = event.rawY
                     moved = false
@@ -229,7 +295,7 @@ class FloatingBubbleService : Service() {
                     val dx = (event.rawX - touchX).toInt()
                     val dy = (event.rawY - touchY).toInt()
 
-                    if (abs(dx) > 8 || abs(dy) > 8) {
+                    if (abs(dx) > dp(5) || abs(dy) > dp(5)) {
                         moved = true
                     }
 
@@ -243,11 +309,13 @@ class FloatingBubbleService : Service() {
                     val maxY =
                         (screenHeight - view.height).coerceAtLeast(0)
 
-                    params.x = (startX + dx).coerceIn(0, maxX)
-                    params.y = (startY + dy).coerceIn(0, maxY)
+                    layoutParams.x =
+                        (startX + dx).coerceIn(0, maxX)
+                    layoutParams.y =
+                        (startY + dy).coerceIn(0, maxY)
 
                     try {
-                        windowManager.updateViewLayout(view, params)
+                        windowManager.updateViewLayout(view, layoutParams)
                     } catch (_: Exception) {
                         // The overlay may already have been removed.
                     }
@@ -257,27 +325,8 @@ class FloatingBubbleService : Service() {
 
                 MotionEvent.ACTION_UP -> {
                     if (moved) {
-                        val screenWidth =
-                            resources.displayMetrics.widthPixels
-                        val maxX =
-                            (screenWidth - view.width).coerceAtLeast(0)
-
-                        params.x =
-                            if (params.x + view.width / 2 <
-                                screenWidth / 2
-                            ) {
-                                0
-                            } else {
-                                maxX
-                            }
-
-                        try {
-                            windowManager.updateViewLayout(view, params)
-                        } catch (_: Exception) {
-                            // Ignore updates after removal.
-                        }
+                        snapToNearestSide(view)
                     }
-
                     true
                 }
 
@@ -288,7 +337,7 @@ class FloatingBubbleService : Service() {
         showExpanded()
 
         try {
-            windowManager.addView(panel, params)
+            windowManager.addView(panel, layoutParams)
             controlPanel = panel
         } catch (_: Exception) {
             controlPanel = null
@@ -296,21 +345,31 @@ class FloatingBubbleService : Service() {
         }
     }
 
-    private fun makeControlButton(
-        label: String,
-        color: Int,
-        description: String
-    ): Button {
-        return Button(this).apply {
-            text = label
-            textSize = 10f
-            isAllCaps = false
-            contentDescription = description
-            setTextColor(Color.WHITE)
-            setBackgroundColor(color)
-            minWidth = 0
-            minimumWidth = 0
-            setPadding(8, 4, 8, 4)
+    private fun snapToNearestSide(view: View) {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val maxX = (screenWidth - view.width).coerceAtLeast(0)
+
+        layoutParams.x =
+            if (layoutParams.x + view.width / 2 < screenWidth / 2) {
+                0
+            } else {
+                maxX
+            }
+
+        try {
+            windowManager.updateViewLayout(view, layoutParams)
+        } catch (_: Exception) {
+            // Ignore if Android has removed the overlay.
+        }
+    }
+
+    private fun updatePanelPosition() {
+        val panel = controlPanel ?: return
+
+        try {
+            windowManager.updateViewLayout(panel, layoutParams)
+        } catch (_: Exception) {
+            // The panel may not have been attached yet.
         }
     }
 
@@ -325,5 +384,9 @@ class FloatingBubbleService : Service() {
 
         controlPanel = null
         super.onDestroy()
+    }
+
+    private object ViewGroupSize {
+        const val WRAP = android.view.ViewGroup.LayoutParams.WRAP_CONTENT
     }
 }

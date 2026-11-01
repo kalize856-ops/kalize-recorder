@@ -178,7 +178,6 @@ class MainActivity : ComponentActivity() {
                     "recording_countdown_seconds",
                     0
                 ),
-
                 onStartRecording = {
                         quality, fps, folderUri, countdown, onResult ->
 
@@ -682,6 +681,15 @@ private fun KalizeHome(
             }
 
             ToolButton(
+                "⚡  Performance Tools",
+                "Game Booster, network test and CPU benchmark"
+            ) {
+                context.startActivity(
+                    Intent(context, PerformanceToolsActivity::class.java)
+                )
+            }
+
+            ToolButton(
                 "◉  Floating controls",
                 "Enable the on-screen recording bubble"
             ) {
@@ -716,7 +724,8 @@ private fun KalizeHome(
                             "• Video trimming and export\n" +
                             "• Resolution and frame-rate settings\n" +
                             "• Optional recording countdown\n" +
-                            "• Custom recording folders\n\n" +
+                            "• Custom recording folders\n" +
+                            "• Performance tools and device information\n\n" +
                             "Android asks for screen-capture approval before capturing."
                     )
                 },

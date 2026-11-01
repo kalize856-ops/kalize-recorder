@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
                     screenshotRequested = false
 
                     val screenshotIntent = Intent(
-                        this, ScreenshotService::class.java
+                        this,
+                        ScreenshotService::class.java
                     ).apply {
                         putExtra(
                             ScreenshotService.EXTRA_RESULT_CODE,
@@ -73,7 +74,8 @@ class MainActivity : ComponentActivity() {
                     )
                 } else {
                     val serviceIntent = Intent(
-                        this, ScreenRecordingService::class.java
+                        this,
+                        ScreenRecordingService::class.java
                     ).apply {
                         putExtra(
                             ScreenRecordingService.EXTRA_RESULT_CODE,
@@ -107,7 +109,10 @@ class MainActivity : ComponentActivity() {
 
                     if (Settings.canDrawOverlays(this)) {
                         startService(
-                            Intent(this, FloatingBubbleService::class.java)
+                            Intent(
+                                this,
+                                FloatingBubbleService::class.java
+                            )
                         )
                     }
 
@@ -160,13 +165,19 @@ class MainActivity : ComponentActivity() {
 
                 onStopRecording = {
                     startService(
-                        Intent(this, ScreenRecordingService::class.java).apply {
+                        Intent(
+                            this,
+                            ScreenRecordingService::class.java
+                        ).apply {
                             action = ScreenRecordingService.ACTION_STOP
                         }
                     )
 
                     stopService(
-                        Intent(this, FloatingBubbleService::class.java)
+                        Intent(
+                            this,
+                            FloatingBubbleService::class.java
+                        )
                     )
                 },
 
@@ -187,7 +198,12 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KalizeHome(
     initialFolderUri: String?,
-    onStartRecording: (String, Int, String?, (Boolean) -> Unit) -> Unit,
+    onStartRecording: (
+        String,
+        Int,
+        String?,
+        (Boolean) -> Unit
+    ) -> Unit,
     onTakeScreenshot: () -> Unit,
     onStopRecording: () -> Unit,
     onEnableBubble: () -> Unit
@@ -196,6 +212,7 @@ private fun KalizeHome(
     var requesting by remember { mutableStateOf(false) }
     var quality by remember { mutableStateOf("1080p") }
     var fps by remember { mutableStateOf("30 FPS") }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     var status by remember {
         mutableStateOf(
@@ -232,7 +249,8 @@ private fun KalizeHome(
                     .apply()
 
                 saveFolderUri = uri.toString()
-                status = "Save folder selected. New recordings will use it."
+                status =
+                    "Save folder selected. New recordings will use it."
             } catch (_: Exception) {
                 status =
                     "Could not access that folder. Please choose it again."
@@ -540,7 +558,6 @@ private fun KalizeHome(
                 Text("✂ Open Video Editor")
             }
 
-            // NEW: Open the saved video library directly from Home.
             OutlinedButton(
                 onClick = {
                     context.startActivity(
@@ -592,6 +609,86 @@ private fun KalizeHome(
                     )
                 }
             }
+
+            // New About screen button.
+            OutlinedButton(
+                onClick = {
+                    showAboutDialog = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("ⓘ About Ƙalize Recorder")
+            }
+
+            Text(
+                "Ƙalize Recorder · Made for your screen-capture needs",
+                color = Muted,
+                fontSize = 11.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally)
+            )
+        }
+
+        // About dialog.
+        if (showAboutDialog) {
+            AlertDialog(
+                onDismissRequest = {
+                    showAboutDialog = false
+                },
+                title = {
+                    Text(
+                        "About Ƙalize Recorder",
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            "Your screen-capture toolkit",
+                            fontWeight = FontWeight.SemiBold,
+                            color = Violet
+                        )
+
+                        Text(
+                            "FEATURES\n" +
+                                "• Screen recording\n" +
+                                "• Screenshot capture\n" +
+                                "• Saved video library\n" +
+                                "• Video editor\n" +
+                                "• Resolution and frame-rate options\n" +
+                                "• Custom save-folder selection"
+                        )
+
+                        HorizontalDivider(
+                            color = Muted.copy(alpha = 0.3f)
+                        )
+
+                        Text(
+                            "PRIVACY\n" +
+                                "Android asks for screen-capture permission before capture begins. Review the Android prompt before approving it. Save recordings in the default or selected folder."
+                        )
+
+                        Text(
+                            "Use screen capture responsibly and respect other people's privacy.",
+                            color = Muted,
+                            fontSize = 12.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showAboutDialog = false
+                        }
+                    ) {
+                        Text("Close")
+                    }
+                },
+                containerColor = Panel,
+                titleContentColor = Color.White,
+                textContentColor = Color.White
+            )
         }
     }
 }

@@ -28,6 +28,7 @@ class FloatingBubbleService : Service() {
     private var controlPanel: LinearLayout? = null
     private lateinit var layoutParams: WindowManager.LayoutParams
     private var isMinimized = false
+    private var isRecording = false
     private var isPaused = false
     private var receiverRegistered = false
     private var pauseButton: Button? = null
@@ -45,7 +46,7 @@ class FloatingBubbleService : Service() {
                 return
             }
 
-            val recording = intent.getBooleanExtra(
+            isRecording = intent.getBooleanExtra(
                 ScreenRecordingService.EXTRA_IS_RECORDING,
                 false
             )
@@ -55,7 +56,7 @@ class FloatingBubbleService : Service() {
                 false
             )
 
-            if (!recording) {
+            if (!isRecording) {
                 isPaused = false
             }
 
@@ -90,7 +91,12 @@ class FloatingBubbleService : Service() {
             Context.MODE_PRIVATE
         )
 
+        isRecording = prefs.getBoolean("is_recording", false)
         isPaused = prefs.getBoolean("is_paused", false)
+
+        if (!isRecording) {
+            isPaused = false
+        }
     }
 
     override fun onStartCommand(
@@ -161,7 +167,7 @@ class FloatingBubbleService : Service() {
         try {
             startService(serviceIntent)
         } catch (_: Exception) {
-            // Notification controls remain available as a fallback.
+            // The recording notification provides backup controls.
         }
     }
 
@@ -307,14 +313,16 @@ class FloatingBubbleService : Service() {
                 Context.MODE_PRIVATE
             )
 
-            val recording = prefs.getBoolean("is_recording", false)
-            val paused = prefs.getBoolean("is_paused", false)
+            // Read the latest saved state before acting.
+            isRecording = prefs.getBoolean("is_recording", false)
+            isPaused = prefs.getBoolean("is_paused", false)
 
-            if (!recording) {
+            if (!isRecording) {
+                updatePauseButton()
                 return@setOnClickListener
             }
 
-            if (paused) {
+            if (isPaused) {
                 sendRecordingAction(
                     ScreenRecordingService.ACTION_RESUME
                 )
@@ -438,14 +446,25 @@ class FloatingBubbleService : Service() {
     private fun updatePauseButton() {
         val button = pauseButton ?: return
 
-        if (isPaused) {
+        button.isEnabled = isRecording
+        button.alpha = if (isRecording) 1f else 0.55f
+
+        if (!isRecording) {
+            button.text = "NOT RECORDING"
+            button.background = roundedBackground(
+                Color.rgb(75, 70, 90),
+                12
+            )
+            button.contentDescription =
+                "No active screen recording"
+        } else if (isPaused) {
             button.text = "▶ RESUME"
             button.background = roundedBackground(greenColor, 12)
             button.contentDescription = "Resume screen recording"
         } else {
             button.text = "Ⅱ PAUSE"
             button.background = roundedBackground(
-                Color.rgb(75, 53, 125),
+                purpleColor,
                 12
             )
             button.contentDescription = "Pause screen recording"

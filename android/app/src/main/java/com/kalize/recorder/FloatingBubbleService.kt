@@ -11,14 +11,16 @@ import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
-import android.widget.TextView
+import android.widget.Button
+import android.widget.LinearLayout
 import kotlin.math.abs
 
 class FloatingBubbleService : Service() {
 
     private lateinit var windowManager: WindowManager
-    private var bubble: TextView? = null
+    private var controlPanel: LinearLayout? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -32,30 +34,65 @@ class FloatingBubbleService : Service() {
             return START_NOT_STICKY
         }
 
-        if (bubble == null) showBubble()
+        if (controlPanel == null) {
+            showControls()
+        }
+
         return START_NOT_STICKY
     }
 
-    private fun showBubble() {
+    private fun showControls() {
         windowManager =
             getSystemService(WINDOW_SERVICE) as WindowManager
 
-        val button = TextView(this).apply {
-            text = "■ STOP"
-            textSize = 14f
-            setTextColor(Color.WHITE)
+        val panel = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(18, 12, 18, 12)
-            contentDescription = "Stop screen recording"
+            setPadding(6, 6, 6, 6)
 
             background = GradientDrawable().apply {
-                setColor(Color.rgb(220, 45, 65))
-                cornerRadius = 60f
+                setColor(Color.rgb(30, 30, 38))
+                cornerRadius = 28f
                 setStroke(2, Color.WHITE)
             }
 
             elevation = 12f
+            contentDescription = "Floating recording controls"
         }
+
+        val openButton = Button(this).apply {
+            text = "OPEN"
+            textSize = 12f
+            isAllCaps = false
+            contentDescription = "Open Kalize Recorder"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(45, 115, 210))
+        }
+
+        val stopButton = Button(this).apply {
+            text = "■ STOP"
+            textSize = 12f
+            isAllCaps = false
+            contentDescription = "Stop screen recording"
+            setTextColor(Color.WHITE)
+            setBackgroundColor(Color.rgb(210, 45, 60))
+        }
+
+        panel.addView(
+            openButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
+
+        panel.addView(
+            stopButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
 
         val overlayType =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -74,8 +111,42 @@ class FloatingBubbleService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 40
+            x = 20
             y = 250
+        }
+
+        openButton.setOnClickListener {
+            val launchIntent =
+                packageManager.getLaunchIntentForPackage(packageName)
+
+            launchIntent?.apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                )
+                startActivity(this)
+            }
+        }
+
+        stopButton.setOnClickListener {
+            val stopIntent = Intent(
+                this,
+                ScreenRecordingService::class.java
+            ).apply {
+                action = ScreenRecordingService.ACTION_STOP
+            }
+
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    startForegroundService(stopIntent)
+                } else {
+                    startService(stopIntent)
+                }
+            } catch (_: Exception) {
+                // Avoid crashing if Android rejects the stop request.
+            }
+
+            stopSelf()
         }
 
         var startX = 0
@@ -84,7 +155,7 @@ class FloatingBubbleService : Service() {
         var touchY = 0f
         var moved = false
 
-        button.setOnTouchListener { view, event ->
+        panel.setOnTouchListener { view, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     startX = params.x
@@ -133,29 +204,17 @@ class FloatingBubbleService : Service() {
 
                         params.x =
                             if (params.x + view.width / 2 <
-                                screenWidth / 2) 0 else maxX
+                                screenWidth / 2
+                            ) {
+                                0
+                            } else {
+                                maxX
+                            }
 
                         try {
                             windowManager.updateViewLayout(view, params)
                         } catch (_: Exception) {
                         }
-                    } else {
-                        val stopIntent = Intent(
-                            this,
-                            ScreenRecordingService::class.java
-                        ).apply {
-                            action = ScreenRecordingService.ACTION_STOP
-                        }
-
-                        if (Build.VERSION.SDK_INT >=
-                            Build.VERSION_CODES.O
-                        ) {
-                            startForegroundService(stopIntent)
-                        } else {
-                            startService(stopIntent)
-                        }
-
-                        stopSelf()
                     }
 
                     true
@@ -166,23 +225,23 @@ class FloatingBubbleService : Service() {
         }
 
         try {
-            windowManager.addView(button, params)
-            bubble = button
+            windowManager.addView(panel, params)
+            controlPanel = panel
         } catch (_: Exception) {
-            bubble = null
+            controlPanel = null
             stopSelf()
         }
     }
 
     override fun onDestroy() {
-        bubble?.let {
+        controlPanel?.let {
             try {
                 windowManager.removeView(it)
             } catch (_: Exception) {
             }
         }
 
-        bubble = null
+        controlPanel = null
         super.onDestroy()
     }
 }

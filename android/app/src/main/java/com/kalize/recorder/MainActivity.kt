@@ -51,73 +51,39 @@ class MainActivity : ComponentActivity() {
             val data = result.data
 
             if (result.resultCode == Activity.RESULT_OK && data != null) {
-
                 if (screenshotRequested) {
                     screenshotRequested = false
 
                     val screenshotIntent = Intent(
-                        this,
-                        ScreenshotService::class.java
+                        this, ScreenshotService::class.java
                     ).apply {
-                        putExtra(
-                            ScreenshotService.EXTRA_RESULT_CODE,
-                            result.resultCode
-                        )
-                        putExtra(
-                            ScreenshotService.EXTRA_RESULT_DATA,
-                            data
-                        )
+                        putExtra(ScreenshotService.EXTRA_RESULT_CODE, result.resultCode)
+                        putExtra(ScreenshotService.EXTRA_RESULT_DATA, data)
                     }
 
-                    ContextCompat.startForegroundService(
-                        this,
-                        screenshotIntent
-                    )
-
+                    ContextCompat.startForegroundService(this, screenshotIntent)
                 } else {
                     val serviceIntent = Intent(
-                        this,
-                        ScreenRecordingService::class.java
+                        this, ScreenRecordingService::class.java
                     ).apply {
-                        putExtra(
-                            ScreenRecordingService.EXTRA_RESULT_CODE,
-                            result.resultCode
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_RESULT_DATA,
-                            data
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_QUALITY,
-                            requestedQuality
-                        )
-                        putExtra(
-                            ScreenRecordingService.EXTRA_FPS,
-                            requestedFps
-                        )
+                        putExtra(ScreenRecordingService.EXTRA_RESULT_CODE, result.resultCode)
+                        putExtra(ScreenRecordingService.EXTRA_RESULT_DATA, data)
+                        putExtra(ScreenRecordingService.EXTRA_QUALITY, requestedQuality)
+                        putExtra(ScreenRecordingService.EXTRA_FPS, requestedFps)
 
                         requestedFolderUri?.let {
-                            putExtra(
-                                ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
-                                it
-                            )
+                            putExtra(ScreenRecordingService.EXTRA_OUTPUT_TREE_URI, it)
                         }
                     }
 
-                    ContextCompat.startForegroundService(
-                        this,
-                        serviceIntent
-                    )
+                    ContextCompat.startForegroundService(this, serviceIntent)
 
                     if (Settings.canDrawOverlays(this)) {
-                        startService(
-                            Intent(this, FloatingBubbleService::class.java)
-                        )
+                        startService(Intent(this, FloatingBubbleService::class.java))
                     }
 
                     requestResultHandler?.invoke(true)
                 }
-
             } else {
                 val wasScreenshot = screenshotRequested
                 screenshotRequested = false
@@ -131,8 +97,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             KalizeHome(
                 initialFolderUri = getSharedPreferences(
-                    "kalize_settings",
-                    MODE_PRIVATE
+                    "kalize_settings", MODE_PRIVATE
                 ).getString("save_tree_uri", null),
 
                 onStartRecording = { quality, fps, folderUri, onResult ->
@@ -146,9 +111,7 @@ class MainActivity : ComponentActivity() {
                         MEDIA_PROJECTION_SERVICE
                     ) as MediaProjectionManager
 
-                    captureLauncher.launch(
-                        manager.createScreenCaptureIntent()
-                    )
+                    captureLauncher.launch(manager.createScreenCaptureIntent())
                 },
 
                 onTakeScreenshot = {
@@ -158,24 +121,17 @@ class MainActivity : ComponentActivity() {
                         MEDIA_PROJECTION_SERVICE
                     ) as MediaProjectionManager
 
-                    captureLauncher.launch(
-                        manager.createScreenCaptureIntent()
-                    )
+                    captureLauncher.launch(manager.createScreenCaptureIntent())
                 },
 
                 onStopRecording = {
                     startService(
-                        Intent(
-                            this,
-                            ScreenRecordingService::class.java
-                        ).apply {
+                        Intent(this, ScreenRecordingService::class.java).apply {
                             action = ScreenRecordingService.ACTION_STOP
                         }
                     )
 
-                    stopService(
-                        Intent(this, FloatingBubbleService::class.java)
-                    )
+                    stopService(Intent(this, FloatingBubbleService::class.java))
                 },
 
                 onEnableBubble = {
@@ -195,12 +151,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun KalizeHome(
     initialFolderUri: String?,
-    onStartRecording: (
-        String,
-        Int,
-        String?,
-        (Boolean) -> Unit
-    ) -> Unit,
+    onStartRecording: (String, Int, String?, (Boolean) -> Unit) -> Unit,
     onTakeScreenshot: () -> Unit,
     onStopRecording: () -> Unit,
     onEnableBubble: () -> Unit
@@ -215,7 +166,6 @@ private fun KalizeHome(
     }
 
     var saveFolderUri by remember { mutableStateOf(initialFolderUri) }
-
     val context = androidx.compose.ui.platform.LocalContext.current
 
     val prefs = remember {
@@ -236,10 +186,7 @@ private fun KalizeHome(
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
 
-                prefs.edit()
-                    .putString("save_tree_uri", uri.toString())
-                    .apply()
-
+                prefs.edit().putString("save_tree_uri", uri.toString()).apply()
                 saveFolderUri = uri.toString()
                 status = "Save folder selected. New recordings will use it."
             } catch (_: Exception) {
@@ -260,11 +207,7 @@ private fun KalizeHome(
         Column(
             Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF171532), Night)
-                    )
-                )
+                .background(Brush.verticalGradient(listOf(Color(0xFF171532), Night)))
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -276,10 +219,7 @@ private fun KalizeHome(
                 ) {
                     Text(
                         "Ƙ",
-                        Modifier.padding(
-                            horizontal = 15.dp,
-                            vertical = 9.dp
-                        ),
+                        Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
                         color = Color.White,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Black
@@ -289,30 +229,14 @@ private fun KalizeHome(
                 Spacer(Modifier.width(12.dp))
 
                 Column {
-                    Text(
-                        "Ƙalize Recorder",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "Screen recording · v0.4.0",
-                        color = Muted,
-                        fontSize = 12.sp
-                    )
+                    Text("Ƙalize Recorder", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text("Screen recording · v0.4.0", color = Muted, fontSize = 12.sp)
                 }
             }
 
-            Text(
-                "Capture every moment.",
-                fontSize = 29.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
+            Text("Capture every moment.", fontSize = 29.sp, fontWeight = FontWeight.ExtraBold)
 
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = Panel
-                )
-            ) {
+            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
                 Column(
                     Modifier.padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -347,7 +271,6 @@ private fun KalizeHome(
                                 ) { approved ->
                                     requesting = false
                                     recording = approved
-
                                     status = if (approved) {
                                         "Capture requested. Use the floating STOP bubble or this button to finish."
                                     } else {
@@ -358,13 +281,7 @@ private fun KalizeHome(
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(
-                            if (recording || requesting) {
-                                "■ Stop recording"
-                            } else {
-                                "● Start recording"
-                            }
-                        )
+                        Text(if (recording || requesting) "■ Stop recording" else "● Start recording")
                     }
 
                     OutlinedButton(
@@ -393,13 +310,9 @@ private fun KalizeHome(
                         fontSize = 12.sp
                     )
 
-                    Divider(color = Muted.copy(alpha = 0.3f))
+                    HorizontalDivider(color = Muted.copy(alpha = 0.3f))
 
-                    Text(
-                        "Save location",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Text("Save location", fontSize = 18.sp, fontWeight = FontWeight.Bold)
 
                     Text(
                         if (saveFolderUri == null) {
@@ -412,9 +325,7 @@ private fun KalizeHome(
 
                     Button(
                         onClick = {
-                            folderPicker.launch(
-                                saveFolderUri?.let { Uri.parse(it) }
-                            )
+                            folderPicker.launch(saveFolderUri?.let { Uri.parse(it) })
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -438,18 +349,13 @@ private fun KalizeHome(
                         fontSize = 12.sp
                     )
 
-                    Divider(color = Muted.copy(alpha = 0.3f))
+                    HorizontalDivider(color = Muted.copy(alpha = 0.3f))
 
                     Text("Resolution target", color = Muted)
-
-                    var qualityExpanded by remember {
-                        mutableStateOf(false)
-                    }
+                    var qualityExpanded by remember { mutableStateOf(false) }
 
                     Box {
-                        OutlinedButton(
-                            onClick = { qualityExpanded = true }
-                        ) {
+                        OutlinedButton(onClick = { qualityExpanded = true }) {
                             Text(quality)
                         }
 
@@ -457,10 +363,7 @@ private fun KalizeHome(
                             expanded = qualityExpanded,
                             onDismissRequest = { qualityExpanded = false }
                         ) {
-                            listOf(
-                                "360p", "480p", "720p",
-                                "1080p", "1440p", "4K"
-                            ).forEach {
+                            listOf("360p", "480p", "720p", "1080p", "1440p", "4K").forEach {
                                 DropdownMenuItem(
                                     text = { Text(it) },
                                     onClick = {
@@ -473,15 +376,10 @@ private fun KalizeHome(
                     }
 
                     Text("Frame-rate target", color = Muted)
-
-                    var fpsExpanded by remember {
-                        mutableStateOf(false)
-                    }
+                    var fpsExpanded by remember { mutableStateOf(false) }
 
                     Box {
-                        OutlinedButton(
-                            onClick = { fpsExpanded = true }
-                        ) {
+                        OutlinedButton(onClick = { fpsExpanded = true }) {
                             Text(fps)
                         }
 
@@ -509,27 +407,32 @@ private fun KalizeHome(
                 }
             }
 
-            Text(
-                "Coming next",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Video tools", fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
-            listOf(
-                "◉  Floating bubble" to "Draggable recording controls",
-                "✂  Video editor" to "Trim, crop, mute and export",
-                "⚡  Game tools" to "Safe performance checks and benchmark"
-            ).forEach { (title, desc) ->
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = Panel
+            Button(
+                onClick = {
+                    context.startActivity(
+                        Intent(context, VideoEditorActivity::class.java)
                     )
-                ) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(title, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        Text(desc, color = Muted, fontSize = 12.sp)
-                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("✂ Open Video Editor")
+            }
+
+            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("◉ Floating bubble", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Draggable recording controls", color = Muted, fontSize = 12.sp)
+                }
+            }
+
+            Card(colors = CardDefaults.cardColors(containerColor = Panel)) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("⚡ Game tools", fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Safe performance checks and benchmark", color = Muted, fontSize = 12.sp)
                 }
             }
         }

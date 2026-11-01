@@ -47,7 +47,6 @@ class ScreenshotService : Service() {
     private var imageReader: ImageReader? = null
     private var workerThread: HandlerThread? = null
     private var workerHandler: Handler? = null
-    private var imageCallbackRegistered = false
     private var captureStarted = false
 
     private val projectionCallback =
@@ -185,7 +184,11 @@ class ScreenshotService : Service() {
         val metrics = DisplayMetrics()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds = windowManager.currentWindowMetrics.bounds
+            val manager = getSystemService(
+                WINDOW_SERVICE
+            ) as WindowManager
+            val bounds = manager.currentWindowMetrics.bounds
+
             metrics.widthPixels = bounds.width()
             metrics.heightPixels = bounds.height()
             metrics.densityDpi = resources.displayMetrics.densityDpi
@@ -217,7 +220,8 @@ class ScreenshotService : Service() {
 
         imageReader!!.setOnImageAvailableListener(
             { reader ->
-                val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
+                val image = reader.acquireLatestImage()
+                    ?: return@setOnImageAvailableListener
 
                 try {
                     val plane = image.planes[0]
@@ -266,8 +270,6 @@ class ScreenshotService : Service() {
             workerHandler
         )
 
-        imageCallbackRegistered = true
-
         virtualDisplay = projection!!.createVirtualDisplay(
             "KalizeScreenshotDisplay",
             width,
@@ -308,11 +310,7 @@ class ScreenshotService : Service() {
                 val uri: Uri? = resolver.insert(
                     MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                     values
-                )
-
-                if (uri == null) {
-                    return false
-                }
+                ) ?: return false
 
                 try {
                     val output = resolver.openOutputStream(uri)
@@ -379,7 +377,6 @@ class ScreenshotService : Service() {
         projection?.unregisterCallback(projectionCallback)
         projection = null
 
-        imageCallbackRegistered = false
         captureStarted = false
     }
 

@@ -17,7 +17,6 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.Gravity
-import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
@@ -58,6 +57,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var exportButton: Button
     private lateinit var previewButton: Button
     private lateinit var exportStatus: TextView
+    private lateinit var exportNameInput: EditText
 
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -280,6 +280,35 @@ class VideoEditorActivity : Activity() {
             textSize = 13f
             setTextColor(mutedColor)
             setPadding(0, dp(4), 0, dp(12))
+        })
+
+        exportCard.addView(TextView(this).apply {
+            text = "FILE NAME"
+            textSize = 10f
+            letterSpacing = 0.08f
+            setTextColor(mutedColor)
+            setPadding(0, dp(4), 0, dp(4))
+        })
+
+        exportNameInput = EditText(this).apply {
+            hint = "My gaming highlights"
+            setText("Kalize_Edit")
+            textSize = 14f
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setTextColor(textColor)
+            setHintTextColor(mutedColor)
+            backgroundTintList = ColorStateList.valueOf(accentColor)
+            setPadding(dp(10), dp(10), dp(10), dp(10))
+        }
+        exportCard.addView(exportNameInput, matchWrap())
+
+        exportCard.addView(TextView(this).apply {
+            text = "The .mp4 extension is added automatically. Leave the name blank to use a default name."
+            textSize = 11f
+            setTextColor(mutedColor)
+            setPadding(0, dp(4), 0, dp(10))
         })
 
         exportStatus = TextView(this).apply {
@@ -573,6 +602,7 @@ class VideoEditorActivity : Activity() {
         }
 
         val shouldMuteAudio = muteAudio.isChecked
+        val requestedFileName = exportNameInput.text.toString()
         exportButton.isEnabled = false
         exportButton.text = "Exporting..."
         exportStatus.text = "Processing your clip. Please wait."
@@ -596,7 +626,7 @@ class VideoEditorActivity : Activity() {
                     shouldMuteAudio
                 )
 
-                val savedUri = saveExport(cacheFile)
+                val savedUri = saveExport(cacheFile, requestedFileName)
 
                 runOnUiThread {
                     if (savedUri != null) {
@@ -730,13 +760,21 @@ class VideoEditorActivity : Activity() {
         }
     }
 
-    private fun saveExport(file: File): Uri? {
+    private fun saveExport(file: File, requestedFileName: String): Uri? {
         val timestamp = SimpleDateFormat(
             "yyyyMMdd_HHmmss",
             Locale.US
         ).format(Date())
 
-        val name = "Kalize_Edit_$timestamp.mp4"
+        val typedName = requestedFileName.trim()
+        val nameWithoutExtension = typedName.substringBeforeLast('.', typedName)
+        val safeBaseName = nameWithoutExtension
+            .replace(Regex("[^A-Za-z0-9 _-]"), "")
+            .trim()
+            .replace(Regex("\\s+"), "_")
+            .take(60)
+
+        val name = (safeBaseName.ifBlank { "Kalize_Edit_$timestamp" }) + ".mp4"
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {

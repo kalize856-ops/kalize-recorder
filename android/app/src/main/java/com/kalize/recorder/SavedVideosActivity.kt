@@ -38,11 +38,13 @@ class SavedVideosActivity : Activity() {
         val uri: Uri,
         val name: String,
         val durationMs: Long,
-        val dateAdded: Long
+        val dateAdded: Long,
+        val sizeBytes: Long
     )
 
     private lateinit var listContainer: LinearLayout
     private lateinit var statusText: TextView
+    private lateinit var storageText: TextView
     private lateinit var searchInput: EditText
     private lateinit var clearSearchButton: Button
     private lateinit var emptyText: TextView
@@ -167,6 +169,16 @@ class SavedVideosActivity : Activity() {
 
         summaryCard.addView(statusText)
 
+        storageText = TextView(this).apply {
+            text = "Storage used: calculating..."
+            textSize = 14f
+            setTextColor(Color.rgb(190, 170, 255))
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(4), 0, dp(5))
+        }
+
+        summaryCard.addView(storageText)
+
         summaryCard.addView(TextView(this).apply {
             text = "Videos exported to Movies/Kalize Recorder appear here."
             textSize = 12f
@@ -281,7 +293,6 @@ class SavedVideosActivity : Activity() {
                 )
             }
 
-            // Restore the user's previous sorting choice.
             val savedSortPosition = sortPreferences.getInt(
                 "sort_position",
                 0
@@ -304,7 +315,6 @@ class SavedVideosActivity : Activity() {
                         position: Int,
                         id: Long
                     ) {
-                        // Save the chosen sorting option for next time.
                         sortPreferences.edit()
                             .putInt("sort_position", position)
                             .apply()
@@ -387,6 +397,10 @@ class SavedVideosActivity : Activity() {
             statusText.text = "Loading your library..."
         }
 
+        if (::storageText.isInitialized) {
+            storageText.text = "Storage used: calculating..."
+        }
+
         try {
             allVideos = querySavedVideos()
             displayVideos()
@@ -397,6 +411,10 @@ class SavedVideosActivity : Activity() {
             if (::statusText.isInitialized) {
                 statusText.text =
                     "Could not load videos. Tap refresh to retry."
+            }
+
+            if (::storageText.isInitialized) {
+                storageText.text = "Storage used: unavailable"
             }
 
             Toast.makeText(
@@ -417,14 +435,16 @@ class SavedVideosActivity : Activity() {
                 MediaStore.Video.Media.DISPLAY_NAME,
                 MediaStore.Video.Media.DURATION,
                 MediaStore.Video.Media.DATE_ADDED,
-                MediaStore.Video.Media.RELATIVE_PATH
+                MediaStore.Video.Media.RELATIVE_PATH,
+                MediaStore.Video.Media.SIZE
             )
         } else {
             arrayOf(
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.DISPLAY_NAME,
                 MediaStore.Video.Media.DURATION,
-                MediaStore.Video.Media.DATE_ADDED
+                MediaStore.Video.Media.DATE_ADDED,
+                MediaStore.Video.Media.SIZE
             )
         }
 
@@ -456,6 +476,8 @@ class SavedVideosActivity : Activity() {
                 it.getColumnIndex(MediaStore.Video.Media.DURATION)
             val dateColumn =
                 it.getColumnIndex(MediaStore.Video.Media.DATE_ADDED)
+            val sizeColumn =
+                it.getColumnIndex(MediaStore.Video.Media.SIZE)
 
             while (it.moveToNext()) {
                 val id = it.getLong(idColumn)
@@ -473,12 +495,19 @@ class SavedVideosActivity : Activity() {
                     0L
                 }
 
+                val sizeBytes = if (sizeColumn >= 0) {
+                    it.getLong(sizeColumn).coerceAtLeast(0L)
+                } else {
+                    0L
+                }
+
                 results.add(
                     SavedVideo(
                         uri = ContentUris.withAppendedId(collection, id),
                         name = name,
                         durationMs = duration,
-                        dateAdded = dateAdded
+                        dateAdded = dateAdded,
+                        sizeBytes = sizeBytes
                     )
                 )
             }
@@ -491,6 +520,10 @@ class SavedVideosActivity : Activity() {
         if (!::listContainer.isInitialized) return
 
         listContainer.removeAllViews()
+
+        val totalBytes = allVideos.sumOf { it.sizeBytes }
+
+        storageText.text = "Storage used: ${formatFileSize(totalBytes)}"
 
         val query = searchInput.text.toString().trim()
 
@@ -600,7 +633,7 @@ class SavedVideosActivity : Activity() {
         })
 
         card.addView(TextView(this).apply {
-            text = "VIDEO  •  ${formatDuration(video.durationMs)}"
+            text = "VIDEO  •  ${formatDuration(video.durationMs)}  •  ${formatFileSize(video.sizeBytes)}"
             textSize = 12f
             setTextColor(mutedColor)
             setPadding(dp(2), dp(2), 0, dp(12))
@@ -804,6 +837,9 @@ class SavedVideosActivity : Activity() {
             Duration:
             ${formatDuration(video.durationMs)}
 
+            File size:
+            ${formatFileSize(video.sizeBytes)}
+
             Saved date:
             $savedDate
 
@@ -907,6 +943,26 @@ class SavedVideosActivity : Activity() {
                 Toast.LENGTH_LONG
             ).show()
         }
+    }
+
+    private fun formatFileSize(bytes: Long): String {
+        if (bytes < 1024L) return "$bytes B"
+
+        val units = arrayOf("KB", "MB", "GB", "TB")
+        var size = bytes / 1024.0
+        var unitIndex = 0
+
+        while (size >= 1024.0 && unitIndex < units.lastIndex) {
+            size /= 1024.0
+            unitIndex++
+        }
+
+        return String.format(
+            Locale.US,
+            "%.2f %s",
+            size,
+            units[unitIndex]
+        )
     }
 
     private fun makeButton(label: String, color: Int): Button {

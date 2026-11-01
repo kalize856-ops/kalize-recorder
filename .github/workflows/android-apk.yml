@@ -33,13 +33,8 @@ jobs:
           import xml.etree.ElementTree as ET
 
           path = "android/app/src/main/AndroidManifest.xml"
-
-          try:
-              ET.parse(path)
-              print("Manifest XML syntax is valid.")
-          except ET.ParseError as error:
-              print(f"Manifest XML syntax error: {error}")
-              raise
+          ET.parse(path)
+          print("Manifest XML syntax is valid.")
           PY
 
       - name: Set up Java
@@ -87,10 +82,22 @@ jobs:
         working-directory: android
         run: gradle --no-daemon assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Prepare APK and checksum
+        run: |
+          mkdir -p release-files
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+            release-files/Kalize-Recorder-debug.apk
+          cd release-files
+          sha256sum Kalize-Recorder-debug.apk \
+            > Kalize-Recorder-debug.apk.sha256
+          ls -lh
+
+      - name: Upload APK and checksum
         uses: actions/upload-artifact@v4
         with:
-          name: kalize-recorder-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: kalize-recorder-apk
+          path: |
+            release-files/Kalize-Recorder-debug.apk
+            release-files/Kalize-Recorder-debug.apk.sha256
           if-no-files-found: error
           retention-days: 14

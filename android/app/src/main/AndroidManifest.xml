@@ -34,6 +34,10 @@
             android:name=".SavedVideosActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ScreenshotGalleryActivity"
+            android:exported="false" />
+
         <service
             android:name=".ScreenRecordingService"
             android:exported="false"

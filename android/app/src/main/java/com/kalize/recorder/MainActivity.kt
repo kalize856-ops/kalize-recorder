@@ -672,6 +672,15 @@ private fun KalizeHome(
             }
 
             ToolButton(
+                "▧  Screenshot Gallery",
+                "Find, view, share or delete screenshots"
+            ) {
+                context.startActivity(
+                    Intent(context, ScreenshotGalleryActivity::class.java)
+                )
+            }
+
+            ToolButton(
                 "✂  Video editor",
                 "Trim clips and export edits"
             ) {
@@ -719,7 +728,7 @@ private fun KalizeHome(
                     Text(
                         "Features\n" +
                             "• Screen recording\n" +
-                            "• Screenshot capture\n" +
+                            "• Screenshot capture and gallery\n" +
                             "• Saved video library\n" +
                             "• Video trimming and export\n" +
                             "• Resolution and frame-rate settings\n" +

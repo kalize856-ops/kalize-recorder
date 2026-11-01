@@ -41,6 +41,10 @@ class ScreenRecordingService : Service() {
         const val ACTION_STOP = "com.kalize.recorder.STOP_RECORDING"
         const val ACTION_PAUSE = "com.kalize.recorder.PAUSE_RECORDING"
         const val ACTION_RESUME = "com.kalize.recorder.RESUME_RECORDING"
+        const val ACTION_STATE_CHANGED = "com.kalize.recorder.RECORDING_STATE_CHANGED"
+
+        const val EXTRA_IS_RECORDING = "is_recording"
+        const val EXTRA_IS_PAUSED = "is_paused"
 
         const val EXTRA_RESULT_CODE = "projection_result_code"
         const val EXTRA_RESULT_DATA = "projection_result_data"
@@ -55,6 +59,9 @@ class ScreenRecordingService : Service() {
         private const val OPEN_REQUEST_CODE = 7403
         private const val PAUSE_REQUEST_CODE = 7404
         private const val RESUME_REQUEST_CODE = 7405
+        private const val PREFS_NAME = "kalize_recording_state"
+        private const val PREF_RECORDING = "is_recording"
+        private const val PREF_PAUSED = "is_paused"
     }
 
     private var projection: MediaProjection? = null
@@ -72,7 +79,26 @@ class ScreenRecordingService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    private fun publishRecordingState() {
+        getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(PREF_RECORDING, recordingStarted)
+            .putBoolean(PREF_PAUSED, recordingPaused)
+            .apply()
+
+        val stateIntent = Intent(ACTION_STATE_CHANGED).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_IS_RECORDING, recordingStarted)
+            putExtra(EXTRA_IS_PAUSED, recordingPaused)
+        }
+        sendBroadcast(stateIntent)
+    }
+
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
         when (intent?.action) {
             ACTION_STOP -> {
                 stopRecording(stopProjection = true)
@@ -123,7 +149,8 @@ class ScreenRecordingService : Service() {
 
         val quality = intent?.getStringExtra(EXTRA_QUALITY) ?: "1080p"
         val fps = intent?.getIntExtra(EXTRA_FPS, 30) ?: 30
-        val audioEnabled = intent?.getBooleanExtra(EXTRA_AUDIO_ENABLED, false) ?: false
+        val audioEnabled =
+            intent?.getBooleanExtra(EXTRA_AUDIO_ENABLED, false) ?: false
 
         if (resultData == null || resultCode == 0) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -147,6 +174,7 @@ class ScreenRecordingService : Service() {
 
         try {
             startRecording(resultCode, resultData, quality, fps, audioEnabled)
+            publishRecordingState()
             updateNotification("Recording screen — tap PAUSE or STOP")
         } catch (error: Exception) {
             Toast.makeText(
@@ -177,11 +205,14 @@ class ScreenRecordingService : Service() {
         try {
             recorder?.pause()
             recordingPaused = true
+            publishRecordingState()
             updateNotification("Recording paused — tap RESUME to continue")
         } catch (error: Exception) {
             Toast.makeText(
                 this,
-                "Could not pause recording: ${error.localizedMessage ?: "Try again"}",
+                "Could not pause recording: ${
+                    error.localizedMessage ?: "Try again"
+                }",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -189,17 +220,19 @@ class ScreenRecordingService : Service() {
 
     private fun resumeRecording() {
         if (!recordingStarted || !recordingPaused || isStopping) return
-
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
 
         try {
             recorder?.resume()
             recordingPaused = false
+            publishRecordingState()
             updateNotification("Recording resumed — tap PAUSE or STOP")
         } catch (error: Exception) {
             Toast.makeText(
                 this,
-                "Could not resume recording: ${error.localizedMessage ?: "Try again"}",
+                "Could not resume recording: ${
+                    error.localizedMessage ?: "Try again"
+                }",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -283,7 +316,8 @@ class ScreenRecordingService : Service() {
         mediaRecorder.prepare()
 
         val manager =
-            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            getSystemService(Context.MEDIA_PROJECTION_SERVICE)
+                as MediaProjectionManager
 
         val mediaProjection = manager.getMediaProjection(resultCode, resultData)
         projection = mediaProjection
@@ -452,6 +486,7 @@ class ScreenRecordingService : Service() {
         }
 
         recordingStartTime = 0L
+        publishRecordingState()
 
         try {
             outputDescriptor?.close()
@@ -524,7 +559,8 @@ class ScreenRecordingService : Service() {
                 "Screen recording",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Shows when Kalize Recorder is capturing the screen."
+                description =
+                    "Shows when Kalize Recorder is capturing the screen."
             }
 
             getSystemService(NotificationManager::class.java)
@@ -590,7 +626,8 @@ class ScreenRecordingService : Service() {
         if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
             builder.setWhen(recordingStartTime).setUsesChronometer(true)
         } else {
-            builder.setWhen(System.currentTimeMillis()).setUsesChronometer(false)
+            builder.setWhen(System.currentTimeMillis())
+                .setUsesChronometer(false)
         }
 
         return builder.build()

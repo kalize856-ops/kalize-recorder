@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
     private var requestedFps = 30
     private var requestedFolderUri: String? = null
     private var requestResultHandler: ((Boolean) -> Unit)? = null
+    private var screenshotRequested = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,49 +51,80 @@ class MainActivity : ComponentActivity() {
             val data = result.data
 
             if (result.resultCode == Activity.RESULT_OK && data != null) {
-                val serviceIntent = Intent(
-                    this,
-                    ScreenRecordingService::class.java
-                ).apply {
-                    putExtra(
-                        ScreenRecordingService.EXTRA_RESULT_CODE,
-                        result.resultCode
-                    )
-                    putExtra(
-                        ScreenRecordingService.EXTRA_RESULT_DATA,
-                        data
-                    )
-                    putExtra(
-                        ScreenRecordingService.EXTRA_QUALITY,
-                        requestedQuality
-                    )
-                    putExtra(
-                        ScreenRecordingService.EXTRA_FPS,
-                        requestedFps
-                    )
 
-                    requestedFolderUri?.let {
+                if (screenshotRequested) {
+                    screenshotRequested = false
+
+                    val screenshotIntent = Intent(
+                        this,
+                        ScreenshotService::class.java
+                    ).apply {
                         putExtra(
-                            ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
-                            it
+                            ScreenshotService.EXTRA_RESULT_CODE,
+                            result.resultCode
+                        )
+                        putExtra(
+                            ScreenshotService.EXTRA_RESULT_DATA,
+                            data
                         )
                     }
-                }
 
-                ContextCompat.startForegroundService(
-                    this,
-                    serviceIntent
-                )
-
-                if (Settings.canDrawOverlays(this)) {
-                    startService(
-                        Intent(this, FloatingBubbleService::class.java)
+                    ContextCompat.startForegroundService(
+                        this,
+                        screenshotIntent
                     )
+
+                } else {
+                    val serviceIntent = Intent(
+                        this,
+                        ScreenRecordingService::class.java
+                    ).apply {
+                        putExtra(
+                            ScreenRecordingService.EXTRA_RESULT_CODE,
+                            result.resultCode
+                        )
+                        putExtra(
+                            ScreenRecordingService.EXTRA_RESULT_DATA,
+                            data
+                        )
+                        putExtra(
+                            ScreenRecordingService.EXTRA_QUALITY,
+                            requestedQuality
+                        )
+                        putExtra(
+                            ScreenRecordingService.EXTRA_FPS,
+                            requestedFps
+                        )
+
+                        requestedFolderUri?.let {
+                            putExtra(
+                                ScreenRecordingService.EXTRA_OUTPUT_TREE_URI,
+                                it
+                            )
+                        }
+                    }
+
+                    ContextCompat.startForegroundService(
+                        this,
+                        serviceIntent
+                    )
+
+                    if (Settings.canDrawOverlays(this)) {
+                        startService(
+                            Intent(this, FloatingBubbleService::class.java)
+                        )
+                    }
+
+                    requestResultHandler?.invoke(true)
                 }
 
-                requestResultHandler?.invoke(true)
             } else {
-                requestResultHandler?.invoke(false)
+                val wasScreenshot = screenshotRequested
+                screenshotRequested = false
+
+                if (!wasScreenshot) {
+                    requestResultHandler?.invoke(false)
+                }
             }
         }
 
@@ -108,6 +140,19 @@ class MainActivity : ComponentActivity() {
                     requestedFps = fps
                     requestedFolderUri = folderUri
                     requestResultHandler = onResult
+                    screenshotRequested = false
+
+                    val manager = getSystemService(
+                        MEDIA_PROJECTION_SERVICE
+                    ) as MediaProjectionManager
+
+                    captureLauncher.launch(
+                        manager.createScreenCaptureIntent()
+                    )
+                },
+
+                onTakeScreenshot = {
+                    screenshotRequested = true
 
                     val manager = getSystemService(
                         MEDIA_PROJECTION_SERVICE
@@ -156,6 +201,7 @@ private fun KalizeHome(
         String?,
         (Boolean) -> Unit
     ) -> Unit,
+    onTakeScreenshot: () -> Unit,
     onStopRecording: () -> Unit,
     onEnableBubble: () -> Unit
 ) {
@@ -323,6 +369,16 @@ private fun KalizeHome(
 
                     OutlinedButton(
                         onClick = {
+                            onTakeScreenshot()
+                            status = "Approve Android's prompt to capture a screenshot."
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("▣ Take screenshot")
+                    }
+
+                    OutlinedButton(
+                        onClick = {
                             onEnableBubble()
                             status = "Allow display over other apps in Android Settings, then return here."
                         },
@@ -332,7 +388,7 @@ private fun KalizeHome(
                     }
 
                     Text(
-                        "Enable the permission above before recording. The movable STOP bubble appears while recording.",
+                        "Android asks for screen-capture permission before recording or taking a screenshot.",
                         color = Muted,
                         fontSize = 12.sp
                     )
@@ -347,9 +403,9 @@ private fun KalizeHome(
 
                     Text(
                         if (saveFolderUri == null) {
-                            "Current default: phone storage — Movies/Kalize Recorder"
+                            "Videos: Movies/Kalize Recorder. Screenshots: Pictures/Kalize Recorder."
                         } else {
-                            "A custom folder is selected. It may be on your phone or SD card."
+                            "Your selected folder is used for recordings. Screenshots are saved in Pictures/Kalize Recorder."
                         },
                         color = Muted
                     )
@@ -446,7 +502,7 @@ private fun KalizeHome(
                     }
 
                     Text(
-                        "Video-only recording for now. Audio, screenshots and the video editor can be added later.",
+                        "Recording quality depends on your device's display and capabilities.",
                         color = Muted,
                         fontSize = 12.sp
                     )
@@ -461,7 +517,6 @@ private fun KalizeHome(
 
             listOf(
                 "◉  Floating bubble" to "Draggable recording controls",
-                "▣  Screenshot" to "One-tap screen capture",
                 "✂  Video editor" to "Trim, crop, mute and export",
                 "⚡  Game tools" to "Safe performance checks and benchmark"
             ).forEach { (title, desc) ->

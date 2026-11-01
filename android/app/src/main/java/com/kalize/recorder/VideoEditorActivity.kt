@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Activity
@@ -92,7 +91,7 @@ class VideoEditorActivity : Activity() {
             hint = "Start time in seconds (e.g. 0)"
             inputType =
                 android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             setText("0")
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.LTGRAY)
@@ -103,7 +102,7 @@ class VideoEditorActivity : Activity() {
             hint = "End time in seconds (e.g. 30)"
             inputType =
                 android.text.InputType.TYPE_CLASS_NUMBER or
-                android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+                    android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
             setTextColor(android.graphics.Color.WHITE)
             setHintTextColor(android.graphics.Color.LTGRAY)
         }
@@ -130,6 +129,20 @@ class VideoEditorActivity : Activity() {
             }
         }
         root.addView(exportButton)
+
+        // NEW: Open the Saved Videos Library.
+        val savedVideosButton = Button(this).apply {
+            text = "Open Saved Videos"
+            setOnClickListener {
+                startActivity(
+                    Intent(
+                        this@VideoEditorActivity,
+                        SavedVideosActivity::class.java
+                    )
+                )
+            }
+        }
+        root.addView(savedVideosButton)
 
         val backButton = Button(this).apply {
             text = "Back to recorder"

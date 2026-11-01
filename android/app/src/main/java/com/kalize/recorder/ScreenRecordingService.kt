@@ -36,7 +36,6 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 class ScreenRecordingService : Service() {
-
     companion object {
         const val ACTION_STOP = "com.kalize.recorder.STOP_RECORDING"
         const val EXTRA_RESULT_CODE = "projection_result_code"
@@ -44,6 +43,7 @@ class ScreenRecordingService : Service() {
         const val EXTRA_QUALITY = "recording_quality"
         const val EXTRA_FPS = "recording_fps"
         const val EXTRA_OUTPUT_TREE_URI = "output_tree_uri"
+        const val EXTRA_AUDIO_ENABLED = "recording_audio_enabled"
 
         private const val CHANNEL_ID = "kalize_recording"
         private const val NOTIFICATION_ID = 7401
@@ -54,52 +54,33 @@ class ScreenRecordingService : Service() {
     private var projection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var recorder: MediaRecorder? = null
-
     private var outputUri: Uri? = null
     private var outputDescriptor: android.os.ParcelFileDescriptor? = null
     private var legacyOutputFile: File? = null
-
     private var outputIsMediaStore = false
     private var requestedTreeUri: Uri? = null
     private var isStopping = false
     private var recordingStarted = false
-
-    // Used by the notification's elapsed-time counter.
     private var recordingStartTime = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             stopRecording(stopProjection = true)
             return START_NOT_STICKY
         }
 
-        requestedTreeUri = intent
-            ?.getStringExtra(EXTRA_OUTPUT_TREE_URI)
-            ?.let {
-                try {
-                    Uri.parse(it)
-                } catch (_: Exception) {
-                    null
-                }
-            }
+        requestedTreeUri = intent?.getStringExtra(EXTRA_OUTPUT_TREE_URI)?.let {
+            try { Uri.parse(it) } catch (_: Exception) { null }
+        }
 
         createNotificationChannel()
-
-        val notification = buildNotification(
-            "Preparing screen recording…"
-        )
+        val notification = buildNotification("Preparing screen recording…")
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_ID,
-                notification,
+                this, NOTIFICATION_ID, notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
             )
         } else {
@@ -107,12 +88,8 @@ class ScreenRecordingService : Service() {
         }
 
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
-
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= 33) {
-            intent?.getParcelableExtra(
-                EXTRA_RESULT_DATA,
-                Intent::class.java
-            )
+            intent?.getParcelableExtra(EXTRA_RESULT_DATA, Intent::class.java)
         } else {
             @Suppress("DEPRECATION")
             intent?.getParcelableExtra(EXTRA_RESULT_DATA)
@@ -120,6 +97,7 @@ class ScreenRecordingService : Service() {
 
         val quality = intent?.getStringExtra(EXTRA_QUALITY) ?: "1080p"
         val fps = intent?.getIntExtra(EXTRA_FPS, 30) ?: 30
+        val audioEnabled = intent?.getBooleanExtra(EXTRA_AUDIO_ENABLED, false) ?: false
 
         if (resultData == null || resultCode == 0) {
             stopForeground(STOP_FOREGROUND_REMOVE)
@@ -127,23 +105,30 @@ class ScreenRecordingService : Service() {
             return START_NOT_STICKY
         }
 
+        if (audioEnabled &&
+            checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(this, "Microphone permission is required for audio recording.", Toast.LENGTH_LONG).show()
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
         try {
-            startRecording(resultCode, resultData, quality, fps)
+            startRecording(resultCode, resultData, quality, fps, audioEnabled)
             updateNotification(
-                "Recording screen — tap STOP RECORDING to finish"
+                if (audioEnabled) "Recording screen and microphone — tap STOP to finish"
+                else "Recording screen — tap STOP RECORDING to finish"
             )
         } catch (error: Exception) {
             Toast.makeText(
                 this,
-                "Could not start recording: ${
-                    error.localizedMessage ?: "Check the selected folder"
-                }",
+                "Could not start recording: ${error.localizedMessage ?: "Check permissions and save folder"}",
                 Toast.LENGTH_LONG
             ).show()
-
             stopRecording(stopProjection = true)
         }
-
         return START_NOT_STICKY
     }
 
@@ -151,17 +136,16 @@ class ScreenRecordingService : Service() {
         resultCode: Int,
         resultData: Intent,
         quality: String,
-        fps: Int
+        fps: Int,
+        audioEnabled: Boolean
     ) {
         val metrics = DisplayMetrics()
-
         @Suppress("DEPRECATION")
         (getSystemService(Context.WINDOW_SERVICE) as WindowManager)
             .defaultDisplay.getRealMetrics(metrics)
 
         val screenWidth = max(2, metrics.widthPixels)
         val screenHeight = max(2, metrics.heightPixels)
-
         val longEdgeTarget = when (quality) {
             "360p" -> 640
             "480p" -> 854
@@ -170,22 +154,12 @@ class ScreenRecordingService : Service() {
             "4K" -> 3840
             else -> 1920
         }
-
-        val scale = minOf(
-            1f,
-            longEdgeTarget.toFloat() / max(screenWidth, screenHeight)
-        )
-
+        val scale = minOf(1f, longEdgeTarget.toFloat() / max(screenWidth, screenHeight))
         val outputWidth = even((screenWidth * scale).roundToInt())
         val outputHeight = even((screenHeight * scale).roundToInt())
 
-        val timestamp = SimpleDateFormat(
-            "yyyyMMdd_HHmmss",
-            Locale.US
-        ).format(Date())
-
-        val displayName = "Kalize_$timestamp.mp4"
-        val outputFileDescriptor = prepareOutput(displayName)
+        val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val outputFileDescriptor = prepareOutput("Kalize_$timestamp.mp4")
 
         val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(this)
@@ -193,12 +167,20 @@ class ScreenRecordingService : Service() {
             @Suppress("DEPRECATION")
             MediaRecorder()
         }
-
         recorder = mediaRecorder
 
+        // Audio and video sources must be configured before prepare().
+        if (audioEnabled) {
+            mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+        }
         mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
         mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+        if (audioEnabled) {
+            mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+            mediaRecorder.setAudioEncodingBitRate(128_000)
+            mediaRecorder.setAudioSamplingRate(44_100)
+        }
         mediaRecorder.setVideoSize(outputWidth, outputHeight)
         mediaRecorder.setVideoFrameRate(if (fps >= 60) 60 else 30)
         mediaRecorder.setVideoEncodingBitRate(8_000_000)
@@ -206,95 +188,50 @@ class ScreenRecordingService : Service() {
         if (outputFileDescriptor != null) {
             mediaRecorder.setOutputFile(outputFileDescriptor.fileDescriptor)
         } else {
-            val file = legacyOutputFile
-                ?: throw IllegalStateException(
-                    "Could not prepare the output file"
-                )
+            val file = legacyOutputFile ?: throw IllegalStateException("Could not prepare the output file")
             mediaRecorder.setOutputFile(file.absolutePath)
         }
-
         mediaRecorder.prepare()
 
-        val manager =
-            getSystemService(Context.MEDIA_PROJECTION_SERVICE)
-                as MediaProjectionManager
-
+        val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val mediaProjection = manager.getMediaProjection(resultCode, resultData)
         projection = mediaProjection
-
-        mediaProjection.registerCallback(
-            object : MediaProjection.Callback() {
-                override fun onStop() {
-                    stopRecording(stopProjection = false)
-                }
-            },
-            Handler(Looper.getMainLooper())
-        )
+        mediaProjection.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                stopRecording(stopProjection = false)
+            }
+        }, Handler(Looper.getMainLooper()))
 
         virtualDisplay = mediaProjection.createVirtualDisplay(
-            "KalizeRecorderDisplay",
-            outputWidth,
-            outputHeight,
-            metrics.densityDpi,
+            "KalizeRecorderDisplay", outputWidth, outputHeight, metrics.densityDpi,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            mediaRecorder.surface,
-            null,
-            null
+            mediaRecorder.surface, null, null
         )
-
         mediaRecorder.start()
         recordingStarted = true
-
-        // Start the timer only after the recorder successfully starts.
         recordingStartTime = System.currentTimeMillis()
     }
 
-    private fun prepareOutput(
-        displayName: String
-    ): android.os.ParcelFileDescriptor? {
-
+    private fun prepareOutput(displayName: String): android.os.ParcelFileDescriptor? {
         val treeUri = requestedTreeUri
-
         if (treeUri != null) {
             try {
-                val parentDocumentUri =
-                    DocumentsContract.buildDocumentUriUsingTree(
-                        treeUri,
-                        DocumentsContract.getTreeDocumentId(treeUri)
-                    )
-
-                val createdUri = DocumentsContract.createDocument(
-                    contentResolver,
-                    parentDocumentUri,
-                    "video/mp4",
-                    displayName
-                ) ?: throw IllegalStateException(
-                    "Android could not create a video in that folder"
+                val parentDocumentUri = DocumentsContract.buildDocumentUriUsingTree(
+                    treeUri, DocumentsContract.getTreeDocumentId(treeUri)
                 )
-
+                val createdUri = DocumentsContract.createDocument(
+                    contentResolver, parentDocumentUri, "video/mp4", displayName
+                ) ?: throw IllegalStateException("Android could not create a video in that folder")
                 outputUri = createdUri
                 outputIsMediaStore = false
-
-                val descriptor = contentResolver.openFileDescriptor(
-                    createdUri,
-                    "w"
-                ) ?: throw IllegalStateException(
-                    "Could not open the selected folder's video file"
-                )
-
+                val descriptor = contentResolver.openFileDescriptor(createdUri, "w")
+                    ?: throw IllegalStateException("Could not open the selected folder's video file")
                 outputDescriptor = descriptor
                 return descriptor
             } catch (error: Exception) {
-                outputUri?.let {
-                    try {
-                        contentResolver.delete(it, null, null)
-                    } catch (_: Exception) {
-                    }
-                }
-
+                outputUri?.let { try { contentResolver.delete(it, null, null) } catch (_: Exception) {} }
                 outputUri = null
                 outputIsMediaStore = false
-
                 throw IllegalStateException(
                     "Could not save to the selected folder. Choose the folder again or use default phone storage.",
                     error
@@ -306,40 +243,22 @@ class ScreenRecordingService : Service() {
             val values = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
                 put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
-                put(
-                    MediaStore.MediaColumns.RELATIVE_PATH,
-                    "${Environment.DIRECTORY_MOVIES}/Kalize Recorder"
-                )
+                put(MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/Kalize Recorder")
                 put(MediaStore.MediaColumns.IS_PENDING, 1)
             }
-
-            val uri = contentResolver.insert(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                values
-            ) ?: throw IllegalStateException(
-                "Could not create a video in phone storage"
-            )
-
+            val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("Could not create a video in phone storage")
             outputUri = uri
             outputIsMediaStore = true
-
             return contentResolver.openFileDescriptor(uri, "w").also {
-                if (it == null) {
-                    throw IllegalStateException(
-                        "Could not open the phone storage video file"
-                    )
-                }
+                if (it == null) throw IllegalStateException("Could not open the phone storage video file")
                 outputDescriptor = it
             }
         }
 
         val movies = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
             ?: throw IllegalStateException("Phone storage is unavailable")
-
-        if (!movies.exists()) {
-            movies.mkdirs()
-        }
-
+        if (!movies.exists()) movies.mkdirs()
         legacyOutputFile = File(movies, displayName)
         outputIsMediaStore = false
         return null
@@ -348,25 +267,16 @@ class ScreenRecordingService : Service() {
     private fun stopRecording(stopProjection: Boolean) {
         if (isStopping) return
         isStopping = true
-
         val oldProjection = projection
         projection = null
 
         if (stopProjection) {
-            try {
-                oldProjection?.stop()
-            } catch (_: Exception) {
-            }
+            try { oldProjection?.stop() } catch (_: Exception) {}
         }
-
-        try {
-            virtualDisplay?.release()
-        } catch (_: Exception) {
-        }
+        try { virtualDisplay?.release() } catch (_: Exception) {}
         virtualDisplay = null
 
         var saved = false
-
         try {
             if (recordingStarted) {
                 recorder?.stop()
@@ -375,75 +285,41 @@ class ScreenRecordingService : Service() {
         } catch (_: RuntimeException) {
             saved = false
         } finally {
-            try {
-                recorder?.reset()
-            } catch (_: Exception) {
-            }
-
-            try {
-                recorder?.release()
-            } catch (_: Exception) {
-            }
-
+            try { recorder?.reset() } catch (_: Exception) {}
+            try { recorder?.release() } catch (_: Exception) {}
             recorder = null
             recordingStarted = false
         }
 
-        // Clear the timer when recording finishes.
         recordingStartTime = 0L
-
-        try {
-            outputDescriptor?.close()
-        } catch (_: Exception) {
-        }
+        try { outputDescriptor?.close() } catch (_: Exception) {}
         outputDescriptor = null
 
         val uri = outputUri
-
         if (uri != null) {
             if (outputIsMediaStore) {
                 if (saved) {
                     val values = ContentValues().apply {
                         put(MediaStore.MediaColumns.IS_PENDING, 0)
                     }
-
-                    try {
-                        contentResolver.update(uri, values, null, null)
-                    } catch (_: Exception) {
-                    }
+                    try { contentResolver.update(uri, values, null, null) } catch (_: Exception) {}
                 } else {
-                    try {
-                        contentResolver.delete(uri, null, null)
-                    } catch (_: Exception) {
-                    }
+                    try { contentResolver.delete(uri, null, null) } catch (_: Exception) {}
                 }
             } else if (!saved) {
-                try {
-                    DocumentsContract.deleteDocument(contentResolver, uri)
-                } catch (_: Exception) {
-                    try {
-                        contentResolver.delete(uri, null, null)
-                    } catch (_: Exception) {
-                    }
-                }
+                try { DocumentsContract.deleteDocument(contentResolver, uri) }
+                catch (_: Exception) { try { contentResolver.delete(uri, null, null) } catch (_: Exception) {} }
             }
         }
 
         val file = legacyOutputFile
-
         if (file != null) {
             if (saved) {
                 android.media.MediaScannerConnection.scanFile(
-                    this,
-                    arrayOf(file.absolutePath),
-                    arrayOf("video/mp4"),
-                    null
+                    this, arrayOf(file.absolutePath), arrayOf("video/mp4"), null
                 )
             } else {
-                try {
-                    file.delete()
-                } catch (_: Exception) {
-                }
+                try { file.delete() } catch (_: Exception) {}
             }
         }
 
@@ -452,7 +328,6 @@ class ScreenRecordingService : Service() {
         outputIsMediaStore = false
         requestedTreeUri = null
         isStopping = false
-
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -460,43 +335,26 @@ class ScreenRecordingService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Screen recording",
-                NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, "Screen recording", NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description =
-                    "Shows when Kalize Recorder is capturing the screen."
+                description = "Shows when Kalize Recorder is capturing the screen."
             }
-
-            getSystemService(NotificationManager::class.java)
-                .createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
     private fun buildNotification(message: String): Notification {
         val openApp = PendingIntent.getActivity(
-            this,
-            OPEN_REQUEST_CODE,
-            Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE
+            this, OPEN_REQUEST_CODE, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val stopIntent = Intent(
-            this,
-            ScreenRecordingService::class.java
-        ).apply {
+        val stopIntent = Intent(this, ScreenRecordingService::class.java).apply {
             action = ACTION_STOP
         }
-
         val stopPendingIntent = PendingIntent.getService(
-            this,
-            STOP_REQUEST_CODE,
-            stopIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or
-                PendingIntent.FLAG_IMMUTABLE
+            this, STOP_REQUEST_CODE, stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle("Kalize Recorder")
@@ -505,29 +363,18 @@ class ScreenRecordingService : Service() {
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .addAction(
-                android.R.drawable.ic_media_pause,
-                "STOP RECORDING",
-                stopPendingIntent
-            )
+            .addAction(android.R.drawable.ic_media_pause, "STOP RECORDING", stopPendingIntent)
 
-        // Display a live elapsed-time counter while recording is active.
         if (recordingStarted && recordingStartTime > 0L) {
-            builder
-                .setWhen(recordingStartTime)
-                .setUsesChronometer(true)
+            builder.setWhen(recordingStartTime).setUsesChronometer(true)
         } else {
-            builder
-                .setWhen(System.currentTimeMillis())
-                .setUsesChronometer(false)
+            builder.setWhen(System.currentTimeMillis()).setUsesChronometer(false)
         }
-
         return builder.build()
     }
 
     private fun updateNotification(message: String) {
-        getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(message))
     }
 
     private fun even(value: Int): Int = max(2, value - (value % 2))

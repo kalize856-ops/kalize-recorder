@@ -3,7 +3,9 @@ package com.kalize.recorder
 
 import android.app.ActivityManager
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -87,7 +89,8 @@ class PerformanceToolsActivity : ComponentActivity() {
                                 Settings.ACTION_WIFI_SETTINGS
                             )
                         },
-                        deviceInfo = getDeviceInfo()
+                        deviceInfo = getDeviceInfo(),
+                        batteryInfo = getBatteryInfo()
                     )
                 }
             }
@@ -143,6 +146,106 @@ class PerformanceToolsActivity : ComponentActivity() {
             )
         }
     }
+
+    private fun getBatteryInfo(): String {
+        return try {
+            val batteryIntent = registerReceiver(
+                null,
+                IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            )
+
+            if (batteryIntent == null) {
+                return "Battery information is unavailable."
+            }
+
+            val level = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_LEVEL,
+                -1
+            )
+            val scale = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_SCALE,
+                -1
+            )
+
+            val percentage = if (level >= 0 && scale > 0) {
+                (level * 100) / scale
+            } else {
+                -1
+            }
+
+            val status = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_STATUS,
+                -1
+            )
+
+            val chargingStatus = when (status) {
+                BatteryManager.BATTERY_STATUS_CHARGING -> "Charging"
+                BatteryManager.BATTERY_STATUS_FULL -> "Fully charged"
+                BatteryManager.BATTERY_STATUS_DISCHARGING -> "Discharging"
+                BatteryManager.BATTERY_STATUS_NOT_CHARGING ->
+                    "Not charging"
+                else -> "Status unavailable"
+            }
+
+            val plugged = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_PLUGGED,
+                0
+            )
+
+            val powerSource = when (plugged) {
+                BatteryManager.BATTERY_PLUGGED_AC -> "AC charger"
+                BatteryManager.BATTERY_PLUGGED_USB -> "USB"
+                BatteryManager.BATTERY_PLUGGED_WIRELESS -> "Wireless charger"
+                else -> "Not connected or unknown"
+            }
+
+            val temperatureTenths = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_TEMPERATURE,
+                -1
+            )
+
+            val temperature = if (temperatureTenths >= 0) {
+                String.format(
+                    Locale.US,
+                    "%.1f°C",
+                    temperatureTenths / 10.0
+                )
+            } else {
+                "Unavailable"
+            }
+
+            val healthCode = batteryIntent.getIntExtra(
+                BatteryManager.EXTRA_HEALTH,
+                -1
+            )
+
+            val health = when (healthCode) {
+                BatteryManager.BATTERY_HEALTH_GOOD -> "Good"
+                BatteryManager.BATTERY_HEALTH_OVERHEAT -> "Overheating"
+                BatteryManager.BATTERY_HEALTH_DEAD -> "Battery failure reported"
+                BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE ->
+                    "Over-voltage reported"
+                BatteryManager.BATTERY_HEALTH_COLD -> "Cold"
+                BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE ->
+                    "Issue reported by Android"
+                else -> "Not reported"
+            }
+
+            buildString {
+                appendLine(
+                    "Battery level: ${
+                        if (percentage >= 0) "$percentage%" else "Unavailable"
+                    }"
+                )
+                appendLine("Charging status: $chargingStatus")
+                appendLine("Power source: $powerSource")
+                appendLine("Battery temperature: $temperature")
+                append("Reported battery condition: $health")
+            }
+        } catch (_: Exception) {
+            "Could not read battery information on this device."
+        }
+    }
 }
 
 @Composable
@@ -152,16 +255,21 @@ private fun PerformanceToolsScreen(
     onDisplaySettings: () -> Unit,
     onAppSettings: () -> Unit,
     onWifiSettings: () -> Unit,
-    deviceInfo: String
+    deviceInfo: String,
+    batteryInfo: String
 ) {
     var networkRunning by remember { mutableStateOf(false) }
     var networkResult by remember {
-        mutableStateOf("Run a test to check connection latency and download speed.")
+        mutableStateOf(
+            "Run a test to check connection latency and download speed."
+        )
     }
 
     var cpuRunning by remember { mutableStateOf(false) }
     var cpuResult by remember {
-        mutableStateOf("Run the benchmark to measure a short CPU workload.")
+        mutableStateOf(
+            "Run the benchmark to measure a short CPU workload."
+        )
     }
 
     var boosterMessage by remember {
@@ -207,6 +315,30 @@ private fun PerformanceToolsScreen(
         }
 
         Spacer(modifier = Modifier.height(18.dp))
+
+        ToolPanel(
+            title = "🔋 Battery Status",
+            subtitle = "Battery details reported by Android"
+        ) {
+            Text(
+                text = batteryInfo,
+                color = ToolsText,
+                fontSize = 15.sp,
+                lineHeight = 24.sp
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "This screen shows available battery readings. " +
+                    "The reported condition is not a professional battery " +
+                    "health or remaining-lifespan test.",
+                color = ToolsMuted,
+                fontSize = 12.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         ToolPanel(
             title = "🎮 Game Booster",
@@ -342,16 +474,14 @@ private fun PerformanceToolsScreen(
                                     }
                                 }
 
-                                val elapsedMs =
-                                    (
-                                        SystemClock.elapsedRealtime() -
-                                            downloadStart
-                                        ).coerceAtLeast(1L)
+                                val elapsedMs = (
+                                    SystemClock.elapsedRealtime() -
+                                        downloadStart
+                                    ).coerceAtLeast(1L)
 
                                 downloadConnection.disconnect()
 
                                 val seconds = elapsedMs / 1000.0
-
                                 val mbps =
                                     (bytesReadTotal * 8.0) /
                                         seconds / 1_000_000.0
@@ -455,7 +585,6 @@ private fun PerformanceToolsScreen(
                                 operations++
                             }
 
-                            // Keep the calculation result observable.
                             val elapsedNs = (
                                 SystemClock.elapsedRealtimeNanos() - start
                                 ).coerceAtLeast(1L)
@@ -463,8 +592,7 @@ private fun PerformanceToolsScreen(
                             val operationsPerSecond =
                                 operations * 1_000_000_000.0 / elapsedNs
 
-                            val score =
-                                operationsPerSecond / 1000.0
+                            val score = operationsPerSecond / 1000.0
 
                             val result = buildString {
                                 appendLine(

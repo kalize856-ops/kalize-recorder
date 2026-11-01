@@ -17,11 +17,13 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -57,6 +59,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var exportButton: Button
     private lateinit var previewButton: Button
     private lateinit var exportStatus: TextView
+    private lateinit var exportProgressBar: ProgressBar
     private lateinit var exportNameInput: EditText
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -318,6 +321,28 @@ class VideoEditorActivity : Activity() {
             setPadding(0, 0, 0, dp(10))
         }
         exportCard.addView(exportStatus)
+
+        exportProgressBar = ProgressBar(
+            this,
+            null,
+            android.R.attr.progressBarStyleHorizontal
+        ).apply {
+            max = 100
+            progress = 0
+            progressTintList = ColorStateList.valueOf(accentColor)
+            progressBackgroundTintList =
+                ColorStateList.valueOf(Color.rgb(42, 47, 68))
+            visibility = View.GONE
+        }
+        exportCard.addView(
+            exportProgressBar,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(8)
+            ).apply {
+                bottomMargin = dp(12)
+            }
+        )
 
         exportButton = makeButton("Export edited video", true)
         exportButton.isEnabled = false
@@ -603,9 +628,13 @@ class VideoEditorActivity : Activity() {
 
         val shouldMuteAudio = muteAudio.isChecked
         val requestedFileName = exportNameInput.text.toString()
+
         exportButton.isEnabled = false
         exportButton.text = "Exporting..."
-        exportStatus.text = "Processing your clip. Please wait."
+        exportButton.alpha = 0.5f
+        exportProgressBar.progress = 0
+        exportProgressBar.visibility = View.VISIBLE
+        exportStatus.text = "Preparing your clip... 0%"
 
         executor.execute {
             var temporaryFile: File? = null
@@ -624,14 +653,25 @@ class VideoEditorActivity : Activity() {
                     (startSeconds * 1_000_000).toLong(),
                     (endSeconds * 1_000_000).toLong(),
                     shouldMuteAudio
-                )
+                ) { progress ->
+                    runOnUiThread {
+                        exportProgressBar.progress = progress
+                        exportStatus.text = "Exporting video... $progress%"
+                    }
+                }
+
+                runOnUiThread {
+                    exportStatus.text = "Saving exported video... 95%"
+                    exportProgressBar.progress = 95
+                }
 
                 val savedUri = saveExport(cacheFile, requestedFileName)
 
                 runOnUiThread {
                     if (savedUri != null) {
                         lastExportedVideo = savedUri
-                        exportStatus.text = "Export complete. Your clip is saved."
+                        exportProgressBar.progress = 100
+                        exportStatus.text = "Export complete. Your clip is saved. 100%"
                         showMessage("Export complete! Your video is saved.")
                     } else {
                         exportStatus.text = "Export could not be saved."
@@ -639,6 +679,7 @@ class VideoEditorActivity : Activity() {
                     }
 
                     exportButton.isEnabled = true
+                    exportButton.alpha = 1f
                     exportButton.text = "Export edited video"
                 }
             } catch (e: Exception) {
@@ -648,6 +689,7 @@ class VideoEditorActivity : Activity() {
                         "Export failed: ${e.message ?: "Unsupported video"}"
                     )
                     exportButton.isEnabled = true
+                    exportButton.alpha = 1f
                     exportButton.text = "Export edited video"
                 }
             } finally {
@@ -661,7 +703,8 @@ class VideoEditorActivity : Activity() {
         outputFile: File,
         startUs: Long,
         endUs: Long,
-        mute: Boolean
+        mute: Boolean,
+        onProgress: (Int) -> Unit
     ) {
         val extractor = MediaExtractor()
         var muxer: MediaMuxer? = null
@@ -710,6 +753,7 @@ class VideoEditorActivity : Activity() {
             val buffer = ByteBuffer.allocate(4 * 1024 * 1024)
             val info = android.media.MediaCodec.BufferInfo()
             var samplesWritten = 0
+            var lastProgressUpdate = 0L
 
             while (true) {
                 val inputTrack = extractor.sampleTrackIndex
@@ -717,6 +761,17 @@ class VideoEditorActivity : Activity() {
 
                 val sampleTime = extractor.sampleTime
                 if (sampleTime < 0 || sampleTime >= endUs) break
+
+                val progress = (
+                    ((sampleTime - startUs).coerceAtLeast(0L) * 95L) /
+                        (endUs - startUs).coerceAtLeast(1L)
+                    ).toInt().coerceIn(0, 94)
+
+                val now = System.currentTimeMillis()
+                if (now - lastProgressUpdate >= 250L) {
+                    onProgress(progress)
+                    lastProgressUpdate = now
+                }
 
                 val outputTrack = outputTracks[inputTrack]
 
@@ -767,14 +822,17 @@ class VideoEditorActivity : Activity() {
         ).format(Date())
 
         val typedName = requestedFileName.trim()
-        val nameWithoutExtension = typedName.substringBeforeLast('.', typedName)
+        val nameWithoutExtension =
+            typedName.substringBeforeLast('.', typedName)
+
         val safeBaseName = nameWithoutExtension
             .replace(Regex("[^A-Za-z0-9 _-]"), "")
             .trim()
             .replace(Regex("\\s+"), "_")
             .take(60)
 
-        val name = (safeBaseName.ifBlank { "Kalize_Edit_$timestamp" }) + ".mp4"
+        val name =
+            (safeBaseName.ifBlank { "Kalize_Edit_$timestamp" }) + ".mp4"
 
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
@@ -797,7 +855,9 @@ class VideoEditorActivity : Activity() {
                     FileInputStream(file).use { input ->
                         input.copyTo(output)
                     }
-                } ?: throw IllegalStateException("Could not open export file.")
+                } ?: throw IllegalStateException(
+                    "Could not open export file."
+                )
 
                 val completedValues = ContentValues().apply {
                     put(MediaStore.Video.Media.IS_PENDING, 0)
@@ -816,7 +876,9 @@ class VideoEditorActivity : Activity() {
             )
 
             if (!directory.exists() && !directory.mkdirs()) {
-                throw IllegalStateException("Could not create export folder.")
+                throw IllegalStateException(
+                    "Could not create export folder."
+                )
             }
 
             val destination = File(directory, name)

@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Notification
@@ -74,9 +75,52 @@ class ScreenRecordingService : Service() {
     private var isStopping = false
     private var recordingStarted = false
     private var recordingPaused = false
+
     private var recordingStartTime = 0L
+    private var totalPausedMillis = 0L
+    private var pauseStartedAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun elapsedRecordingMillis(): Long {
+        if (!recordingStarted || recordingStartTime <= 0L) {
+            return 0L
+        }
+
+        val now = System.currentTimeMillis()
+        val currentPause = if (recordingPaused && pauseStartedAt > 0L) {
+            now - pauseStartedAt
+        } else {
+            0L
+        }
+
+        return (now - recordingStartTime - totalPausedMillis - currentPause)
+            .coerceAtLeast(0L)
+    }
+
+    private fun formatElapsedTime(milliseconds: Long): String {
+        val seconds = milliseconds / 1000L
+        val hours = seconds / 3600L
+        val minutes = (seconds % 3600L) / 60L
+        val remainingSeconds = seconds % 60L
+
+        return if (hours > 0L) {
+            String.format(
+                Locale.US,
+                "%02d:%02d:%02d",
+                hours,
+                minutes,
+                remainingSeconds
+            )
+        } else {
+            String.format(
+                Locale.US,
+                "%02d:%02d",
+                minutes,
+                remainingSeconds
+            )
+        }
+    }
 
     private fun publishRecordingState() {
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -213,9 +257,13 @@ class ScreenRecordingService : Service() {
 
         try {
             recorder?.pause()
+
+            pauseStartedAt = System.currentTimeMillis()
             recordingPaused = true
+
             publishRecordingState()
-            updateNotification("Recording paused — tap RESUME to continue")
+            updateNotification("Recording paused")
+
         } catch (error: Exception) {
             Toast.makeText(
                 this,
@@ -233,9 +281,18 @@ class ScreenRecordingService : Service() {
 
         try {
             recorder?.resume()
+
+            if (pauseStartedAt > 0L) {
+                totalPausedMillis +=
+                    System.currentTimeMillis() - pauseStartedAt
+            }
+
+            pauseStartedAt = 0L
             recordingPaused = false
+
             publishRecordingState()
             updateNotification("Recording resumed — tap PAUSE or STOP")
+
         } catch (error: Exception) {
             Toast.makeText(
                 this,
@@ -262,9 +319,7 @@ class ScreenRecordingService : Service() {
                 display.refreshRate
             }
 
-            maximumRate
-                .toInt()
-                .coerceIn(30, 240)
+            maximumRate.toInt().coerceIn(30, 240)
 
         } catch (_: Exception) {
             60
@@ -279,10 +334,7 @@ class ScreenRecordingService : Service() {
             30, 60, 90, 120, 144, 165, 180, 200, 240
         )
 
-        val safeMaximum = minOf(
-            maximumDisplayRate,
-            240
-        )
+        val safeMaximum = minOf(maximumDisplayRate, 240)
 
         return choices
             .filter {
@@ -418,9 +470,12 @@ class ScreenRecordingService : Service() {
         )
 
         mediaRecorder.start()
+
         recordingStarted = true
         recordingPaused = false
         recordingStartTime = System.currentTimeMillis()
+        totalPausedMillis = 0L
+        pauseStartedAt = 0L
 
         if (targetFps < fps) {
             Handler(Looper.getMainLooper()).post {
@@ -576,6 +631,9 @@ class ScreenRecordingService : Service() {
         }
 
         recordingStartTime = 0L
+        totalPausedMillis = 0L
+        pauseStartedAt = 0L
+
         publishRecordingState()
 
         try {
@@ -649,6 +707,8 @@ class ScreenRecordingService : Service() {
         recordingStarted = false
         recordingPaused = false
         recordingStartTime = 0L
+        totalPausedMillis = 0L
+        pauseStartedAt = 0L
         publishRecordingState()
         super.onDestroy()
     }
@@ -698,13 +758,19 @@ class ScreenRecordingService : Service() {
                 PendingIntent.FLAG_IMMUTABLE
         )
 
+        val notificationMessage = if (recordingPaused) {
+            "$message • ${formatElapsedTime(elapsedRecordingMillis())} elapsed"
+        } else {
+            message
+        }
+
         val builder = NotificationCompat.Builder(
             this,
             CHANNEL_ID
         )
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle("Kalize Recorder")
-            .setContentText(message)
+            .setContentText(notificationMessage)
             .setContentIntent(openApp)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -746,11 +812,16 @@ class ScreenRecordingService : Service() {
             !recordingPaused &&
             recordingStartTime > 0L
         ) {
-            builder.setWhen(recordingStartTime)
+            val effectiveStartTime =
+                recordingStartTime + totalPausedMillis
+
+            builder.setWhen(effectiveStartTime)
                 .setUsesChronometer(true)
+                .setShowWhen(true)
         } else {
-            builder.setWhen(System.currentTimeMillis())
+            builder.setWhen(0L)
                 .setUsesChronometer(false)
+                .setShowWhen(false)
         }
 
         return builder.build()

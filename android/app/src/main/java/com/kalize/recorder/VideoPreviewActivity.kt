@@ -1,8 +1,9 @@
-
 package com.kalize.recorder
 
 import android.app.Activity
+import android.media.PlaybackParams
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -20,8 +21,12 @@ class VideoPreviewActivity : Activity() {
     }
 
     private var fullScreen = false
+    private var playbackSpeed = 1.0f
+
     private lateinit var videoView: VideoView
     private lateinit var fullScreenButton: Button
+    private lateinit var speedLabel: TextView
+    private lateinit var playbackStatus: TextView
 
     private val backgroundColor = android.graphics.Color.rgb(8, 11, 22)
     private val accent = android.graphics.Color.rgb(154, 105, 255)
@@ -76,7 +81,7 @@ class VideoPreviewActivity : Activity() {
 
         root.addView(
             TextView(this).apply {
-                text = "Watch your selected clip before editing."
+                text = "Preview your clip and adjust playback speed."
                 textSize = 13f
                 setTextColor(muted)
                 gravity = Gravity.CENTER
@@ -107,7 +112,7 @@ class VideoPreviewActivity : Activity() {
         controller.setAnchorView(videoView)
         videoView.setMediaController(controller)
 
-        val playbackStatus = TextView(this).apply {
+        playbackStatus = TextView(this).apply {
             text = "Loading video..."
             textSize = 12f
             setTextColor(muted)
@@ -121,13 +126,85 @@ class VideoPreviewActivity : Activity() {
             )
         )
 
+        root.addView(
+            TextView(this).apply {
+                text = "PLAYBACK SPEED"
+                textSize = 11f
+                letterSpacing = 0.1f
+                setTextColor(accent)
+                gravity = Gravity.CENTER
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            },
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 32
+            )
+        )
+
+        speedLabel = TextView(this).apply {
+            text = "Current speed: 1.0×"
+            textSize = 15f
+            setTextColor(white)
+            gravity = Gravity.CENTER
+        }
+
+        root.addView(
+            speedLabel,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 36
+            )
+        )
+
+        val speedRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+
+        listOf(0.5f, 1.0f, 1.5f, 2.0f).forEach { speed ->
+            val button = Button(this).apply {
+                text = "${speed}×"
+                textSize = 12f
+                isAllCaps = false
+                setTextColor(white)
+                backgroundTintList = android.content.res.ColorStateList.valueOf(
+                    if (speed == 1.0f) accent else
+                        android.graphics.Color.rgb(49, 55, 76)
+                )
+                setOnClickListener {
+                    setPlaybackSpeed(speed)
+                }
+            }
+
+            speedRow.addView(
+                button,
+                LinearLayout.LayoutParams(
+                    0,
+                    48,
+                    1f
+                ).apply {
+                    marginEnd = 4
+                }
+            )
+        }
+
+        root.addView(
+            speedRow,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                52
+            ).apply {
+                topMargin = 6
+                bottomMargin = 8
+            }
+        )
+
         videoView.setOnPreparedListener { player ->
-            playbackStatus.text = "Video ready • Use the playback controls"
+            playbackStatus.text = "Video ready • Playback controls available"
             player.start()
+            setPlaybackSpeed(playbackSpeed)
         }
 
         videoView.setOnCompletionListener {
-            playbackStatus.text = "Preview finished. You can replay the clip."
+            playbackStatus.text = "Preview finished • Replay using the controls"
         }
 
         videoView.setOnErrorListener { _, _, _ ->
@@ -139,7 +216,8 @@ class VideoPreviewActivity : Activity() {
             text = "⛶  ENTER FULL SCREEN"
             isAllCaps = false
             setTextColor(white)
-            setBackgroundColor(accent)
+            backgroundTintList =
+                android.content.res.ColorStateList.valueOf(accent)
             setOnClickListener {
                 toggleFullScreen()
             }
@@ -158,9 +236,10 @@ class VideoPreviewActivity : Activity() {
             text = "BACK TO VIDEO EDITOR"
             isAllCaps = false
             setTextColor(white)
-            setBackgroundColor(
-                android.graphics.Color.rgb(49, 55, 76)
-            )
+            backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    android.graphics.Color.rgb(49, 55, 76)
+                )
             setOnClickListener {
                 if (videoView.isPlaying) {
                     videoView.stopPlayback()
@@ -181,6 +260,37 @@ class VideoPreviewActivity : Activity() {
         setContentView(root)
     }
 
+    private fun setPlaybackSpeed(speed: Float) {
+        playbackSpeed = speed
+
+        speedLabel.text = "Current speed: ${speed}×"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                videoView.setOnPreparedListener { player ->
+                    player.playbackParams = PlaybackParams().setSpeed(speed)
+                    playbackStatus.text =
+                        "Video ready • Playback speed ${speed}×"
+                    player.start()
+                }
+
+                // Apply immediately if the video is already prepared.
+                if (videoView.isPlaying) {
+                    videoView.setOnPreparedListener { player ->
+                        player.playbackParams =
+                            PlaybackParams().setSpeed(speed)
+                    }
+                }
+            } catch (_: Exception) {
+                playbackStatus.text =
+                    "This device does not support the selected speed."
+            }
+        } else {
+            playbackStatus.text =
+                "Playback speed controls require Android 6.0 or newer."
+        }
+    }
+
     private fun toggleFullScreen() {
         fullScreen = !fullScreen
 
@@ -193,7 +303,9 @@ class VideoPreviewActivity : Activity() {
 
             fullScreenButton.text = "⛶  EXIT FULL SCREEN"
         } else {
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_VISIBLE
+
             fullScreenButton.text = "⛶  ENTER FULL SCREEN"
         }
     }
@@ -207,7 +319,7 @@ class VideoPreviewActivity : Activity() {
     }
 
     override fun onDestroy() {
-        if (::videoView.isInitialized && videoView.isPlaying) {
+        if (::videoView.isInitialized) {
             videoView.stopPlayback()
         }
         super.onDestroy()

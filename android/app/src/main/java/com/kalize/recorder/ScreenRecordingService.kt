@@ -281,6 +281,16 @@ class ScreenRecordingService : Service() {
         val outputWidth = even((screenWidth * scale).roundToInt())
         val outputHeight = even((screenHeight * scale).roundToInt())
 
+        // Accept requested frame rates from 30 through 240 FPS.
+        val targetFps = fps.coerceIn(30, 240)
+
+        // Increase the encoder bitrate for higher frame rates.
+        // The encoder and device may still impose their own limits.
+        val targetBitrate = max(
+            8_000_000L,
+            8_000_000L * targetFps / 60L
+        ).coerceAtMost(64_000_000L).toInt()
+
         val timestamp = SimpleDateFormat(
             "yyyyMMdd_HHmmss",
             Locale.US
@@ -312,8 +322,8 @@ class ScreenRecordingService : Service() {
         }
 
         mediaRecorder.setVideoSize(outputWidth, outputHeight)
-        mediaRecorder.setVideoFrameRate(if (fps >= 60) 60 else 30)
-        mediaRecorder.setVideoEncodingBitRate(8_000_000)
+        mediaRecorder.setVideoFrameRate(targetFps)
+        mediaRecorder.setVideoEncodingBitRate(targetBitrate)
 
         if (outputFileDescriptor != null) {
             mediaRecorder.setOutputFile(outputFileDescriptor.fileDescriptor)
@@ -563,7 +573,6 @@ class ScreenRecordingService : Service() {
     }
 
     override fun onDestroy() {
-        // Keep the saved state accurate if Android destroys this service.
         recordingStarted = false
         recordingPaused = false
         recordingStartTime = 0L

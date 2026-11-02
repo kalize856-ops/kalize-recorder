@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Service
@@ -356,11 +355,6 @@ class FloatingBubbleService : Service() {
             panel.orientation = LinearLayout.HORIZONTAL
             panel.gravity = Gravity.CENTER
             panel.setPadding(dp(7), dp(7), dp(7), dp(7))
-            panel.background = roundedBackground(
-                backgroundColor,
-                22,
-                purpleColor
-            )
             panel.contentDescription = "Floating recording controls"
 
             updatePauseButton()
@@ -502,9 +496,34 @@ class FloatingBubbleService : Service() {
     private fun updateRecordingAppearance() {
         val panel = controlPanel ?: return
 
-        // More transparent while recording so the screen remains visible.
-        // FLAG_SECURE helps keep the floating controls out of screen captures.
-        panel.alpha = if (isRecording) 0.30f else 1.0f
+        // Change only the panel background, not the buttons or their labels.
+        panel.alpha = 1.0f
+
+        if (isMinimized) {
+            panel.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(
+                    if (isRecording) {
+                        Color.argb(185, 65, 42, 125)
+                    } else {
+                        Color.rgb(65, 42, 125)
+                    }
+                )
+                setStroke(dp(2), lightPurple)
+            }
+        } else {
+            val panelColor = if (isRecording) {
+                Color.argb(175, 20, 19, 37)
+            } else {
+                backgroundColor
+            }
+
+            panel.background = roundedBackground(
+                panelColor,
+                22,
+                purpleColor
+            )
+        }
     }
 
     private fun updatePauseButton() {

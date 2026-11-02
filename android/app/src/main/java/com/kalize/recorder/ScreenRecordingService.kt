@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Notification
@@ -248,6 +247,50 @@ class ScreenRecordingService : Service() {
         }
     }
 
+    private fun getMaximumDisplayRefreshRate(
+        windowManager: WindowManager
+    ): Int {
+        return try {
+            @Suppress("DEPRECATION")
+            val display = windowManager.defaultDisplay
+
+            val maximumRate = if (Build.VERSION.SDK_INT >= 23) {
+                display.supportedModes
+                    .maxOfOrNull { it.refreshRate }
+                    ?: display.refreshRate
+            } else {
+                display.refreshRate
+            }
+
+            maximumRate
+                .toInt()
+                .coerceIn(30, 240)
+
+        } catch (_: Exception) {
+            60
+        }
+    }
+
+    private fun getSupportedRecordingFps(
+        requestedFps: Int,
+        maximumDisplayRate: Int
+    ): Int {
+        val choices = listOf(
+            30, 60, 90, 120, 144, 165, 180, 200, 240
+        )
+
+        val safeMaximum = minOf(
+            maximumDisplayRate,
+            240
+        )
+
+        return choices
+            .filter {
+                it <= requestedFps && it <= safeMaximum
+            }
+            .maxOrNull() ?: 30
+    }
+
     private fun startRecording(
         resultCode: Int,
         resultData: Intent,
@@ -256,10 +299,11 @@ class ScreenRecordingService : Service() {
         audioEnabled: Boolean
     ) {
         val metrics = DisplayMetrics()
+        val windowManager =
+            getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
         @Suppress("DEPRECATION")
-        (getSystemService(Context.WINDOW_SERVICE) as WindowManager)
-            .defaultDisplay.getRealMetrics(metrics)
+        windowManager.defaultDisplay.getRealMetrics(metrics)
 
         val screenWidth = max(2, metrics.widthPixels)
         val screenHeight = max(2, metrics.heightPixels)
@@ -281,11 +325,14 @@ class ScreenRecordingService : Service() {
         val outputWidth = even((screenWidth * scale).roundToInt())
         val outputHeight = even((screenHeight * scale).roundToInt())
 
-        // Accept requested frame rates from 30 through 240 FPS.
-        val targetFps = fps.coerceIn(30, 240)
+        val maximumDisplayRate =
+            getMaximumDisplayRefreshRate(windowManager)
 
-        // Increase the encoder bitrate for higher frame rates.
-        // The encoder and device may still impose their own limits.
+        val targetFps = getSupportedRecordingFps(
+            fps.coerceIn(30, 240),
+            maximumDisplayRate
+        )
+
         val targetBitrate = max(
             8_000_000L,
             8_000_000L * targetFps / 60L
@@ -296,14 +343,16 @@ class ScreenRecordingService : Service() {
             Locale.US
         ).format(Date())
 
-        val outputFileDescriptor = prepareOutput("Kalize_$timestamp.mp4")
+        val outputFileDescriptor =
+            prepareOutput("Kalize_$timestamp.mp4")
 
-        val mediaRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(this)
-        } else {
-            @Suppress("DEPRECATION")
-            MediaRecorder()
-        }
+        val mediaRecorder =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                MediaRecorder(this)
+            } else {
+                @Suppress("DEPRECATION")
+                MediaRecorder()
+            }
 
         recorder = mediaRecorder
 
@@ -326,10 +375,14 @@ class ScreenRecordingService : Service() {
         mediaRecorder.setVideoEncodingBitRate(targetBitrate)
 
         if (outputFileDescriptor != null) {
-            mediaRecorder.setOutputFile(outputFileDescriptor.fileDescriptor)
+            mediaRecorder.setOutputFile(
+                outputFileDescriptor.fileDescriptor
+            )
         } else {
             val file = legacyOutputFile
-                ?: throw IllegalStateException("Could not prepare the output file")
+                ?: throw IllegalStateException(
+                    "Could not prepare the output file"
+                )
             mediaRecorder.setOutputFile(file.absolutePath)
         }
 
@@ -339,7 +392,9 @@ class ScreenRecordingService : Service() {
             getSystemService(Context.MEDIA_PROJECTION_SERVICE)
                 as MediaProjectionManager
 
-        val mediaProjection = manager.getMediaProjection(resultCode, resultData)
+        val mediaProjection =
+            manager.getMediaProjection(resultCode, resultData)
+
         projection = mediaProjection
 
         mediaProjection.registerCallback(
@@ -366,6 +421,16 @@ class ScreenRecordingService : Service() {
         recordingStarted = true
         recordingPaused = false
         recordingStartTime = System.currentTimeMillis()
+
+        if (targetFps < fps) {
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(
+                    this,
+                    "Recording FPS adjusted to ${targetFps} FPS for this display.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun prepareOutput(
@@ -375,10 +440,11 @@ class ScreenRecordingService : Service() {
 
         if (treeUri != null) {
             try {
-                val parentDocumentUri = DocumentsContract.buildDocumentUriUsingTree(
-                    treeUri,
-                    DocumentsContract.getTreeDocumentId(treeUri)
-                )
+                val parentDocumentUri =
+                    DocumentsContract.buildDocumentUriUsingTree(
+                        treeUri,
+                        DocumentsContract.getTreeDocumentId(treeUri)
+                    )
 
                 val createdUri = DocumentsContract.createDocument(
                     contentResolver,
@@ -401,6 +467,7 @@ class ScreenRecordingService : Service() {
 
                 outputDescriptor = descriptor
                 return descriptor
+
             } catch (error: Exception) {
                 outputUri?.let {
                     try {
@@ -450,8 +517,11 @@ class ScreenRecordingService : Service() {
             }
         }
 
-        val movies = getExternalFilesDir(Environment.DIRECTORY_MOVIES)
-            ?: throw IllegalStateException("Phone storage is unavailable")
+        val movies =
+            getExternalFilesDir(Environment.DIRECTORY_MOVIES)
+                ?: throw IllegalStateException(
+                    "Phone storage is unavailable"
+                )
 
         if (!movies.exists()) movies.mkdirs()
 
@@ -534,7 +604,10 @@ class ScreenRecordingService : Service() {
                 }
             } else if (!saved) {
                 try {
-                    DocumentsContract.deleteDocument(contentResolver, uri)
+                    DocumentsContract.deleteDocument(
+                        contentResolver,
+                        uri
+                    )
                 } catch (_: Exception) {
                     try {
                         contentResolver.delete(uri, null, null)
@@ -600,7 +673,10 @@ class ScreenRecordingService : Service() {
         action: String,
         requestCode: Int
     ): PendingIntent {
-        val intent = Intent(this, ScreenRecordingService::class.java).apply {
+        val intent = Intent(
+            this,
+            ScreenRecordingService::class.java
+        ).apply {
             this.action = action
         }
 
@@ -608,7 +684,8 @@ class ScreenRecordingService : Service() {
             this,
             requestCode,
             intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
         )
     }
 
@@ -617,10 +694,14 @@ class ScreenRecordingService : Service() {
             this,
             OPEN_REQUEST_CODE,
             Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                PendingIntent.FLAG_IMMUTABLE
         )
 
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+        val builder = NotificationCompat.Builder(
+            this,
+            CHANNEL_ID
+        )
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle("Kalize Recorder")
             .setContentText(message)
@@ -634,25 +715,39 @@ class ScreenRecordingService : Service() {
                 builder.addAction(
                     android.R.drawable.ic_media_play,
                     "RESUME",
-                    servicePendingIntent(ACTION_RESUME, RESUME_REQUEST_CODE)
+                    servicePendingIntent(
+                        ACTION_RESUME,
+                        RESUME_REQUEST_CODE
+                    )
                 )
             } else {
                 builder.addAction(
                     android.R.drawable.ic_media_pause,
                     "PAUSE",
-                    servicePendingIntent(ACTION_PAUSE, PAUSE_REQUEST_CODE)
+                    servicePendingIntent(
+                        ACTION_PAUSE,
+                        PAUSE_REQUEST_CODE
+                    )
                 )
             }
 
             builder.addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "STOP",
-                servicePendingIntent(ACTION_STOP, STOP_REQUEST_CODE)
+                servicePendingIntent(
+                    ACTION_STOP,
+                    STOP_REQUEST_CODE
+                )
             )
         }
 
-        if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
-            builder.setWhen(recordingStartTime).setUsesChronometer(true)
+        if (
+            recordingStarted &&
+            !recordingPaused &&
+            recordingStartTime > 0L
+        ) {
+            builder.setWhen(recordingStartTime)
+                .setUsesChronometer(true)
         } else {
             builder.setWhen(System.currentTimeMillis())
                 .setUsesChronometer(false)
@@ -663,8 +758,12 @@ class ScreenRecordingService : Service() {
 
     private fun updateNotification(message: String) {
         getSystemService(NotificationManager::class.java)
-            .notify(NOTIFICATION_ID, buildNotification(message))
+            .notify(
+                NOTIFICATION_ID,
+                buildNotification(message)
+            )
     }
 
-    private fun even(value: Int): Int = max(2, value - (value % 2))
+    private fun even(value: Int): Int =
+        max(2, value - (value % 2))
 }

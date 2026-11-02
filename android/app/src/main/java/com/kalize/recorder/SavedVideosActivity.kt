@@ -49,6 +49,7 @@ class SavedVideosActivity : Activity() {
     private lateinit var listContainer: LinearLayout
     private lateinit var statusText: TextView
     private lateinit var storageText: TextView
+    private lateinit var summaryDetails: TextView
     private lateinit var searchInput: EditText
     private lateinit var sortSpinner: Spinner
     private lateinit var bulkStatus: TextView
@@ -185,8 +186,16 @@ class SavedVideosActivity : Activity() {
             setPadding(0, dp(5), 0, 0)
         }
 
+        summaryDetails = TextView(this).apply {
+            text = "Average file size: calculating..."
+            textSize = 12f
+            setTextColor(mutedColor)
+            setPadding(0, dp(7), 0, 0)
+        }
+
         summary.addView(statusText)
         summary.addView(storageText)
+        summary.addView(summaryDetails)
 
         root.addView(
             summary,
@@ -406,6 +415,7 @@ class SavedVideosActivity : Activity() {
             displayVideos()
             statusText.text = "Could not load videos. Reopen or refresh."
             storageText.text = "Storage used: unavailable"
+            summaryDetails.text = "Library statistics unavailable."
         }
     }
 
@@ -502,7 +512,28 @@ class SavedVideosActivity : Activity() {
         listContainer.removeAllViews()
 
         val totalBytes = allVideos.sumOf { it.sizeBytes }
-        storageText.text = "Storage used: ${formatFileSize(totalBytes)}"
+        val totalDuration = allVideos.sumOf { it.durationMs }
+        val averageSize = if (allVideos.isNotEmpty()) {
+            totalBytes / allVideos.size
+        } else {
+            0L
+        }
+        val longestVideo = allVideos.maxByOrNull { it.durationMs }
+
+        storageText.text =
+            "Storage used: ${formatFileSize(totalBytes)}"
+
+        summaryDetails.text = buildString {
+            append("Average file: ${formatFileSize(averageSize)}")
+            append("   •   ")
+            append("Total duration: ${formatDuration(totalDuration)}")
+            append("\nLongest video: ")
+            append(
+                longestVideo?.let {
+                    "${it.name} (${formatDuration(it.durationMs)})"
+                } ?: "None yet"
+            )
+        }
 
         val query = searchInput.text.toString().trim()
 
@@ -684,9 +715,7 @@ class SavedVideosActivity : Activity() {
             tag = key
         }
 
-        // Load the thumbnail on a background thread, not the UI thread.
         loadThumbnailAsync(video, thumbnail)
-
         thumbnail.setOnClickListener { playVideo(video) }
 
         card.addView(
@@ -806,9 +835,9 @@ class SavedVideosActivity : Activity() {
             .setView(input)
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Save") { _, _ ->
-                val safeName = input.text.toString()
-                    .trim()
-                    .substringBeforeLast('.', input.text.toString().trim())
+                val rawName = input.text.toString().trim()
+                val safeName = rawName
+                    .substringBeforeLast('.', rawName)
                     .replace(Regex("[^A-Za-z0-9 _-]"), "")
                     .replace(Regex("\\s+"), "_")
                     .take(60)

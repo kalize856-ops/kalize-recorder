@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Activity
@@ -163,7 +162,7 @@ class VideoEditorActivity : Activity() {
         previewButton.isEnabled = false
         previewButton.alpha = 0.5f
         previewButton.setOnClickListener {
-            selectedVideo?.let { playVideo(it) }
+            selectedVideo?.let { openInAppPreview(it) }
         }
         sourceCard.addView(previewButton, matchWrap())
         content.addView(sourceCard)
@@ -233,7 +232,6 @@ class VideoEditorActivity : Activity() {
         endInput = makeTimeInput("End time", "")
         trimCard.addView(endInput, matchWrap())
 
-        // NEW: LIVE TRIM SUMMARY
         trimSummaryLabel = TextView(this).apply {
             text = "Clip length: choose a video and set your trim range."
             textSize = 12f
@@ -437,7 +435,6 @@ class VideoEditorActivity : Activity() {
         setContentView(root)
     }
 
-    // NEW: Updates the selected clip length as the times change.
     private fun refreshTrimSummary() {
         val durationMs = durationLabel.tag as? Long ?: 0L
         val start = startInput.text.toString().toDoubleOrNull()
@@ -650,15 +647,19 @@ class VideoEditorActivity : Activity() {
         }
     }
 
-    private fun playVideo(uri: Uri) {
+    // Opens the selected video inside Kalize Recorder.
+    private fun openInAppPreview(uri: Uri) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "video/*")
+            val intent = Intent(this, VideoPreviewActivity::class.java).apply {
+                putExtra(
+                    VideoPreviewActivity.EXTRA_VIDEO_URI,
+                    uri.toString()
+                )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             startActivity(intent)
         } catch (_: Exception) {
-            showMessage("No compatible video player was found.")
+            showMessage("Could not open the in-app preview.")
         }
     }
 

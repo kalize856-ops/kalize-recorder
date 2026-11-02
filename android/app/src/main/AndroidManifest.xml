@@ -23,6 +23,7 @@
 
         <activity android:name=".PerformanceToolsActivity" android:exported="false" />
         <activity android:name=".VideoEditorActivity" android:exported="false" />
+        <activity android:name=".VideoPreviewActivity" android:exported="false" />
         <activity android:name=".SavedVideosActivity" android:exported="false" />
         <activity android:name=".ScreenshotGalleryActivity" android:exported="false" />
 

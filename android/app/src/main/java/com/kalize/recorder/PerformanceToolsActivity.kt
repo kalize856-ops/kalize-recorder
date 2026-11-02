@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.ActivityManager
@@ -15,28 +14,12 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -69,17 +52,16 @@ class PerformanceToolsActivity : ComponentActivity() {
         )
 
         setContent {
-            var batteryInfo by remember {
-                mutableStateOf(getBatteryInfo())
-            }
-
-            var deviceInfo by remember {
-                mutableStateOf(getDeviceInfo())
-            }
+            var batteryInfo by remember { mutableStateOf(getBatteryInfo()) }
+            var deviceInfo by remember { mutableStateOf(getDeviceInfo()) }
 
             var cpuHistory by remember {
+                mutableStateOf(preferences.getString("cpu_history", "") ?: "")
+            }
+
+            var networkHistory by remember {
                 mutableStateOf(
-                    preferences.getString("cpu_history", "") ?: ""
+                    preferences.getString("network_history", "") ?: ""
                 )
             }
 
@@ -93,46 +75,75 @@ class PerformanceToolsActivity : ComponentActivity() {
                         batteryInfo = batteryInfo,
                         deviceInfo = deviceInfo,
                         cpuHistory = cpuHistory,
+                        networkHistory = networkHistory,
+
                         onSaveCpuScore = { score, operations ->
                             val date = SimpleDateFormat(
                                 "dd MMM yyyy, HH:mm",
                                 Locale.getDefault()
                             ).format(Date())
 
-                            val newEntry = "$date|$score|$operations"
+                            val entry = "$date|$score|$operations"
 
-                            val updated = (
-                                listOf(newEntry) +
-                                    cpuHistory.lines().filter {
-                                        it.isNotBlank()
-                                    }
+                            cpuHistory = (
+                                listOf(entry) + cpuHistory.lines()
+                                    .filter { it.isNotBlank() }
                                 ).take(10).joinToString("\n")
 
                             preferences.edit()
-                                .putString("cpu_history", updated)
+                                .putString("cpu_history", cpuHistory)
                                 .apply()
-
-                            cpuHistory = updated
                         },
+
                         onClearCpuHistory = {
                             preferences.edit()
                                 .remove("cpu_history")
                                 .apply()
                             cpuHistory = ""
                         },
+
+                        onSaveNetworkTest = { latency, download, upload ->
+                            val date = SimpleDateFormat(
+                                "dd MMM yyyy, HH:mm",
+                                Locale.getDefault()
+                            ).format(Date())
+
+                            val entry = "$date|$latency|$download|$upload"
+
+                            networkHistory = (
+                                listOf(entry) + networkHistory.lines()
+                                    .filter { it.isNotBlank() }
+                                ).take(10).joinToString("\n")
+
+                            preferences.edit()
+                                .putString("network_history", networkHistory)
+                                .apply()
+                        },
+
+                        onClearNetworkHistory = {
+                            preferences.edit()
+                                .remove("network_history")
+                                .apply()
+                            networkHistory = ""
+                        },
+
                         onRefresh = {
                             batteryInfo = getBatteryInfo()
                             deviceInfo = getDeviceInfo()
                         },
+
                         onBatterySettings = {
                             openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS)
                         },
+
                         onDisplaySettings = {
                             openSettings(Settings.ACTION_DISPLAY_SETTINGS)
                         },
+
                         onWifiSettings = {
                             openSettings(Settings.ACTION_WIFI_SETTINGS)
                         },
+
                         onAppSettings = {
                             openSettings(
                                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -154,7 +165,6 @@ class PerformanceToolsActivity : ComponentActivity() {
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (_: Exception) {
-                // Settings are unavailable.
             }
         }
     }
@@ -164,28 +174,18 @@ class PerformanceToolsActivity : ComponentActivity() {
         val memory = ActivityManager.MemoryInfo()
         manager.getMemoryInfo(memory)
 
-        val totalRam = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
-        val availableRam = memory.availMem / (1024.0 * 1024.0 * 1024.0)
-        val usedRam = (totalRam - availableRam).coerceAtLeast(0.0)
+        val total = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
+        val available = memory.availMem / (1024.0 * 1024.0 * 1024.0)
+        val used = (total - available).coerceAtLeast(0.0)
 
         return buildString {
             appendLine("Manufacturer: ${Build.MANUFACTURER}")
             appendLine("Device: ${Build.MODEL}")
             appendLine("Android: ${Build.VERSION.RELEASE}")
             appendLine("SDK level: ${Build.VERSION.SDK_INT}")
-            appendLine(
-                "Total RAM: ${String.format(Locale.US, "%.2f", totalRam)} GB"
-            )
-            appendLine(
-                "Used RAM estimate: ${
-                    String.format(Locale.US, "%.2f", usedRam)
-                } GB"
-            )
-            append(
-                "Available RAM: ${
-                    String.format(Locale.US, "%.2f", availableRam)
-                } GB"
-            )
+            appendLine("Total RAM: ${"%.2f".format(Locale.US, total)} GB")
+            appendLine("Used RAM estimate: ${"%.2f".format(Locale.US, used)} GB")
+            append("Available RAM: ${"%.2f".format(Locale.US, available)} GB")
         }
     }
 
@@ -194,7 +194,7 @@ class PerformanceToolsActivity : ComponentActivity() {
             val intent = registerReceiver(
                 null,
                 IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-            ) ?: return "Battery information is unavailable."
+            ) ?: return "Battery information unavailable."
 
             val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
             val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
@@ -231,16 +231,12 @@ class PerformanceToolsActivity : ComponentActivity() {
             }
 
             buildString {
-                appendLine(
-                    "Charge: ${if (percent >= 0) "$percent%" else "Unavailable"}"
-                )
+                appendLine("Charge: ${if (percent >= 0) "$percent%" else "Unavailable"}")
                 appendLine("Status: $status")
                 appendLine(
                     "Temperature: ${
                         if (temperature >= 0) {
-                            String.format(
-                                Locale.US, "%.1f°C", temperature / 10.0
-                            )
+                            "%.1f°C".format(Locale.US, temperature / 10.0)
                         } else "Unavailable"
                     }"
                 )
@@ -258,8 +254,11 @@ private fun PerformanceToolsScreen(
     batteryInfo: String,
     deviceInfo: String,
     cpuHistory: String,
+    networkHistory: String,
     onSaveCpuScore: (Double, Double) -> Unit,
     onClearCpuHistory: () -> Unit,
+    onSaveNetworkTest: (Long, Double, Double) -> Unit,
+    onClearNetworkHistory: () -> Unit,
     onRefresh: () -> Unit,
     onBatterySettings: () -> Unit,
     onDisplaySettings: () -> Unit,
@@ -268,7 +267,7 @@ private fun PerformanceToolsScreen(
 ) {
     var networkRunning by remember { mutableStateOf(false) }
     var networkResult by remember {
-        mutableStateOf("Run a test to estimate network latency and speed.")
+        mutableStateOf("Run a test to measure latency, download and upload.")
     }
 
     var cpuRunning by remember { mutableStateOf(false) }
@@ -289,19 +288,16 @@ private fun PerformanceToolsScreen(
     }
 
     val sessionTime = remember(sessionSeconds) {
-        val hours = sessionSeconds / 3600
-        val minutes = (sessionSeconds % 3600) / 60
-        val seconds = sessionSeconds % 60
         String.format(
             Locale.US,
             "%02d:%02d:%02d",
-            hours,
-            minutes,
-            seconds
+            sessionSeconds / 3600,
+            (sessionSeconds % 3600) / 60,
+            sessionSeconds % 60
         )
     }
 
-    val savedEntries = cpuHistory.lines()
+    val savedCpuEntries = cpuHistory.lines()
         .filter { it.isNotBlank() }
         .mapNotNull { line ->
             val parts = line.split("|")
@@ -314,10 +310,30 @@ private fun PerformanceToolsScreen(
             } else null
         }
 
-    val bestScore = savedEntries.maxOfOrNull { it.second } ?: 0.0
-    val averageScore = if (savedEntries.isNotEmpty()) {
-        savedEntries.map { it.second }.average()
-    } else 0.0
+    val savedNetworkEntries = networkHistory.lines()
+        .filter { it.isNotBlank() }
+        .mapNotNull { line ->
+            val parts = line.split("|")
+            if (parts.size >= 4) {
+                val latency = parts[1].toLongOrNull()
+                val download = parts[2].toDoubleOrNull()
+                val upload = parts[3].toDoubleOrNull()
+                if (latency != null && download != null && upload != null) {
+                    listOf(parts[0], latency.toString(),
+                        download.toString(), upload.toString())
+                } else null
+            } else null
+        }
+
+    val bestCpu = savedCpuEntries.maxOfOrNull { it.second } ?: 0.0
+    val averageCpu = savedCpuEntries.map { it.second }
+        .takeIf { it.isNotEmpty() }?.average() ?: 0.0
+
+    val bestDownload = savedNetworkEntries
+        .maxOfOrNull { it[2].toDouble() } ?: 0.0
+
+    val bestUpload = savedNetworkEntries
+        .maxOfOrNull { it[3].toDouble() } ?: 0.0
 
     Column(
         modifier = Modifier
@@ -406,17 +422,13 @@ private fun PerformanceToolsScreen(
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (gameSessionActive) {
                         Color(0xFF9B3434)
-                    } else {
-                        ToolsGreen
-                    }
+                    } else ToolsGreen
                 )
             ) {
                 Text(
                     if (gameSessionActive) {
                         "End Gaming Session"
-                    } else {
-                        "Start Gaming Session"
-                    }
+                    } else "Start Gaming Session"
                 )
             }
 
@@ -447,7 +459,7 @@ private fun PerformanceToolsScreen(
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel("🌐 Network Speed Test", "Estimate connection performance") {
+        ToolPanel("🌐 Network Speed Test", "Latency, download and upload") {
             InfoText(networkResult)
 
             Spacer(Modifier.height(12.dp))
@@ -458,8 +470,13 @@ private fun PerformanceToolsScreen(
                     networkResult = "Testing connection…"
 
                     Thread {
+                        var latency = -1L
+                        var download = 0.0
+                        var upload = 0.0
+
                         val result = try {
                             val pingStart = SystemClock.elapsedRealtime()
+
                             val ping = URL(
                                 "https://www.google.com/generate_204"
                             ).openConnection() as HttpURLConnection
@@ -469,57 +486,103 @@ private fun PerformanceToolsScreen(
                             ping.useCaches = false
 
                             val code = ping.responseCode
-                            val latency =
-                                SystemClock.elapsedRealtime() - pingStart
+                            latency = SystemClock.elapsedRealtime() - pingStart
                             ping.disconnect()
 
                             if (code !in 200..399) {
                                 throw Exception("Connection unavailable")
                             }
 
-                            val connection = URL(
+                            val down = URL(
                                 "https://speed.cloudflare.com/__down?bytes=1000000"
                             ).openConnection() as HttpURLConnection
 
-                            connection.connectTimeout = 10000
-                            connection.readTimeout = 15000
-                            connection.useCaches = false
+                            down.connectTimeout = 10000
+                            down.readTimeout = 15000
+                            down.useCaches = false
 
-                            val start = SystemClock.elapsedRealtime()
-                            var total = 0L
+                            val downStart = SystemClock.elapsedRealtime()
+                            var received = 0L
 
-                            connection.inputStream.use { input ->
+                            down.inputStream.use { input ->
                                 val buffer = ByteArray(8192)
                                 while (true) {
                                     val count = input.read(buffer)
                                     if (count == -1) break
-                                    total += count
+                                    received += count
                                 }
                             }
 
-                            connection.disconnect()
+                            down.disconnect()
 
-                            val elapsed = (
-                                SystemClock.elapsedRealtime() - start
+                            val downTime = (
+                                SystemClock.elapsedRealtime() - downStart
                             ).coerceAtLeast(1L)
 
-                            val mbps = total * 8.0 /
-                                (elapsed / 1000.0) / 1_000_000.0
+                            download = received * 8.0 /
+                                (downTime / 1000.0) / 1_000_000.0
+
+                            // Upload a limited 256 KB test payload.
+                            val payload = ByteArray(256 * 1024) {
+                                (it % 251).toByte()
+                            }
+
+                            val up = URL(
+                                "https://speed.cloudflare.com/__up"
+                            ).openConnection() as HttpURLConnection
+
+                            up.requestMethod = "POST"
+                            up.doOutput = true
+                            up.connectTimeout = 10000
+                            up.readTimeout = 15000
+                            up.useCaches = false
+                            up.setRequestProperty(
+                                "Content-Type",
+                                "application/octet-stream"
+                            )
+                            up.setFixedLengthStreamingMode(payload.size)
+
+                            val upStart = SystemClock.elapsedRealtime()
+
+                            up.outputStream.use { output ->
+                                output.write(payload)
+                                output.flush()
+                            }
+
+                            val uploadCode = up.responseCode
+                            val upTime = (
+                                SystemClock.elapsedRealtime() - upStart
+                            ).coerceAtLeast(1L)
+
+                            up.disconnect()
+
+                            if (uploadCode !in 200..399) {
+                                throw Exception("Upload test unavailable")
+                            }
+
+                            upload = payload.size * 8.0 /
+                                (upTime / 1000.0) / 1_000_000.0
+
+                            onSaveNetworkTest(latency, download, upload)
 
                             "Latency: ${latency} ms\n" +
-                                "Estimated download: ${
-                                    String.format(Locale.US, "%.2f", mbps)
+                                "Download: ${
+                                    "%.2f".format(Locale.US, download)
                                 } Mbps\n" +
-                                "Data received: ${
-                                    String.format(
+                                "Upload: ${
+                                    "%.2f".format(Locale.US, upload)
+                                } Mbps\n" +
+                                "Download data: ${
+                                    "%.2f".format(
                                         Locale.US,
-                                        "%.2f",
-                                        total / 1_000_000.0
+                                        received / 1_000_000.0
                                     )
-                                } MB"
+                                } MB\n" +
+                                "Upload data: 0.26 MB"
                         } catch (_: Exception) {
-                            "The test failed. Check your internet connection " +
-                                "and try again."
+                            "The network test could not finish. Check your " +
+                                "connection and try again. Some networks may " +
+                                "block the upload test."
                         }
 
                         handler.post {
@@ -534,14 +597,70 @@ private fun PerformanceToolsScreen(
                     containerColor = ToolsPurple
                 )
             ) {
-                Text(if (networkRunning) "Testing…" else "Start Network Test")
+                Text(if (networkRunning) "Testing…" else "Start Full Network Test")
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "NETWORK HISTORY — LAST 10 TESTS",
+                color = ToolsMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            InfoText(
+                "Saved tests: ${savedNetworkEntries.size}\n" +
+                    "Best download: ${
+                        "%.2f".format(Locale.US, bestDownload)
+                    } Mbps\n" +
+                    "Best upload: ${
+                        "%.2f".format(Locale.US, bestUpload)
+                    } Mbps"
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            if (savedNetworkEntries.isEmpty()) {
+                InfoText("Your network test results will appear here.")
+            } else {
+                savedNetworkEntries.forEachIndexed { index, entry ->
+                    InfoText(
+                        "${index + 1}. ${entry[0]}\n" +
+                            "Latency: ${entry[1]} ms\n" +
+                            "Download: ${
+                                "%.2f".format(
+                                    Locale.US,
+                                    entry[2].toDouble()
+                                )
+                            } Mbps • Upload: ${
+                                "%.2f".format(
+                                    Locale.US,
+                                    entry[3].toDouble()
+                                )
+                            } Mbps"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                Button(
+                    onClick = onClearNetworkHistory,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF773333)
+                    )
+                ) {
+                    Text("Clear Network History")
+                }
             }
 
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "This version tests latency and download speed. Upload " +
-                    "testing and saved network history are not included yet.",
+                "Speed results are estimates and depend on the server, " +
+                    "network conditions and other devices using your connection.",
                 muted = true
             )
         }
@@ -557,11 +676,9 @@ private fun PerformanceToolsScreen(
             )
 
             Text(
-                if (savedEntries.isEmpty()) {
+                if (savedCpuEntries.isEmpty()) {
                     "No score yet"
-                } else {
-                    String.format(Locale.US, "%.1f", bestScore)
-                },
+                } else "%.1f".format(Locale.US, bestCpu),
                 color = ToolsGreen,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold
@@ -570,13 +687,10 @@ private fun PerformanceToolsScreen(
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "Saved tests: ${savedEntries.size}\n" +
+                "Saved tests: ${savedCpuEntries.size}\n" +
                     "Average score: ${
-                        if (savedEntries.isEmpty()) {
-                            "Not available"
-                        } else {
-                            String.format(Locale.US, "%.1f", averageScore)
-                        }
+                        if (savedCpuEntries.isEmpty()) "Not available"
+                        else "%.1f".format(Locale.US, averageCpu)
                     }"
             )
 
@@ -617,15 +731,11 @@ private fun PerformanceToolsScreen(
 
                         val result =
                             "Operations per second: ${
-                                String.format(
-                                    Locale.US,
-                                    "%,.0f",
-                                    perSecond
-                                )
+                                String.format(Locale.US, "%,.0f", perSecond)
                             }\nKalize CPU score: ${
-                                String.format(Locale.US, "%.1f", score)
+                                "%.1f".format(Locale.US, score)
                             }\nCalculation result: ${
-                                String.format(Locale.US, "%.2f", value)
+                                "%.2f".format(Locale.US, value)
                             }\nTest duration: 0.7 seconds"
 
                         handler.post {
@@ -641,9 +751,7 @@ private fun PerformanceToolsScreen(
                     containerColor = ToolsBlue
                 )
             ) {
-                Text(
-                    if (cpuRunning) "Benchmarking…" else "Run CPU Benchmark"
-                )
+                Text(if (cpuRunning) "Benchmarking…" else "Run CPU Benchmark")
             }
 
             Spacer(Modifier.height(12.dp))
@@ -657,20 +765,16 @@ private fun PerformanceToolsScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            if (savedEntries.isEmpty()) {
+            if (savedCpuEntries.isEmpty()) {
                 InfoText("Your completed benchmark results will appear here.")
             } else {
-                savedEntries.forEachIndexed { index, entry ->
+                savedCpuEntries.forEachIndexed { index, entry ->
                     InfoText(
                         "${index + 1}. ${entry.first}\n" +
                             "Score: ${
-                                String.format(Locale.US, "%.1f", entry.second)
-                            }  •  ${
-                                String.format(
-                                    Locale.US,
-                                    "%,.0f",
-                                    entry.third
-                                )
+                                "%.1f".format(Locale.US, entry.second)
+                            } • ${
+                                String.format(Locale.US, "%,.0f", entry.third)
                             } operations/sec"
                     )
                     Spacer(Modifier.height(8.dp))
@@ -690,10 +794,8 @@ private fun PerformanceToolsScreen(
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "This is a simple synthetic calculation test, not an " +
-                    "official processor rating. Compare results on the same " +
-                    "device under similar conditions. Scores are stored " +
-                    "locally on this phone.",
+                "This is a synthetic calculation test, not an official " +
+                    "processor rating. Scores are stored locally.",
                 muted = true
             )
         }
@@ -746,9 +848,7 @@ private fun ToolPanel(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = ToolsPanel
-        )
+        colors = CardDefaults.cardColors(containerColor = ToolsPanel)
     ) {
         Column(
             modifier = Modifier

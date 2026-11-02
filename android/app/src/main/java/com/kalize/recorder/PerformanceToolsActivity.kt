@@ -15,9 +15,7 @@ import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +45,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import java.net.HttpURLConnection
 import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.sqrt
 
@@ -63,12 +63,24 @@ class PerformanceToolsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val preferences = getSharedPreferences(
+            "kalize_performance",
+            MODE_PRIVATE
+        )
+
         setContent {
             var batteryInfo by remember {
                 mutableStateOf(getBatteryInfo())
             }
+
             var deviceInfo by remember {
                 mutableStateOf(getDeviceInfo())
+            }
+
+            var cpuHistory by remember {
+                mutableStateOf(
+                    preferences.getString("cpu_history", "") ?: ""
+                )
             }
 
             MaterialTheme {
@@ -80,6 +92,34 @@ class PerformanceToolsActivity : ComponentActivity() {
                         onBack = { finish() },
                         batteryInfo = batteryInfo,
                         deviceInfo = deviceInfo,
+                        cpuHistory = cpuHistory,
+                        onSaveCpuScore = { score, operations ->
+                            val date = SimpleDateFormat(
+                                "dd MMM yyyy, HH:mm",
+                                Locale.getDefault()
+                            ).format(Date())
+
+                            val newEntry = "$date|$score|$operations"
+
+                            val updated = (
+                                listOf(newEntry) +
+                                    cpuHistory.lines().filter {
+                                        it.isNotBlank()
+                                    }
+                                ).take(10).joinToString("\n")
+
+                            preferences.edit()
+                                .putString("cpu_history", updated)
+                                .apply()
+
+                            cpuHistory = updated
+                        },
+                        onClearCpuHistory = {
+                            preferences.edit()
+                                .remove("cpu_history")
+                                .apply()
+                            cpuHistory = ""
+                        },
                         onRefresh = {
                             batteryInfo = getBatteryInfo()
                             deviceInfo = getDeviceInfo()
@@ -114,7 +154,7 @@ class PerformanceToolsActivity : ComponentActivity() {
             try {
                 startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (_: Exception) {
-                // Settings are unavailable on this device.
+                // Settings are unavailable.
             }
         }
     }
@@ -217,6 +257,9 @@ private fun PerformanceToolsScreen(
     onBack: () -> Unit,
     batteryInfo: String,
     deviceInfo: String,
+    cpuHistory: String,
+    onSaveCpuScore: (Double, Double) -> Unit,
+    onClearCpuHistory: () -> Unit,
     onRefresh: () -> Unit,
     onBatterySettings: () -> Unit,
     onDisplaySettings: () -> Unit,
@@ -230,7 +273,7 @@ private fun PerformanceToolsScreen(
 
     var cpuRunning by remember { mutableStateOf(false) }
     var cpuResult by remember {
-        mutableStateOf("Run a short calculation benchmark.")
+        mutableStateOf("Run a CPU calculation benchmark.")
     }
 
     var gameSessionActive by remember { mutableStateOf(false) }
@@ -257,6 +300,24 @@ private fun PerformanceToolsScreen(
             seconds
         )
     }
+
+    val savedEntries = cpuHistory.lines()
+        .filter { it.isNotBlank() }
+        .mapNotNull { line ->
+            val parts = line.split("|")
+            if (parts.size >= 3) {
+                val score = parts[1].toDoubleOrNull()
+                val operations = parts[2].toDoubleOrNull()
+                if (score != null && operations != null) {
+                    Triple(parts[0], score, operations)
+                } else null
+            } else null
+        }
+
+    val bestScore = savedEntries.maxOfOrNull { it.second } ?: 0.0
+    val averageScore = if (savedEntries.isNotEmpty()) {
+        savedEntries.map { it.second }.average()
+    } else 0.0
 
     Column(
         modifier = Modifier
@@ -303,17 +364,10 @@ private fun PerformanceToolsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        ToolPanel(
-            "🎮 Game Booster",
-            "Gaming session dashboard"
-        ) {
+        ToolPanel("🎮 Game Booster", "Gaming session dashboard") {
             Text(
                 if (gameSessionActive) "SESSION RUNNING" else "SESSION STOPPED",
-                color = if (gameSessionActive) {
-                    ToolsGreen
-                } else {
-                    ToolsMuted
-                },
+                color = if (gameSessionActive) ToolsGreen else ToolsMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -331,11 +385,9 @@ private fun PerformanceToolsScreen(
 
             InfoText(
                 if (gameSessionActive) {
-                    "Your gaming session timer is running. Device readings " +
-                        "can be refreshed below."
+                    "Your gaming session timer is running."
                 } else {
-                    "Start a session before opening your game. Kalize will " +
-                        "keep track of how long you play."
+                    "Start a session before opening your game."
                 }
             )
 
@@ -370,64 +422,32 @@ private fun PerformanceToolsScreen(
 
             Spacer(Modifier.height(10.dp))
 
-            Button(
-                onClick = onRefresh,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF292642),
-                    contentColor = ToolsText
-                )
-            ) {
-                Text("Refresh Device Readings")
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            Text(
-                "Gaming settings",
-                color = ToolsText,
-                fontWeight = FontWeight.Bold
-            )
-
-            Spacer(Modifier.height(8.dp))
-
             ToolButton("Battery and power settings", onBatterySettings)
             ToolButton("Display and refresh-rate settings", onDisplaySettings)
             ToolButton("Wi-Fi settings", onWifiSettings)
             ToolButton("Kalize app settings", onAppSettings)
 
-            Spacer(Modifier.height(6.dp))
-
             InfoText(
-                "Android controls many gaming and power features. These " +
-                    "shortcuts let you adjust supported phone settings. " +
-                    "Kalize does not overclock the processor or force-close " +
-                    "other apps.",
+                "Android controls many gaming and power features. Kalize " +
+                    "does not overclock the processor or force-close other apps.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            "🔋 Battery Status",
-            "Information reported by Android"
-        ) {
+        ToolPanel("🔋 Battery Status", "Information reported by Android") {
             InfoText(batteryInfo)
             Spacer(Modifier.height(8.dp))
             InfoText(
-                "Temperature is the battery temperature reported by Android. " +
-                    "It is not a direct measurement of CPU or GPU temperature.",
+                "This is battery temperature, not a direct CPU or GPU reading.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            "🌐 Network Speed Test",
-            "Estimate connection performance"
-        ) {
+        ToolPanel("🌐 Network Speed Test", "Estimate connection performance") {
             InfoText(networkResult)
 
             Spacer(Modifier.height(12.dp))
@@ -514,26 +534,54 @@ private fun PerformanceToolsScreen(
                     containerColor = ToolsPurple
                 )
             ) {
-                Text(
-                    if (networkRunning) "Testing…" else "Start Network Test"
-                )
+                Text(if (networkRunning) "Testing…" else "Start Network Test")
             }
 
             Spacer(Modifier.height(8.dp))
 
             InfoText(
                 "This version tests latency and download speed. Upload " +
-                    "testing and saved test history are not included yet.",
+                    "testing and saved network history are not included yet.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            "⚡ CPU Benchmark",
-            "A short local calculation test"
-        ) {
+        ToolPanel("⚡ CPU Benchmark", "Kalize calculation benchmark") {
+            Text(
+                "BEST SCORE",
+                color = ToolsMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Text(
+                if (savedEntries.isEmpty()) {
+                    "No score yet"
+                } else {
+                    String.format(Locale.US, "%.1f", bestScore)
+                },
+                color = ToolsGreen,
+                fontSize = 32.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            InfoText(
+                "Saved tests: ${savedEntries.size}\n" +
+                    "Average score: ${
+                        if (savedEntries.isEmpty()) {
+                            "Not available"
+                        } else {
+                            String.format(Locale.US, "%.1f", averageScore)
+                        }
+                    }"
+            )
+
+            Spacer(Modifier.height(12.dp))
+
             InfoText(cpuResult)
 
             Spacer(Modifier.height(12.dp))
@@ -541,11 +589,11 @@ private fun PerformanceToolsScreen(
             Button(
                 onClick = {
                     cpuRunning = true
-                    cpuResult = "Running benchmark…"
+                    cpuResult = "Running CPU benchmark…"
 
                     Thread {
                         val start = SystemClock.elapsedRealtimeNanos()
-                        val limit = 500_000_000L
+                        val limit = 700_000_000L
                         var operations = 0L
                         var value = 1.0
 
@@ -565,6 +613,8 @@ private fun PerformanceToolsScreen(
                         val perSecond =
                             operations * 1_000_000_000.0 / elapsed
 
+                        val score = perSecond / 1000.0
+
                         val result =
                             "Operations per second: ${
                                 String.format(
@@ -572,22 +622,15 @@ private fun PerformanceToolsScreen(
                                     "%,.0f",
                                     perSecond
                                 )
-                            }\nBenchmark score: ${
-                                String.format(
-                                    Locale.US,
-                                    "%.1f",
-                                    perSecond / 1000
-                                )
+                            }\nKalize CPU score: ${
+                                String.format(Locale.US, "%.1f", score)
                             }\nCalculation result: ${
-                                String.format(
-                                    Locale.US,
-                                    "%.2f",
-                                    value
-                                )
-                            }"
+                                String.format(Locale.US, "%.2f", value)
+                            }\nTest duration: 0.7 seconds"
 
                         handler.post {
                             cpuResult = result
+                            onSaveCpuScore(score, perSecond)
                             cpuRunning = false
                         }
                     }.start()
@@ -599,27 +642,65 @@ private fun PerformanceToolsScreen(
                 )
             ) {
                 Text(
-                    if (cpuRunning) "Benchmarking…" else "Start CPU Test"
+                    if (cpuRunning) "Benchmarking…" else "Run CPU Benchmark"
                 )
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "SCORE HISTORY — LAST 10 TESTS",
+                color = ToolsMuted,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            if (savedEntries.isEmpty()) {
+                InfoText("Your completed benchmark results will appear here.")
+            } else {
+                savedEntries.forEachIndexed { index, entry ->
+                    InfoText(
+                        "${index + 1}. ${entry.first}\n" +
+                            "Score: ${
+                                String.format(Locale.US, "%.1f", entry.second)
+                            }  •  ${
+                                String.format(
+                                    Locale.US,
+                                    "%,.0f",
+                                    entry.third
+                                )
+                            } operations/sec"
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+
+                Button(
+                    onClick = onClearCpuHistory,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF773333)
+                    )
+                ) {
+                    Text("Clear CPU Score History")
+                }
             }
 
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "This is a simple calculation benchmark, not an official " +
-                    "processor rating. Scores vary with device temperature " +
-                    "and background activity. Saved score history and " +
-                    "additional benchmark tests are planned upgrades.",
+                "This is a simple synthetic calculation test, not an " +
+                    "official processor rating. Compare results on the same " +
+                    "device under similar conditions. Scores are stored " +
+                    "locally on this phone.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel(
-            "📱 Device Monitor",
-            "Device information reported by Android"
-        ) {
+        ToolPanel("📱 Device Monitor", "Device information reported by Android") {
             InfoText(deviceInfo)
 
             Spacer(Modifier.height(12.dp))
@@ -640,7 +721,7 @@ private fun PerformanceToolsScreen(
             InfoText(
                 "RAM figures are system-wide estimates. Android does not " +
                     "allow ordinary apps to read every CPU or GPU temperature " +
-                    "sensor or monitor other apps freely.",
+                    "sensor or freely monitor other apps.",
                 muted = true
             )
         }

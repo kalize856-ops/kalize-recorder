@@ -18,6 +18,8 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
@@ -50,6 +52,8 @@ class VideoEditorActivity : Activity() {
     private var videoHeight = 0
     private var rotationDegrees = 0f
 
+    private var selectedCropFormat = "Original"
+
     private var engine: KalizeVideoEngine? = null
     private var exportInProgress = false
 
@@ -59,7 +63,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var startInput: EditText
     private lateinit var endInput: EditText
     private lateinit var muteAudio: CheckBox
-    private lateinit var cropSquare: CheckBox
+    private lateinit var cropFormatGroup: RadioGroup
     private lateinit var rotationLabel: TextView
     private lateinit var exportNameInput: EditText
     private lateinit var exportButton: Button
@@ -246,22 +250,62 @@ class VideoEditorActivity : Activity() {
         rotationCard.addView(rotationRow)
         content.addView(rotationCard)
 
-        // CROP
+        // CROP FORMATS
         val cropCard = createCard()
-        cropCard.addView(section("04  /  CROP"))
-
-        cropSquare = CheckBox(this).apply {
-            text = "Crop video to centered square"
-            textSize = 14f
-            setTextColor(white)
-            buttonTintList = ColorStateList.valueOf(accent)
-        }
-
-        cropCard.addView(cropSquare)
+        cropCard.addView(section("04  /  CROP FORMAT"))
 
         cropCard.addView(
             label(
-                "The square crop is calculated from your video's dimensions.",
+                "Choose the shape of your exported video.",
+                12f,
+                muted
+            )
+        )
+
+        cropFormatGroup = RadioGroup(this).apply {
+            orientation = RadioGroup.VERTICAL
+        }
+
+        val cropFormats = listOf(
+            "Original",
+            "16:9",
+            "9:16",
+            "4:3",
+            "1:1"
+        )
+
+        cropFormats.forEach { format ->
+            val radioButton = RadioButton(this).apply {
+                id = View.generateViewId()
+                text = when (format) {
+                    "Original" -> "Original video dimensions"
+                    "16:9" -> "16:9  •  Widescreen"
+                    "9:16" -> "9:16  •  Vertical"
+                    "4:3" -> "4:3  •  Classic"
+                    else -> "1:1  •  Square"
+                }
+                tag = format
+                textSize = 14f
+                setTextColor(white)
+                buttonTintList = ColorStateList.valueOf(accent)
+                isChecked = format == "Original"
+                setPadding(dp(4), dp(5), dp(4), dp(5))
+            }
+
+            cropFormatGroup.addView(radioButton)
+        }
+
+        cropFormatGroup.setOnCheckedChangeListener { group, checkedId ->
+            val selected = group.findViewById<RadioButton>(checkedId)
+            selectedCropFormat = selected?.tag?.toString() ?: "Original"
+        }
+
+        cropCard.addView(cropFormatGroup)
+
+        cropCard.addView(
+            label(
+                "The selected format is applied during video export. " +
+                    "Original keeps the complete frame.",
                 12f,
                 muted
             )
@@ -692,6 +736,54 @@ class VideoEditorActivity : Activity() {
         }
     }
 
+    private fun calculateCrop(format: String): FloatArray? {
+        if (format == "Original") return null
+
+        if (videoWidth <= 0 || videoHeight <= 0) {
+            throw IllegalStateException(
+                "Could not read the video's dimensions."
+            )
+        }
+
+        val rotated = (
+            rotationDegrees.toInt() == 90 ||
+                rotationDegrees.toInt() == 270
+            )
+
+        val effectiveWidth =
+            if (rotated) videoHeight.toFloat() else videoWidth.toFloat()
+
+        val effectiveHeight =
+            if (rotated) videoWidth.toFloat() else videoHeight.toFloat()
+
+        val targetAspect = when (format) {
+            "16:9" -> 16f / 9f
+            "9:16" -> 9f / 16f
+            "4:3" -> 4f / 3f
+            "1:1" -> 1f
+            else -> return null
+        }
+
+        val sourceAspect = effectiveWidth / effectiveHeight
+
+        var left = -1f
+        var right = 1f
+        var bottom = -1f
+        var top = 1f
+
+        if (sourceAspect > targetAspect) {
+            val halfWidth = targetAspect / sourceAspect
+            left = -halfWidth
+            right = halfWidth
+        } else if (sourceAspect < targetAspect) {
+            val halfHeight = sourceAspect / targetAspect
+            bottom = -halfHeight
+            top = halfHeight
+        }
+
+        return floatArrayOf(left, right, bottom, top)
+    }
+
     private fun exportVideo() {
         if (exportInProgress) return
 
@@ -710,30 +802,11 @@ class VideoEditorActivity : Activity() {
             return
         }
 
-        if (cropSquare.isChecked && (videoWidth <= 0 || videoHeight <= 0)) {
-            toast("Could not read the video's dimensions.")
+        val crop = try {
+            calculateCrop(selectedCropFormat)
+        } catch (error: Exception) {
+            toast(error.message ?: "Invalid crop format.")
             return
-        }
-
-        var cropLeft = -1f
-        var cropRight = 1f
-        var cropBottom = -1f
-        var cropTop = 1f
-
-        if (cropSquare.isChecked) {
-            if (videoWidth > videoHeight) {
-                val halfWidth =
-                    videoHeight.toFloat() / videoWidth.toFloat()
-
-                cropLeft = -halfWidth
-                cropRight = halfWidth
-            } else if (videoHeight > videoWidth) {
-                val halfHeight =
-                    videoWidth.toFloat() / videoHeight.toFloat()
-
-                cropBottom = -halfHeight
-                cropTop = halfHeight
-            }
         }
 
         val settings = KalizeVideoEngine.EditSettings(
@@ -741,11 +814,11 @@ class VideoEditorActivity : Activity() {
             endMs = (end * 1000.0).toLong(),
             muteAudio = muteAudio.isChecked,
             rotationDegrees = rotationDegrees,
-            cropEnabled = cropSquare.isChecked,
-            cropLeft = cropLeft,
-            cropRight = cropRight,
-            cropBottom = cropBottom,
-            cropTop = cropTop
+            cropEnabled = crop != null,
+            cropLeft = crop?.get(0) ?: -1f,
+            cropRight = crop?.get(1) ?: 1f,
+            cropBottom = crop?.get(2) ?: -1f,
+            cropTop = crop?.get(3) ?: 1f
         )
 
         exportInProgress = true
@@ -753,7 +826,8 @@ class VideoEditorActivity : Activity() {
         exportButton.text = "Processing video..."
         progressBar.progress = 0
         progressBar.visibility = View.VISIBLE
-        exportStatus.text = "Preparing video processing..."
+        exportStatus.text =
+            "Exporting ${selectedCropFormat} video..."
 
         engine?.export(
             uri,
@@ -775,9 +849,11 @@ class VideoEditorActivity : Activity() {
 
                     executor.execute {
                         try {
+                            val requestedName = exportNameInput.text.toString()
+
                             val savedUri = saveExport(
                                 outputFile,
-                                exportNameInput.text.toString()
+                                requestedName
                             )
 
                             outputFile.delete()
@@ -836,8 +912,10 @@ class VideoEditorActivity : Activity() {
             Locale.US
         ).format(Date())
 
-        val cleanedName = requestedName.trim()
-            .substringBeforeLast('.', requestedName.trim())
+        val trimmedName = requestedName.trim()
+
+        val cleanedName = trimmedName
+            .substringBeforeLast('.', trimmedName)
             .replace(Regex("[^A-Za-z0-9 _-]"), "")
             .trim()
             .replace(Regex("\\s+"), "_")

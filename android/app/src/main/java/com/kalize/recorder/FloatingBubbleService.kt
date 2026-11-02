@@ -55,9 +55,7 @@ class FloatingBubbleService : Service() {
                 false
             )
 
-            if (!isRecording) {
-                isPaused = false
-            }
+            if (!isRecording) isPaused = false
 
             updatePauseButton()
             updateRecordingAppearance()
@@ -94,9 +92,7 @@ class FloatingBubbleService : Service() {
         isRecording = prefs.getBoolean("is_recording", false)
         isPaused = prefs.getBoolean("is_paused", false)
 
-        if (!isRecording) {
-            isPaused = false
-        }
+        if (!isRecording) isPaused = false
     }
 
     override fun onStartCommand(
@@ -109,9 +105,7 @@ class FloatingBubbleService : Service() {
             return START_NOT_STICKY
         }
 
-        if (controlPanel == null) {
-            showControls()
-        }
+        if (controlPanel == null) showControls()
 
         return START_NOT_STICKY
     }
@@ -127,7 +121,6 @@ class FloatingBubbleService : Service() {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(radiusDp).toFloat()
-
             if (strokeColor != null) {
                 setStroke(dp(1), strokeColor)
             }
@@ -167,7 +160,7 @@ class FloatingBubbleService : Service() {
         try {
             startService(serviceIntent)
         } catch (_: Exception) {
-            // The recording notification provides backup controls.
+            // Notification controls remain available as backup.
         }
     }
 
@@ -249,15 +242,16 @@ class FloatingBubbleService : Service() {
         }
 
         fun addControlButton(button: Button) {
-            val params = LinearLayout.LayoutParams(
-                ViewGroupSize.WRAP,
-                dp(42)
-            ).apply {
-                marginStart = dp(3)
-                marginEnd = dp(3)
-            }
-
-            panel.addView(button, params)
+            panel.addView(
+                button,
+                LinearLayout.LayoutParams(
+                    ViewGroupSize.WRAP,
+                    dp(42)
+                ).apply {
+                    marginStart = dp(3)
+                    marginEnd = dp(3)
+                }
+            )
         }
 
         fun snapToNearestSide() {
@@ -274,7 +268,6 @@ class FloatingBubbleService : Service() {
             try {
                 windowManager.updateViewLayout(panel, layoutParams)
             } catch (_: Exception) {
-                // The overlay may already have been removed.
             }
         }
 
@@ -328,18 +321,14 @@ class FloatingBubbleService : Service() {
                                 layoutParams
                             )
                         } catch (_: Exception) {
-                            // The overlay may already have been removed.
                         }
 
                         true
                     }
 
                     MotionEvent.ACTION_UP -> {
-                        if (moved) {
-                            snapToNearestSide()
-                        } else {
-                            onTap?.invoke()
-                        }
+                        if (moved) snapToNearestSide()
+                        else onTap?.invoke()
                         true
                     }
 
@@ -479,6 +468,14 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = dp(12)
             y = dp(220)
+
+            // Native blur-behind is available from Android 12.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                flags = flags or
+                    WindowManager.LayoutParams.FLAG_BLUR_BEHIND
+
+                setBlurBehindRadius(dp(28))
+            }
         }
 
         showExpanded()
@@ -496,7 +493,6 @@ class FloatingBubbleService : Service() {
     private fun updateRecordingAppearance() {
         val panel = controlPanel ?: return
 
-        // Change only the panel background, not the buttons or their labels.
         panel.alpha = 1.0f
 
         if (isMinimized) {
@@ -524,6 +520,17 @@ class FloatingBubbleService : Service() {
                 purpleColor
             )
         }
+
+        // Reapply blur when recording state changes.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                layoutParams.setBlurBehindRadius(
+                    if (isRecording) dp(32) else 0
+                )
+                windowManager.updateViewLayout(panel, layoutParams)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun updatePauseButton() {
@@ -538,8 +545,7 @@ class FloatingBubbleService : Service() {
                 Color.rgb(75, 70, 90),
                 12
             )
-            button.contentDescription =
-                "No active screen recording"
+            button.contentDescription = "No active screen recording"
         } else if (isPaused) {
             button.text = "▶ RESUME"
             button.background = roundedBackground(greenColor, 12)
@@ -560,7 +566,6 @@ class FloatingBubbleService : Service() {
         try {
             windowManager.updateViewLayout(panel, layoutParams)
         } catch (_: Exception) {
-            // The panel may not be attached yet.
         }
     }
 
@@ -570,7 +575,6 @@ class FloatingBubbleService : Service() {
                 unregisterReceiver(stateReceiver)
             } catch (_: Exception) {
             }
-
             receiverRegistered = false
         }
 
@@ -578,7 +582,6 @@ class FloatingBubbleService : Service() {
             try {
                 windowManager.removeView(it)
             } catch (_: Exception) {
-                // Ignore if Android has already removed the overlay.
             }
         }
 

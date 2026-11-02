@@ -1,6 +1,7 @@
 package com.kalize.recorder
 
 import android.app.Activity
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.media.MediaPlayer
 import android.media.PlaybackParams
@@ -18,7 +19,6 @@ import android.widget.MediaController
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.VideoView
-import android.content.res.ColorStateList
 import java.util.Locale
 
 class VideoPreviewActivity : Activity() {
@@ -43,7 +43,6 @@ class VideoPreviewActivity : Activity() {
     private lateinit var playPauseButton: Button
 
     private val chromeViews = mutableListOf<View>()
-
     private val handler = Handler(Looper.getMainLooper())
 
     private val backgroundColor = Color.rgb(8, 11, 22)
@@ -85,25 +84,15 @@ class VideoPreviewActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(18, 18, 18, 18)
+            setPadding(dp(18), dp(18), dp(18), dp(18))
             setBackgroundColor(backgroundColor)
         }
 
-        val brand = makeLabel(
-            "ƘALIZE  /  STUDIO",
-            13f,
-            accent,
-            true
-        )
+        val brand = makeLabel("ƘALIZE  /  STUDIO", 13f, accent, true)
         root.addView(brand, matchHeight(44))
         chromeViews.add(brand)
 
-        val heading = makeLabel(
-            "VIDEO PREVIEW",
-            25f,
-            white,
-            true
-        )
+        val heading = makeLabel("VIDEO PREVIEW", 25f, white, true)
         root.addView(heading, matchHeight(55))
         chromeViews.add(heading)
 
@@ -128,8 +117,8 @@ class VideoPreviewActivity : Activity() {
                 0,
                 1f
             ).apply {
-                topMargin = 10
-                bottomMargin = 10
+                topMargin = dp(10)
+                bottomMargin = dp(10)
             }
         )
 
@@ -174,9 +163,10 @@ class VideoPreviewActivity : Activity() {
                     fromUser: Boolean
                 ) {
                     if (fromUser && videoDuration > 0) {
-                        val position =
-                            (progress.toFloat() / seekBar.max *
-                                videoDuration).toInt()
+                        val position = (
+                            progress.toFloat() / seekBar.max *
+                                videoDuration
+                            ).toInt()
 
                         updateTimeLabels(position)
                     }
@@ -184,9 +174,10 @@ class VideoPreviewActivity : Activity() {
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     if (videoDuration > 0) {
-                        val position =
-                            (seekBar.progress.toFloat() / seekBar.max *
-                                videoDuration).toInt()
+                        val position = (
+                            seekBar.progress.toFloat() / seekBar.max *
+                                videoDuration
+                            ).toInt()
 
                         videoView.seekTo(position)
                     }
@@ -204,17 +195,8 @@ class VideoPreviewActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
 
-        currentTimeLabel = makeLabel(
-            "00:00",
-            12f,
-            white
-        )
-
-        remainingTimeLabel = makeLabel(
-            "-00:00",
-            12f,
-            muted
-        )
+        currentTimeLabel = makeLabel("00:00", 12f, white)
+        remainingTimeLabel = makeLabel("-00:00", 12f, muted)
 
         timeRow.addView(
             currentTimeLabel,
@@ -243,10 +225,7 @@ class VideoPreviewActivity : Activity() {
             weightedButton()
         )
 
-        playPauseButton = makeButton(
-            "PAUSE",
-            true
-        ) {
+        playPauseButton = makeButton("PAUSE", true) {
             togglePlayback()
         }
 
@@ -266,7 +245,7 @@ class VideoPreviewActivity : Activity() {
             playbackRow,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                52
+                dp(52)
             )
         )
         chromeViews.add(playbackRow)
@@ -306,7 +285,7 @@ class VideoPreviewActivity : Activity() {
             speedRow,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                48
+                dp(48)
             )
         )
         chromeViews.add(speedRow)
@@ -332,9 +311,9 @@ class VideoPreviewActivity : Activity() {
             backButton,
             LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                50
+                dp(50)
             ).apply {
-                topMargin = 7
+                topMargin = dp(7)
             }
         )
         chromeViews.add(backButton)
@@ -343,11 +322,12 @@ class VideoPreviewActivity : Activity() {
             preparedPlayer = player
             videoDuration = videoView.duration.coerceAtLeast(0)
 
+            // Keep the timeline on a fixed 0–1000 scale.
+            // Convert between timeline progress and milliseconds.
             timeline.max = 1000
             timeline.progress = 0
 
-            playbackStatus.text =
-                "Video ready • Timeline active"
+            playbackStatus.text = "Video ready • Timeline active"
 
             updateTimeLabels(0)
             applyPlaybackSpeed()
@@ -409,18 +389,11 @@ class VideoPreviewActivity : Activity() {
             isAllCaps = false
             setTextColor(white)
 
-            backgroundTintList =
-                ColorStateList.valueOf(
-                    if (primary) {
-                        accent
-                    } else {
-                        Color.rgb(49, 55, 76)
-                    }
-                )
+            backgroundTintList = ColorStateList.valueOf(
+                if (primary) accent else Color.rgb(49, 55, 76)
+            )
 
-            setOnClickListener {
-                action()
-            }
+            setOnClickListener { action() }
         }
     }
 
@@ -449,7 +422,6 @@ class VideoPreviewActivity : Activity() {
         val totalSeconds = milliseconds.coerceAtLeast(0) / 1000
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
-
         val hours = minutes / 60
         val remainingMinutes = minutes % 60
 
@@ -474,11 +446,24 @@ class VideoPreviewActivity : Activity() {
     private fun updateTimeLabels(position: Int) {
         currentTimeLabel.text = formatTime(position)
 
-        val remaining = (videoDuration - position)
-            .coerceAtLeast(0)
+        val remaining = (videoDuration - position).coerceAtLeast(0)
+        remainingTimeLabel.text = "-${formatTime(remaining)}"
+    }
 
-        remainingTimeLabel.text =
-            "-${formatTime(remaining)}"
+    private fun progressToPosition(progress: Int): Int {
+        if (videoDuration <= 0 || timeline.max <= 0) return 0
+
+        return (
+            progress.toFloat() / timeline.max * videoDuration
+            ).toInt().coerceIn(0, videoDuration)
+    }
+
+    private fun positionToProgress(position: Int): Int {
+        if (videoDuration <= 0) return 0
+
+        return (
+            position.toFloat() / videoDuration * timeline.max
+            ).toInt().coerceIn(0, timeline.max)
     }
 
     private fun togglePlayback() {
@@ -500,8 +485,7 @@ class VideoPreviewActivity : Activity() {
                 playbackStatus.text = "Playing video"
             }
         } catch (_: Exception) {
-            playbackStatus.text =
-                "Playback is not ready yet."
+            playbackStatus.text = "Playback is not ready yet."
         }
     }
 
@@ -549,17 +533,12 @@ class VideoPreviewActivity : Activity() {
                 return
             }
 
-            val current = videoView.currentPosition
-
-            val target = (current + milliseconds)
-                .coerceIn(0, videoDuration)
+            val target = (
+                videoView.currentPosition + milliseconds
+                ).coerceIn(0, videoDuration)
 
             videoView.seekTo(target)
-
-            timeline.progress =
-                (target.toFloat() / videoDuration * timeline.max)
-                    .toInt()
-
+            timeline.progress = positionToProgress(target)
             updateTimeLabels(target)
 
         } catch (_: Exception) {

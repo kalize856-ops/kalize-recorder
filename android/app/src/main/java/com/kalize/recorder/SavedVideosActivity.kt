@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Activity
@@ -15,6 +14,8 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
 import android.view.Gravity
 import android.view.View
@@ -33,6 +34,7 @@ import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 class SavedVideosActivity : Activity() {
 
@@ -53,6 +55,9 @@ class SavedVideosActivity : Activity() {
     private lateinit var selectAllButton: Button
     private lateinit var bulkShareButton: Button
     private lateinit var bulkDeleteButton: Button
+
+    private val thumbnailExecutor = Executors.newFixedThreadPool(3)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     private var allVideos = listOf<SavedVideo>()
     private val selectedUris = mutableSetOf<String>()
@@ -199,6 +204,7 @@ class SavedVideosActivity : Activity() {
             isSingleLine = true
             setPadding(dp(12), dp(8), dp(12), dp(8))
             background = rounded(Color.rgb(24, 32, 51))
+
             addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(
                     s: CharSequence?, start: Int, count: Int, after: Int
@@ -584,6 +590,52 @@ class SavedVideosActivity : Activity() {
         displayVideos()
     }
 
+    private fun loadThumbnailAsync(
+        video: SavedVideo,
+        imageView: ImageView
+    ) {
+        val key = video.uri.toString()
+        imageView.tag = key
+
+        thumbnailExecutor.execute {
+            val bitmap: Bitmap? = try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    contentResolver.loadThumbnail(
+                        video.uri,
+                        android.util.Size(640, 360),
+                        null
+                    )
+                } else {
+                    val retriever = MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(
+                            this@SavedVideosActivity,
+                            video.uri
+                        )
+                        retriever.getFrameAtTime(
+                            0,
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        )
+                    } finally {
+                        retriever.release()
+                    }
+                }
+            } catch (_: Exception) {
+                null
+            }
+
+            mainHandler.post {
+                if (!isFinishing &&
+                    !isDestroyed &&
+                    imageView.tag == key &&
+                    bitmap != null
+                ) {
+                    imageView.setImageBitmap(bitmap)
+                }
+            }
+        }
+    }
+
     private fun addVideoCard(video: SavedVideo) {
         val key = video.uri.toString()
 
@@ -629,31 +681,11 @@ class SavedVideosActivity : Activity() {
             scaleType = ImageView.ScaleType.CENTER_CROP
             contentDescription = "Thumbnail for ${video.name}"
             setBackgroundColor(Color.rgb(31, 41, 65))
+            tag = key
         }
 
-        try {
-            val bitmap: Bitmap? =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    contentResolver.loadThumbnail(
-                        video.uri,
-                        android.util.Size(640, 360),
-                        null
-                    )
-                } else {
-                    val retriever = MediaMetadataRetriever()
-                    try {
-                        retriever.setDataSource(this@SavedVideosActivity, video.uri)
-                        retriever.getFrameAtTime(
-                            0,
-                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-                        )
-                    } finally {
-                        retriever.release()
-                    }
-                }
-
-            if (bitmap != null) thumbnail.setImageBitmap(bitmap)
-        } catch (_: Exception) {}
+        // Load the thumbnail on a background thread, not the UI thread.
+        loadThumbnailAsync(video, thumbnail)
 
         thumbnail.setOnClickListener { playVideo(video) }
 
@@ -845,9 +877,7 @@ class SavedVideosActivity : Activity() {
     private fun confirmDelete(video: SavedVideo) {
         AlertDialog.Builder(this)
             .setTitle("Delete video?")
-            .setMessage(
-                "Permanently delete \"${video.name}\"?"
-            )
+            .setMessage("Permanently delete \"${video.name}\"?")
             .setNegativeButton("Cancel", null)
             .setPositiveButton("Delete") { _, _ ->
                 deleteVideo(video)
@@ -889,7 +919,8 @@ class SavedVideosActivity : Activity() {
                             favoriteUris.remove(video.uri.toString())
                             selectedUris.remove(video.uri.toString())
                         }
-                    } catch (_: Exception) {}
+                    } catch (_: Exception) {
+                    }
                 }
 
                 favoritePreferences.edit()
@@ -1099,5 +1130,11 @@ class SavedVideosActivity : Activity() {
                 remaining
             )
         }
+    }
+
+    override fun onDestroy() {
+        thumbnailExecutor.shutdownNow()
+        mainHandler.removeCallbacksAndMessages(null)
+        super.onDestroy()
     }
 }

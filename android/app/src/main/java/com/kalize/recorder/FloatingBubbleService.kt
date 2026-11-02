@@ -478,7 +478,8 @@ class FloatingBubbleService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             overlayType,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_SECURE,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -499,8 +500,8 @@ class FloatingBubbleService : Service() {
     }
 
     private fun updateRecordingAppearance() {
-        // Fade the entire floating panel during recording.
-        // Alpha changes visibility, not touch interaction.
+        // Keep the controls slightly transparent while recording.
+        // FLAG_SECURE protects this overlay from screen capture.
         val panel = controlPanel ?: return
         panel.alpha = if (isRecording) 0.45f else 1.0f
     }

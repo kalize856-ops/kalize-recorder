@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -54,6 +56,7 @@ private val ToolsPurple = Color(0xFF8B5CF6)
 private val ToolsText = Color(0xFFF5F3FF)
 private val ToolsMuted = Color(0xFFB7B4CC)
 private val ToolsBlue = Color(0xFF365DD8)
+private val ToolsGreen = Color(0xFF16865B)
 
 class PerformanceToolsActivity : ComponentActivity() {
 
@@ -61,6 +64,13 @@ class PerformanceToolsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
+            var batteryInfo by remember {
+                mutableStateOf(getBatteryInfo())
+            }
+            var deviceInfo by remember {
+                mutableStateOf(getDeviceInfo())
+            }
+
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -68,8 +78,12 @@ class PerformanceToolsActivity : ComponentActivity() {
                 ) {
                     PerformanceToolsScreen(
                         onBack = { finish() },
-                        batteryInfo = getBatteryInfo(),
-                        deviceInfo = getDeviceInfo(),
+                        batteryInfo = batteryInfo,
+                        deviceInfo = deviceInfo,
+                        onRefresh = {
+                            batteryInfo = getBatteryInfo()
+                            deviceInfo = getDeviceInfo()
+                        },
                         onBatterySettings = {
                             openSettings(Settings.ACTION_BATTERY_SAVER_SETTINGS)
                         },
@@ -112,6 +126,7 @@ class PerformanceToolsActivity : ComponentActivity() {
 
         val totalRam = memory.totalMem / (1024.0 * 1024.0 * 1024.0)
         val availableRam = memory.availMem / (1024.0 * 1024.0 * 1024.0)
+        val usedRam = (totalRam - availableRam).coerceAtLeast(0.0)
 
         return buildString {
             appendLine("Manufacturer: ${Build.MANUFACTURER}")
@@ -120,6 +135,11 @@ class PerformanceToolsActivity : ComponentActivity() {
             appendLine("SDK level: ${Build.VERSION.SDK_INT}")
             appendLine(
                 "Total RAM: ${String.format(Locale.US, "%.2f", totalRam)} GB"
+            )
+            appendLine(
+                "Used RAM estimate: ${
+                    String.format(Locale.US, "%.2f", usedRam)
+                } GB"
             )
             append(
                 "Available RAM: ${
@@ -197,6 +217,7 @@ private fun PerformanceToolsScreen(
     onBack: () -> Unit,
     batteryInfo: String,
     deviceInfo: String,
+    onRefresh: () -> Unit,
     onBatterySettings: () -> Unit,
     onDisplaySettings: () -> Unit,
     onWifiSettings: () -> Unit,
@@ -212,7 +233,30 @@ private fun PerformanceToolsScreen(
         mutableStateOf("Run a short calculation benchmark.")
     }
 
+    var gameSessionActive by remember { mutableStateOf(false) }
+    var sessionSeconds by remember { mutableStateOf(0L) }
+
     val handler = remember { Handler(Looper.getMainLooper()) }
+
+    LaunchedEffect(gameSessionActive) {
+        while (gameSessionActive) {
+            delay(1000)
+            sessionSeconds++
+        }
+    }
+
+    val sessionTime = remember(sessionSeconds) {
+        val hours = sessionSeconds / 3600
+        val minutes = (sessionSeconds % 3600) / 60
+        val seconds = sessionSeconds % 60
+        String.format(
+            Locale.US,
+            "%02d:%02d:%02d",
+            hours,
+            minutes,
+            seconds
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -240,7 +284,7 @@ private fun PerformanceToolsScreen(
         Spacer(Modifier.height(6.dp))
 
         Text(
-            "Battery • Game settings • Network • CPU",
+            "Game Booster • CPU • Network • Device monitor",
             color = ToolsMuted,
             fontSize = 14.sp
         )
@@ -259,43 +303,131 @@ private fun PerformanceToolsScreen(
 
         Spacer(Modifier.height(16.dp))
 
-        ToolPanel("🔋 Battery Status", "Information reported by Android") {
-            InfoText(batteryInfo)
+        ToolPanel(
+            "🎮 Game Booster",
+            "Gaming session dashboard"
+        ) {
+            Text(
+                if (gameSessionActive) "SESSION RUNNING" else "SESSION STOPPED",
+                color = if (gameSessionActive) {
+                    ToolsGreen
+                } else {
+                    ToolsMuted
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+
             Spacer(Modifier.height(8.dp))
-            InfoText(
-                "Battery readings are estimates from Android, not a " +
-                    "professional battery-health or lifespan test.",
-                muted = true
+
+            Text(
+                sessionTime,
+                color = ToolsText,
+                fontSize = 34.sp,
+                fontWeight = FontWeight.Bold
             )
-        }
-
-        Spacer(Modifier.height(14.dp))
-
-        ToolPanel("🎮 Game Booster", "Quick access to phone settings") {
-            InfoText(
-                "Use these shortcuts to adjust your phone before gaming. " +
-                    "Available options depend on your device."
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            ToolButton("Battery and power settings", onBatterySettings)
-            ToolButton("Display settings", onDisplaySettings)
-            ToolButton("Wi-Fi settings", onWifiSettings)
-            ToolButton("Kalize Recorder app settings", onAppSettings)
 
             Spacer(Modifier.height(6.dp))
 
             InfoText(
-                "These shortcuts do not overclock your processor or " +
-                    "forcibly close other apps.",
+                if (gameSessionActive) {
+                    "Your gaming session timer is running. Device readings " +
+                        "can be refreshed below."
+                } else {
+                    "Start a session before opening your game. Kalize will " +
+                        "keep track of how long you play."
+                }
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = {
+                    if (gameSessionActive) {
+                        gameSessionActive = false
+                    } else {
+                        sessionSeconds = 0L
+                        gameSessionActive = true
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (gameSessionActive) {
+                        Color(0xFF9B3434)
+                    } else {
+                        ToolsGreen
+                    }
+                )
+            ) {
+                Text(
+                    if (gameSessionActive) {
+                        "End Gaming Session"
+                    } else {
+                        "Start Gaming Session"
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Button(
+                onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF292642),
+                    contentColor = ToolsText
+                )
+            ) {
+                Text("Refresh Device Readings")
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "Gaming settings",
+                color = ToolsText,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            ToolButton("Battery and power settings", onBatterySettings)
+            ToolButton("Display and refresh-rate settings", onDisplaySettings)
+            ToolButton("Wi-Fi settings", onWifiSettings)
+            ToolButton("Kalize app settings", onAppSettings)
+
+            Spacer(Modifier.height(6.dp))
+
+            InfoText(
+                "Android controls many gaming and power features. These " +
+                    "shortcuts let you adjust supported phone settings. " +
+                    "Kalize does not overclock the processor or force-close " +
+                    "other apps.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel("🌐 Network Speed Test", "Estimate connection performance") {
+        ToolPanel(
+            "🔋 Battery Status",
+            "Information reported by Android"
+        ) {
+            InfoText(batteryInfo)
+            Spacer(Modifier.height(8.dp))
+            InfoText(
+                "Temperature is the battery temperature reported by Android. " +
+                    "It is not a direct measurement of CPU or GPU temperature.",
+                muted = true
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+
+        ToolPanel(
+            "🌐 Network Speed Test",
+            "Estimate connection performance"
+        ) {
             InfoText(networkResult)
 
             Spacer(Modifier.height(12.dp))
@@ -351,8 +483,8 @@ private fun PerformanceToolsScreen(
                                 SystemClock.elapsedRealtime() - start
                             ).coerceAtLeast(1L)
 
-                            val mbps = total * 8.0 / (elapsed / 1000.0) /
-                                1_000_000.0
+                            val mbps = total * 8.0 /
+                                (elapsed / 1000.0) / 1_000_000.0
 
                             "Latency: ${latency} ms\n" +
                                 "Estimated download: ${
@@ -360,7 +492,9 @@ private fun PerformanceToolsScreen(
                                 } Mbps\n" +
                                 "Data received: ${
                                     String.format(
-                                        Locale.US, "%.2f", total / 1_000_000.0
+                                        Locale.US,
+                                        "%.2f",
+                                        total / 1_000_000.0
                                     )
                                 } MB"
                         } catch (_: Exception) {
@@ -380,21 +514,26 @@ private fun PerformanceToolsScreen(
                     containerColor = ToolsPurple
                 )
             ) {
-                Text(if (networkRunning) "Testing…" else "Start Network Test")
+                Text(
+                    if (networkRunning) "Testing…" else "Start Network Test"
+                )
             }
 
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "Results vary with signal strength, network traffic and " +
-                    "server response.",
+                "This version tests latency and download speed. Upload " +
+                    "testing and saved test history are not included yet.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel("⚡ CPU Benchmark", "A short local calculation test") {
+        ToolPanel(
+            "⚡ CPU Benchmark",
+            "A short local calculation test"
+        ) {
             InfoText(cpuResult)
 
             Spacer(Modifier.height(12.dp))
@@ -413,7 +552,9 @@ private fun PerformanceToolsScreen(
                         while (
                             SystemClock.elapsedRealtimeNanos() - start < limit
                         ) {
-                            value += sqrt((operations % 1000L + 1L).toDouble())
+                            value += sqrt(
+                                (operations % 1000L + 1L).toDouble()
+                            )
                             operations++
                         }
 
@@ -426,11 +567,23 @@ private fun PerformanceToolsScreen(
 
                         val result =
                             "Operations per second: ${
-                                String.format(Locale.US, "%,.0f", perSecond)
+                                String.format(
+                                    Locale.US,
+                                    "%,.0f",
+                                    perSecond
+                                )
                             }\nBenchmark score: ${
-                                String.format(Locale.US, "%.1f", perSecond / 1000)
+                                String.format(
+                                    Locale.US,
+                                    "%.1f",
+                                    perSecond / 1000
+                                )
                             }\nCalculation result: ${
-                                String.format(Locale.US, "%.2f", value)
+                                String.format(
+                                    Locale.US,
+                                    "%.2f",
+                                    value
+                                )
                             }"
 
                         handler.post {
@@ -445,22 +598,51 @@ private fun PerformanceToolsScreen(
                     containerColor = ToolsBlue
                 )
             ) {
-                Text(if (cpuRunning) "Benchmarking…" else "Start CPU Test")
+                Text(
+                    if (cpuRunning) "Benchmarking…" else "Start CPU Test"
+                )
             }
 
             Spacer(Modifier.height(8.dp))
 
             InfoText(
-                "This is a simple benchmark, not an official processor rating. " +
-                    "Results vary with device temperature and background activity.",
+                "This is a simple calculation benchmark, not an official " +
+                    "processor rating. Scores vary with device temperature " +
+                    "and background activity. Saved score history and " +
+                    "additional benchmark tests are planned upgrades.",
                 muted = true
             )
         }
 
         Spacer(Modifier.height(14.dp))
 
-        ToolPanel("📱 Device Information", "Device details reported by Android") {
+        ToolPanel(
+            "📱 Device Monitor",
+            "Device information reported by Android"
+        ) {
             InfoText(deviceInfo)
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF292642),
+                    contentColor = ToolsText
+                )
+            ) {
+                Text("Refresh RAM and Device Information")
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            InfoText(
+                "RAM figures are system-wide estimates. Android does not " +
+                    "allow ordinary apps to read every CPU or GPU temperature " +
+                    "sensor or monitor other apps freely.",
+                muted = true
+            )
         }
 
         Spacer(Modifier.height(22.dp))
@@ -483,7 +665,9 @@ private fun ToolPanel(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = ToolsPanel)
+        colors = CardDefaults.cardColors(
+            containerColor = ToolsPanel
+        )
     ) {
         Column(
             modifier = Modifier
@@ -499,7 +683,11 @@ private fun ToolPanel(
 
             Spacer(Modifier.height(4.dp))
 
-            Text(subtitle, color = ToolsMuted, fontSize = 12.sp)
+            Text(
+                subtitle,
+                color = ToolsMuted,
+                fontSize = 12.sp
+            )
 
             Spacer(Modifier.height(14.dp))
 
@@ -509,9 +697,12 @@ private fun ToolPanel(
 }
 
 @Composable
-private fun InfoText(text: String, muted: Boolean = false) {
+private fun InfoText(
+    text: String,
+    muted: Boolean = false
+) {
     Text(
-        text = text,
+        text,
         color = if (muted) ToolsMuted else ToolsText,
         fontSize = 14.sp,
         lineHeight = 22.sp
@@ -519,7 +710,10 @@ private fun InfoText(text: String, muted: Boolean = false) {
 }
 
 @Composable
-private fun ToolButton(text: String, onClick: () -> Unit) {
+private fun ToolButton(
+    text: String,
+    onClick: () -> Unit
+) {
     Button(
         onClick = onClick,
         modifier = Modifier

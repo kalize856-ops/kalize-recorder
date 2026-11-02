@@ -319,8 +319,12 @@ private fun PerformanceToolsScreen(
                 val download = parts[2].toDoubleOrNull()
                 val upload = parts[3].toDoubleOrNull()
                 if (latency != null && download != null && upload != null) {
-                    listOf(parts[0], latency.toString(),
-                        download.toString(), upload.toString())
+                    listOf(
+                        parts[0],
+                        latency.toString(),
+                        download.toString(),
+                        upload.toString()
+                    )
                 } else null
             } else null
         }
@@ -473,6 +477,7 @@ private fun PerformanceToolsScreen(
                         var latency = -1L
                         var download = 0.0
                         var upload = 0.0
+                        var testSucceeded = false
 
                         val result = try {
                             val pingStart = SystemClock.elapsedRealtime()
@@ -522,7 +527,6 @@ private fun PerformanceToolsScreen(
                             download = received * 8.0 /
                                 (downTime / 1000.0) / 1_000_000.0
 
-                            // Upload a limited 256 KB test payload.
                             val payload = ByteArray(256 * 1024) {
                                 (it % 251).toByte()
                             }
@@ -563,7 +567,8 @@ private fun PerformanceToolsScreen(
                             upload = payload.size * 8.0 /
                                 (upTime / 1000.0) / 1_000_000.0
 
-                            onSaveNetworkTest(latency, download, upload)
+                            testSucceeded =
+                                latency >= 0 && download > 0.0 && upload > 0.0
 
                             "Latency: ${latency} ms\n" +
                                 "Download: ${
@@ -586,6 +591,14 @@ private fun PerformanceToolsScreen(
                         }
 
                         handler.post {
+                            if (testSucceeded) {
+                                onSaveNetworkTest(
+                                    latency,
+                                    download,
+                                    upload
+                                )
+                            }
+
                             networkResult = result
                             networkRunning = false
                         }

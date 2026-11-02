@@ -23,7 +23,7 @@ class VideoPreviewActivity : Activity() {
     private lateinit var videoView: VideoView
     private lateinit var fullScreenButton: Button
 
-    private val background = android.graphics.Color.rgb(8, 11, 22)
+    private val backgroundColor = android.graphics.Color.rgb(8, 11, 22)
     private val accent = android.graphics.Color.rgb(154, 105, 255)
     private val white = android.graphics.Color.WHITE
     private val muted = android.graphics.Color.rgb(165, 174, 199)
@@ -44,7 +44,7 @@ class VideoPreviewActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setPadding(18, 18, 18, 18)
-            setBackgroundColor(background)
+            setBackgroundColor(backgroundColor)
         }
 
         root.addView(

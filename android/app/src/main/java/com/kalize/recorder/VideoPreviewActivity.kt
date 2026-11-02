@@ -30,6 +30,8 @@ class VideoPreviewActivity : Activity() {
     private lateinit var speedLabel: TextView
     private lateinit var playbackStatus: TextView
 
+    private val chromeViews = mutableListOf<View>()
+
     private val backgroundColor = android.graphics.Color.rgb(8, 11, 22)
     private val accent = android.graphics.Color.rgb(154, 105, 255)
     private val white = android.graphics.Color.WHITE
@@ -54,38 +56,36 @@ class VideoPreviewActivity : Activity() {
             setBackgroundColor(backgroundColor)
         }
 
-        root.addView(
-            makeLabel(
-                "ƘALIZE  /  STUDIO",
-                13f,
-                accent,
-                true
-            ),
-            matchHeight(44)
+        val brand = makeLabel(
+            "ƘALIZE  /  STUDIO",
+            13f,
+            accent,
+            true
         )
+        root.addView(brand, matchHeight(44))
+        chromeViews.add(brand)
 
-        root.addView(
-            makeLabel(
-                "VIDEO PREVIEW",
-                25f,
-                white,
-                true
-            ),
-            matchHeight(60)
+        val heading = makeLabel(
+            "VIDEO PREVIEW",
+            25f,
+            white,
+            true
         )
+        root.addView(heading, matchHeight(60))
+        chromeViews.add(heading)
 
-        root.addView(
-            makeLabel(
-                "Preview your clip and control playback.",
-                13f,
-                muted
-            ),
-            matchHeight(38)
+        val subtitle = makeLabel(
+            "Preview your clip and control playback.",
+            13f,
+            muted
         )
+        root.addView(subtitle, matchHeight(38))
+        chromeViews.add(subtitle)
 
         videoView = VideoView(this).apply {
             setVideoURI(videoUri)
             setBackgroundColor(android.graphics.Color.BLACK)
+            keepScreenOn = true
         }
 
         root.addView(
@@ -109,18 +109,17 @@ class VideoPreviewActivity : Activity() {
             12f,
             muted
         )
-
         root.addView(playbackStatus, matchHeight(36))
+        chromeViews.add(playbackStatus)
 
-        root.addView(
-            makeLabel(
-                "SEEK CONTROLS",
-                11f,
-                accent,
-                true
-            ),
-            matchHeight(30)
+        val seekTitle = makeLabel(
+            "SEEK CONTROLS",
+            11f,
+            accent,
+            true
         )
+        root.addView(seekTitle, matchHeight(30))
+        chromeViews.add(seekTitle)
 
         val seekRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -148,24 +147,24 @@ class VideoPreviewActivity : Activity() {
                 50
             )
         )
+        chromeViews.add(seekRow)
 
-        root.addView(
-            makeLabel(
-                "PLAYBACK SPEED",
-                11f,
-                accent,
-                true
-            ),
-            matchHeight(32)
+        val speedTitle = makeLabel(
+            "PLAYBACK SPEED",
+            11f,
+            accent,
+            true
         )
+        root.addView(speedTitle, matchHeight(32))
+        chromeViews.add(speedTitle)
 
         speedLabel = makeLabel(
             "Current speed: 1.0×",
             15f,
             white
         )
-
         root.addView(speedLabel, matchHeight(36))
+        chromeViews.add(speedLabel)
 
         val speedRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -173,12 +172,8 @@ class VideoPreviewActivity : Activity() {
         }
 
         listOf(0.5f, 1.0f, 1.5f, 2.0f).forEach { speed ->
-
             speedRow.addView(
-                makeButton(
-                    "${speed}×",
-                    speed == 1.0f
-                ) {
+                makeButton("${speed}×", speed == 1.0f) {
                     setPlaybackSpeed(speed)
                 },
                 weightedButton()
@@ -195,16 +190,43 @@ class VideoPreviewActivity : Activity() {
                 bottomMargin = 8
             }
         )
+        chromeViews.add(speedRow)
+
+        fullScreenButton = makeButton(
+            "⛶  ENTER FULL SCREEN",
+            true
+        ) {
+            toggleFullScreen()
+        }
+
+        root.addView(fullScreenButton, matchHeight(52))
+        chromeViews.add(fullScreenButton)
+
+        val backButton = makeButton(
+            "BACK TO VIDEO EDITOR",
+            false
+        ) {
+            finish()
+        }
+
+        root.addView(
+            backButton,
+            LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                54
+            ).apply {
+                topMargin = 8
+            }
+        )
+        chromeViews.add(backButton)
 
         videoView.setOnPreparedListener { player ->
-
             preparedPlayer = player
 
             playbackStatus.text =
                 "Video ready • Playback controls available"
 
             applyPlaybackSpeed()
-
             player.start()
         }
 
@@ -218,34 +240,6 @@ class VideoPreviewActivity : Activity() {
                 "Could not play this video format."
             true
         }
-
-        fullScreenButton = makeButton(
-            "⛶  ENTER FULL SCREEN",
-            true
-        ) {
-            toggleFullScreen()
-        }
-
-        root.addView(
-            fullScreenButton,
-            matchHeight(52)
-        )
-
-        root.addView(
-            makeButton(
-                "BACK TO VIDEO EDITOR",
-                false
-            ) {
-                videoView.stopPlayback()
-                finish()
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                54
-            ).apply {
-                topMargin = 8
-            }
-        )
 
         setContentView(root)
     }
@@ -315,11 +309,8 @@ class VideoPreviewActivity : Activity() {
     }
 
     private fun setPlaybackSpeed(speed: Float) {
-
         playbackSpeed = speed
-
-        speedLabel.text =
-            "Current speed: ${speed}×"
+        speedLabel.text = "Current speed: ${speed}×"
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             playbackStatus.text =
@@ -337,10 +328,7 @@ class VideoPreviewActivity : Activity() {
     }
 
     private fun applyPlaybackSpeed() {
-
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            return
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
 
         try {
             val player = preparedPlayer ?: return
@@ -352,14 +340,12 @@ class VideoPreviewActivity : Activity() {
                 "Video ready • Playback speed ${playbackSpeed}×"
 
         } catch (_: Exception) {
-
             playbackStatus.text =
                 "This device does not support the selected speed."
         }
     }
 
     private fun seekVideo(milliseconds: Int) {
-
         if (!videoView.isPlaying && preparedPlayer == null) {
             playbackStatus.text = "Wait for the video to load."
             return
@@ -367,7 +353,6 @@ class VideoPreviewActivity : Activity() {
 
         try {
             val current = videoView.currentPosition
-
             val duration = videoView.duration
 
             val target = (current + milliseconds)
@@ -379,40 +364,64 @@ class VideoPreviewActivity : Activity() {
                 "Position: ${target / 1000} seconds"
 
         } catch (_: Exception) {
-
             playbackStatus.text =
                 "Could not change video position."
         }
     }
 
     private fun toggleFullScreen() {
-
         fullScreen = !fullScreen
 
         if (fullScreen) {
+            chromeViews.forEach {
+                it.visibility = View.GONE
+            }
 
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                )
+            videoView.layoutParams =
+                (videoView.layoutParams as LinearLayout.LayoutParams).apply {
+                    topMargin = 0
+                    bottomMargin = 0
+                }
 
-            fullScreenButton.text =
-                "⛶  EXIT FULL SCREEN"
+            videoView.requestLayout()
+            applyImmersiveMode()
 
         } else {
+            chromeViews.forEach {
+                it.visibility = View.VISIBLE
+            }
+
+            videoView.layoutParams =
+                (videoView.layoutParams as LinearLayout.LayoutParams).apply {
+                    topMargin = 12
+                    bottomMargin = 12
+                }
+
+            videoView.requestLayout()
 
             window.decorView.systemUiVisibility =
                 View.SYSTEM_UI_FLAG_VISIBLE
+        }
+    }
 
-            fullScreenButton.text =
-                "⛶  ENTER FULL SCREEN"
+    private fun applyImmersiveMode() {
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            )
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+
+        if (hasFocus && fullScreen) {
+            applyImmersiveMode()
         }
     }
 
     @Deprecated("Uses legacy back callback")
     override fun onBackPressed() {
-
         if (fullScreen) {
             toggleFullScreen()
         } else {
@@ -421,7 +430,6 @@ class VideoPreviewActivity : Activity() {
     }
 
     override fun onDestroy() {
-
         preparedPlayer = null
 
         if (::videoView.isInitialized) {

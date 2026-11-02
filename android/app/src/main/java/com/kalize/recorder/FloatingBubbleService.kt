@@ -500,10 +500,11 @@ class FloatingBubbleService : Service() {
     }
 
     private fun updateRecordingAppearance() {
-        // Keep the controls slightly transparent while recording.
-        // FLAG_SECURE protects this overlay from screen capture.
         val panel = controlPanel ?: return
-        panel.alpha = if (isRecording) 0.45f else 1.0f
+
+        // More transparent while recording so the screen remains visible.
+        // FLAG_SECURE helps keep the floating controls out of screen captures.
+        panel.alpha = if (isRecording) 0.30f else 1.0f
     }
 
     private fun updatePauseButton() {

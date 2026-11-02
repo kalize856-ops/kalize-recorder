@@ -16,25 +16,49 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
 
-        <activity android:name=".PerformanceToolsActivity" android:exported="false" />
-        <activity android:name=".VideoEditorActivity" android:exported="false" />
-        <activity android:name=".VideoPreviewActivity" android:exported="false" />
-        <activity android:name=".SavedVideosActivity" android:exported="false" />
-        <activity android:name=".ScreenshotGalleryActivity" android:exported="false" />
+        <activity
+            android:name=".PerformanceToolsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".VideoEditorActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".VideoPreviewActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".SavedVideosActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ScreenshotGalleryActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".QuickScreenshotActivity"
+            android:exported="false" />
 
         <service
             android:name=".ScreenRecordingService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
 
-        <service android:name=".FloatingBubbleService" android:exported="false" />
+        <service
+            android:name=".FloatingBubbleService"
+            android:exported="false" />
 
         <service
             android:name=".ScreenshotService"
@@ -42,4 +66,5 @@
             android:foregroundServiceType="mediaProjection" />
 
     </application>
+
 </manifest>

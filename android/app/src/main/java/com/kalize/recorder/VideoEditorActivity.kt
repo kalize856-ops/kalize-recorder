@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
@@ -69,7 +68,7 @@ class VideoEditorActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(background)
+            setBackgroundColor(this@VideoEditorActivity.background)
         }
 
         val scroll = ScrollView(this).apply {
@@ -103,6 +102,7 @@ class VideoEditorActivity : Activity() {
                 type = "video/*"
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
+
             @Suppress("DEPRECATION")
             startActivityForResult(intent, PICK_VIDEO_REQUEST)
         })
@@ -113,11 +113,13 @@ class VideoEditorActivity : Activity() {
             isEnabled = false
             alpha = 0.5f
         }
+
         sourceCard.addView(previewButton)
         content.addView(sourceCard)
 
         val trimCard = createCard()
         trimCard.addView(section("02  /  TRIM YOUR CLIP"))
+
         trimCard.addView(label(
             "Enter the start and end times in seconds.",
             12f, muted
@@ -137,6 +139,7 @@ class VideoEditorActivity : Activity() {
                 }
             )
         }
+
         trimCard.addView(presets)
 
         trimCard.addView(section("START TIME (SECONDS)"))
@@ -155,6 +158,7 @@ class VideoEditorActivity : Activity() {
 
         trimCard.addView(button("Use full clip duration", false) {
             val duration = durationLabel.tag as? Long ?: 0L
+
             if (duration > 0L) {
                 startInput.setText("0")
                 endInput.setText(
@@ -178,8 +182,10 @@ class VideoEditorActivity : Activity() {
 
             override fun afterTextChanged(s: android.text.Editable?) {}
         }
+
         startInput.addTextChangedListener(watcher)
         endInput.addTextChangedListener(watcher)
+
         content.addView(trimCard)
 
         val audioCard = createCard()
@@ -191,6 +197,7 @@ class VideoEditorActivity : Activity() {
             setTextColor(white)
             buttonTintList = ColorStateList.valueOf(accent)
         }
+
         audioCard.addView(muteAudio)
         content.addView(audioCard)
 
@@ -203,6 +210,7 @@ class VideoEditorActivity : Activity() {
         ))
 
         exportCard.addView(section("FILE NAME"))
+
         exportNameInput = EditText(this).apply {
             setText("Kalize_Edit")
             hint = "Video file name"
@@ -212,6 +220,7 @@ class VideoEditorActivity : Activity() {
             isSingleLine = true
             backgroundTintList = ColorStateList.valueOf(accent)
         }
+
         exportCard.addView(exportNameInput)
 
         exportStatus = label("Ready when you are.", 12f, muted)
@@ -225,6 +234,7 @@ class VideoEditorActivity : Activity() {
             visibility = View.GONE
             progressTintList = ColorStateList.valueOf(accent)
         }
+
         exportCard.addView(progressBar)
 
         exportButton = button("Export edited video", true) {
@@ -233,6 +243,7 @@ class VideoEditorActivity : Activity() {
             isEnabled = false
             alpha = 0.5f
         }
+
         exportCard.addView(exportButton)
 
         exportCard.addView(button("Share last exported video", false) {
@@ -257,11 +268,13 @@ class VideoEditorActivity : Activity() {
         ))
 
         scroll.addView(content)
+
         root.addView(scroll, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             0,
             1f
         ))
+
         setContentView(root)
     }
 
@@ -270,6 +283,7 @@ class VideoEditorActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(16), dp(16), dp(16))
             setBackgroundColor(card)
+
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -289,7 +303,11 @@ class VideoEditorActivity : Activity() {
             text = value
             textSize = size
             setTextColor(color)
-            if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
+
+            if (bold) {
+                setTypeface(null, android.graphics.Typeface.BOLD)
+            }
+
             setPadding(0, dp(7), 0, dp(7))
         }
     }
@@ -308,11 +326,14 @@ class VideoEditorActivity : Activity() {
             textSize = 13f
             isAllCaps = false
             setTextColor(white)
+
             backgroundTintList = ColorStateList.valueOf(
                 if (primary) accent else Color.rgb(42, 47, 68)
             )
+
             minHeight = dp(46)
             setOnClickListener { action() }
+
             layoutParams = LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -328,9 +349,11 @@ class VideoEditorActivity : Activity() {
             hint = "Time in seconds"
             textSize = 14f
             isSingleLine = true
+
             inputType =
                 android.text.InputType.TYPE_CLASS_NUMBER or
                     android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+
             setTextColor(white)
             setHintTextColor(muted)
             backgroundTintList = ColorStateList.valueOf(accent)
@@ -355,21 +378,26 @@ class VideoEditorActivity : Activity() {
             start < 0 || end <= start -> "Check your start and end times."
             end * 1000.0 > duration + 100 ->
                 "End time exceeds the video duration."
+
             else -> {
                 val seconds = end - start
-                "Selected clip: ${String.format(Locale.US, "%.2f", seconds)} seconds"
+                "Selected clip: ${
+                    String.format(Locale.US, "%.2f", seconds)
+                } seconds"
             }
         }
     }
 
     private fun applyPreset(seconds: Int) {
         val duration = durationLabel.tag as? Long ?: 0L
+
         if (duration <= 0L) {
             toast("Choose a video first.")
             return
         }
 
         val selected = minOf(seconds * 1000L, duration)
+
         startInput.setText("0")
         endInput.setText(
             String.format(Locale.US, "%.2f", selected / 1000.0)
@@ -396,7 +424,8 @@ class VideoEditorActivity : Activity() {
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-        } catch (_: Exception) {}
+        } catch (_: Exception) {
+        }
 
         selectedLabel.text = "Reading selected video..."
         durationLabel.text = "Loading video information..."
@@ -410,8 +439,10 @@ class VideoEditorActivity : Activity() {
             var height = 0
 
             val retriever = MediaMetadataRetriever()
+
             try {
                 retriever.setDataSource(this, uri)
+
                 duration = retriever.extractMetadata(
                     MediaMetadataRetriever.METADATA_KEY_DURATION
                 )?.toLongOrNull() ?: 0L
@@ -423,6 +454,7 @@ class VideoEditorActivity : Activity() {
                 height = retriever.extractMetadata(
                     MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
                 )?.toIntOrNull() ?: 0
+
             } catch (_: Exception) {
             } finally {
                 retriever.release()
@@ -431,8 +463,10 @@ class VideoEditorActivity : Activity() {
             runOnUiThread {
                 if (selectedVideo == uri) {
                     durationLabel.tag = duration
+
                     durationLabel.text =
                         "Duration: ${formatDuration(duration)} • ${width}×${height}"
+
                     selectedLabel.text = "Video ready to edit"
 
                     if (duration > 0L) {
@@ -447,6 +481,7 @@ class VideoEditorActivity : Activity() {
 
                     exportButton.isEnabled = duration > 0L
                     exportButton.alpha = if (duration > 0L) 1f else 0.5f
+
                     updateTrimSummary()
                 }
             }
@@ -461,6 +496,7 @@ class VideoEditorActivity : Activity() {
                         VideoPreviewActivity.EXTRA_VIDEO_URI,
                         uri.toString()
                     )
+
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
             )
@@ -476,7 +512,11 @@ class VideoEditorActivity : Activity() {
                 putExtra(Intent.EXTRA_STREAM, uri)
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
-            startActivity(Intent.createChooser(intent, "Share video"))
+
+            startActivity(
+                Intent.createChooser(intent, "Share video")
+            )
+
         } catch (_: Exception) {
             toast("Could not share this video.")
         }
@@ -484,11 +524,13 @@ class VideoEditorActivity : Activity() {
 
     private fun exportVideo() {
         val uri = selectedVideo ?: return
+
         val start = startInput.text.toString().toDoubleOrNull()
         val end = endInput.text.toString().toDoubleOrNull()
         val duration = durationLabel.tag as? Long ?: 0L
 
-        if (start == null || end == null ||
+        if (
+            start == null || end == null ||
             start < 0 || end <= start ||
             end * 1000.0 > duration + 100
         ) {
@@ -538,12 +580,20 @@ class VideoEditorActivity : Activity() {
                     } else {
                         exportStatus.text = "Could not save exported video."
                     }
+
                     resetExportButton()
                 }
+
             } catch (e: Exception) {
                 runOnUiThread {
                     exportStatus.text = "Export failed."
-                    toast("Export failed: ${e.message ?: "Unsupported video"}")
+
+                    toast(
+                        "Export failed: ${
+                            e.message ?: "Unsupported video"
+                        }"
+                    )
+
                     resetExportButton()
                 }
             } finally {
@@ -581,8 +631,12 @@ class VideoEditorActivity : Activity() {
                 val mime = format.getString(MediaFormat.KEY_MIME) ?: continue
 
                 if (mime.startsWith("video/")) {
-                    if (videoTrack == -1) videoTrack = i
+                    if (videoTrack == -1) {
+                        videoTrack = i
+                    }
+
                     selectedTracks.add(i)
+
                 } else if (mime.startsWith("audio/") && !mute) {
                     selectedTracks.add(i)
                 }
@@ -592,8 +646,8 @@ class VideoEditorActivity : Activity() {
                 throw IllegalArgumentException("No video track found.")
             }
 
-            // Find a video keyframe at or after the requested start.
             extractor.selectTrack(videoTrack)
+
             extractor.seekTo(
                 requestedStartUs,
                 MediaExtractor.SEEK_TO_NEXT_SYNC
@@ -603,17 +657,25 @@ class VideoEditorActivity : Activity() {
 
             while (true) {
                 val time = extractor.sampleTime
-                if (time < 0 || time >= endUs) break
+
+                if (time < 0 || time >= endUs) {
+                    break
+                }
 
                 if (extractor.sampleTrackIndex == videoTrack) {
                     val flags = extractor.sampleFlags
-                    if ((flags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0) {
+
+                    if (
+                        (flags and MediaExtractor.SAMPLE_FLAG_SYNC) != 0
+                    ) {
                         actualStartUs = time
                         break
                     }
                 }
 
-                if (!extractor.advance()) break
+                if (!extractor.advance()) {
+                    break
+                }
             }
 
             extractor.unselectTrack(videoTrack)
@@ -635,17 +697,23 @@ class VideoEditorActivity : Activity() {
                 MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
             )
 
-            // Preserve the source video's rotation metadata.
             val retriever = MediaMetadataRetriever()
+
             try {
                 retriever.setDataSource(this, inputUri)
+
                 val rotation = retriever.extractMetadata(
                     MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION
                 )?.toIntOrNull() ?: 0
 
-                if (rotation == 90 || rotation == 180 || rotation == 270) {
+                if (
+                    rotation == 90 ||
+                    rotation == 180 ||
+                    rotation == 270
+                ) {
                     muxer.setOrientationHint(rotation)
                 }
+
             } finally {
                 retriever.release()
             }
@@ -655,6 +723,7 @@ class VideoEditorActivity : Activity() {
             for (track in selectedTracks) {
                 outputTracks[track] =
                     muxer.addTrack(extractor.getTrackFormat(track))
+
                 extractor.selectTrack(track)
             }
 
@@ -670,22 +739,31 @@ class VideoEditorActivity : Activity() {
             val info = android.media.MediaCodec.BufferInfo()
 
             var videoSamplesWritten = 0
-            var audioSamplesWritten = 0
             var lastProgressUpdate = 0L
 
             while (true) {
                 val inputTrack = extractor.sampleTrackIndex
-                if (inputTrack < 0) break
+
+                if (inputTrack < 0) {
+                    break
+                }
 
                 val sampleTime = extractor.sampleTime
-                if (sampleTime < 0 || sampleTime >= endUs) break
+
+                if (sampleTime < 0 || sampleTime >= endUs) {
+                    break
+                }
 
                 val progress = (
-                    ((sampleTime - actualStartUs).coerceAtLeast(0L) * 90L) /
+                    (
+                        (sampleTime - actualStartUs)
+                            .coerceAtLeast(0L) * 90L
+                    ) /
                         (endUs - actualStartUs).coerceAtLeast(1L)
                     ).toInt().coerceIn(0, 90)
 
                 val now = System.currentTimeMillis()
+
                 if (now - lastProgressUpdate >= 250L) {
                     onProgress(progress)
                     lastProgressUpdate = now
@@ -693,15 +771,19 @@ class VideoEditorActivity : Activity() {
 
                 val outputTrack = outputTracks[inputTrack]
 
-                if (outputTrack != null && sampleTime >= actualStartUs) {
-                    // Android 9+ reports the exact sample size.
+                if (
+                    outputTrack != null &&
+                    sampleTime >= actualStartUs
+                ) {
                     if (Build.VERSION.SDK_INT >= 28) {
                         val required = extractor.sampleSize
+
                         if (required > MAX_SAMPLE_BUFFER) {
                             throw IllegalArgumentException(
                                 "A video sample is too large for this export."
                             )
                         }
+
                         if (required > buffer.capacity()) {
                             buffer = ByteBuffer.allocate(
                                 required.toInt().coerceAtLeast(1)
@@ -710,6 +792,7 @@ class VideoEditorActivity : Activity() {
                     }
 
                     buffer.clear()
+
                     val size = extractor.readSampleData(buffer, 0)
 
                     if (size > 0) {
@@ -721,20 +804,25 @@ class VideoEditorActivity : Activity() {
 
                         info.offset = 0
                         info.size = size
-                        info.presentationTimeUs = sampleTime - actualStartUs
+                        info.presentationTimeUs =
+                            sampleTime - actualStartUs
                         info.flags = extractor.sampleFlags
 
-                        muxer.writeSampleData(outputTrack, buffer, info)
+                        muxer.writeSampleData(
+                            outputTrack,
+                            buffer,
+                            info
+                        )
 
                         if (inputTrack == videoTrack) {
                             videoSamplesWritten++
-                        } else {
-                            audioSamplesWritten++
                         }
                     }
                 }
 
-                if (!extractor.advance()) break
+                if (!extractor.advance()) {
+                    break
+                }
             }
 
             if (videoSamplesWritten == 0) {
@@ -749,40 +837,51 @@ class VideoEditorActivity : Activity() {
             if (muxerStarted) {
                 try {
                     muxer?.stop()
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
 
             try {
                 muxer?.release()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
 
             extractor.release()
         }
     }
 
-    private fun saveExport(file: File, requestedName: String): Uri? {
+    private fun saveExport(
+        file: File,
+        requestedName: String
+    ): Uri? {
+
         val timestamp = SimpleDateFormat(
             "yyyyMMdd_HHmmss",
             Locale.US
         ).format(Date())
 
-        val base = requestedName.trim()
-            .substringBeforeLast('.', requestedName.trim())
+        val trimmedName = requestedName.trim()
+
+        val base = trimmedName
+            .substringBeforeLast('.', trimmedName)
             .replace(Regex("[^A-Za-z0-9 _-]"), "")
             .trim()
             .replace(Regex("\\s+"), "_")
             .take(60)
 
-        val name = (base.ifBlank { "Kalize_Edit_$timestamp" }) + ".mp4"
+        val name =
+            (base.ifBlank { "Kalize_Edit_$timestamp" }) + ".mp4"
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, name)
                 put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+
                 put(
                     MediaStore.Video.Media.RELATIVE_PATH,
                     "${Environment.DIRECTORY_MOVIES}/Kalize Recorder"
                 )
+
                 put(MediaStore.Video.Media.IS_PENDING, 1)
             }
 
@@ -796,13 +895,18 @@ class VideoEditorActivity : Activity() {
                     FileInputStream(file).use { input ->
                         input.copyTo(output)
                     }
-                } ?: throw IllegalStateException("Could not open saved video.")
+                } ?: throw IllegalStateException(
+                    "Could not open saved video."
+                )
 
                 val completed = ContentValues().apply {
                     put(MediaStore.Video.Media.IS_PENDING, 0)
                 }
+
                 contentResolver.update(uri, completed, null, null)
+
                 return uri
+
             } catch (e: Exception) {
                 contentResolver.delete(uri, null, null)
                 throw e
@@ -815,7 +919,9 @@ class VideoEditorActivity : Activity() {
         )
 
         if (!directory.exists() && !directory.mkdirs()) {
-            throw IllegalStateException("Could not create export folder.")
+            throw IllegalStateException(
+                "Could not create export folder."
+            )
         }
 
         val destination = File(directory, name)
@@ -837,13 +943,18 @@ class VideoEditorActivity : Activity() {
 
         return if (hours > 0) {
             String.format(
-                Locale.US, "%d:%02d:%02d",
-                hours, minutes, remainder
+                Locale.US,
+                "%d:%02d:%02d",
+                hours,
+                minutes,
+                remainder
             )
         } else {
             String.format(
-                Locale.US, "%02d:%02d",
-                minutes, remainder
+                Locale.US,
+                "%02d:%02d",
+                minutes,
+                remainder
             )
         }
     }

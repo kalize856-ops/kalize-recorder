@@ -60,6 +60,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var exportNameInput: EditText
     private lateinit var trimSummary: TextView
+    private lateinit var videoInfoLabel: TextView
 
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -95,6 +96,12 @@ class VideoEditorActivity : Activity() {
 
         durationLabel = label("Choose a video to begin.", 12f, muted)
         sourceCard.addView(durationLabel)
+
+        videoInfoLabel = label(
+            "VIDEO INFORMATION\nSelect a video to inspect its details.",
+            12f, Color.rgb(190, 174, 255)
+        )
+        sourceCard.addView(videoInfoLabel)
 
         sourceCard.addView(button("Choose video", true) {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -367,6 +374,22 @@ class VideoEditorActivity : Activity() {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
     }
 
+    private fun formatFileSize(bytes: Long): String {
+        if (bytes < 1024) return "$bytes B"
+
+        val kb = bytes / 1024.0
+        if (kb < 1024) {
+            return String.format(Locale.US, "%.1f KB", kb)
+        }
+
+        val mb = kb / 1024.0
+        if (mb < 1024) {
+            return String.format(Locale.US, "%.2f MB", mb)
+        }
+
+        return String.format(Locale.US, "%.2f GB", mb / 1024.0)
+    }
+
     private fun updateTrimSummary() {
         val duration = durationLabel.tag as? Long ?: 0L
         val start = startInput.text.toString().toDoubleOrNull()
@@ -429,6 +452,7 @@ class VideoEditorActivity : Activity() {
 
         selectedLabel.text = "Reading selected video..."
         durationLabel.text = "Loading video information..."
+        videoInfoLabel.text = "VIDEO INFORMATION\nReading file details..."
         exportButton.isEnabled = false
         previewButton.isEnabled = true
         previewButton.alpha = 1f
@@ -437,6 +461,10 @@ class VideoEditorActivity : Activity() {
             var duration = 0L
             var width = 0
             var height = 0
+            var bitrate = 0L
+            var frameRate = 0f
+            var fileSize = 0L
+            var mimeType = "Unknown"
 
             val retriever = MediaMetadataRetriever()
 
@@ -455,9 +483,31 @@ class VideoEditorActivity : Activity() {
                     MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT
                 )?.toIntOrNull() ?: 0
 
+                bitrate = retriever.extractMetadata(
+                    MediaMetadataRetriever.METADATA_KEY_BITRATE
+                )?.toLongOrNull() ?: 0L
+
+                if (Build.VERSION.SDK_INT >= 23) {
+                    frameRate = retriever.extractMetadata(
+                        MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE
+                    )?.toFloatOrNull() ?: 0f
+                }
+
             } catch (_: Exception) {
             } finally {
                 retriever.release()
+            }
+
+            try {
+                contentResolver.openAssetFileDescriptor(uri, "r")?.use {
+                    fileSize = it.length
+                }
+            } catch (_: Exception) {
+            }
+
+            try {
+                mimeType = contentResolver.getType(uri) ?: "Unknown"
+            } catch (_: Exception) {
             }
 
             runOnUiThread {
@@ -468,6 +518,30 @@ class VideoEditorActivity : Activity() {
                         "Duration: ${formatDuration(duration)} • ${width}×${height}"
 
                     selectedLabel.text = "Video ready to edit"
+
+                    val fpsText = if (frameRate > 0f) {
+                        String.format(Locale.US, "%.1f FPS", frameRate)
+                    } else {
+                        "Not provided"
+                    }
+
+                    val bitrateText = if (bitrate > 0L) {
+                        String.format(
+                            Locale.US,
+                            "%.2f Mbps",
+                            bitrate / 1_000_000.0
+                        )
+                    } else {
+                        "Not provided"
+                    }
+
+                    videoInfoLabel.text =
+                        "VIDEO INFORMATION\n" +
+                        "Resolution: ${width} × ${height}\n" +
+                        "Frame rate: $fpsText\n" +
+                        "File size: ${formatFileSize(fileSize)}\n" +
+                        "Bitrate: $bitrateText\n" +
+                        "Format: $mimeType"
 
                     if (duration > 0L) {
                         endInput.setText(

@@ -68,6 +68,7 @@ class VideoEditorActivity : Activity() {
     private lateinit var rotationLabel: TextView
     private lateinit var exportNameInput: EditText
     private lateinit var exportButton: Button
+    private lateinit var cancelExportButton: Button
     private lateinit var previewButton: Button
     private lateinit var exportStatus: TextView
     private lateinit var progressBar: ProgressBar
@@ -347,6 +348,18 @@ class VideoEditorActivity : Activity() {
         }
 
         exportCard.addView(exportButton)
+
+        cancelExportButton = button("Cancel export", false) {
+            cancelCurrentExport()
+        }.apply {
+            visibility = View.GONE
+            setTextColor(Color.rgb(255, 165, 175))
+            backgroundTintList = ColorStateList.valueOf(
+                Color.rgb(83, 34, 51)
+            )
+        }
+
+        exportCard.addView(cancelExportButton)
 
         exportCard.addView(button("Share last exported video", false) {
             lastExportedVideo?.let { shareVideo(it) }
@@ -751,6 +764,7 @@ class VideoEditorActivity : Activity() {
         exportInProgress = true
         exportButton.isEnabled = false
         exportButton.text = "Processing video..."
+        cancelExportButton.visibility = View.VISIBLE
         progressBar.progress = 0
         progressBar.visibility = View.VISIBLE
         exportStatus.text = "Exporting ${selectedCropFormat} video..."
@@ -762,14 +776,19 @@ class VideoEditorActivity : Activity() {
 
                 override fun onProgress(progress: Int) {
                     runOnUiThread {
-                        progressBar.progress = progress
-                        exportStatus.text = "Processing video... $progress%"
+                        if (!isFinishing && !isDestroyed) {
+                            progressBar.progress = progress
+                            exportStatus.text =
+                                "Processing video... $progress%"
+                        }
                     }
                 }
 
                 override fun onCompleted(outputFile: File) {
                     runOnUiThread {
-                        exportStatus.text = "Saving finished video..."
+                        if (!isFinishing && !isDestroyed) {
+                            exportStatus.text = "Saving finished video..."
+                        }
                     }
 
                     executor.execute {
@@ -779,6 +798,8 @@ class VideoEditorActivity : Activity() {
                             outputFile.delete()
 
                             runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+
                                 lastExportedVideo = savedUri
                                 exportInProgress = false
                                 progressBar.progress = 100
@@ -791,6 +812,8 @@ class VideoEditorActivity : Activity() {
                             outputFile.delete()
 
                             runOnUiThread {
+                                if (isFinishing || isDestroyed) return@runOnUiThread
+
                                 exportInProgress = false
                                 exportStatus.text = "Could not save video."
                                 toast(
@@ -805,9 +828,18 @@ class VideoEditorActivity : Activity() {
 
                 override fun onError(message: String) {
                     runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+
                         exportInProgress = false
-                        exportStatus.text = "Export failed."
-                        toast("Export failed: $message")
+
+                        if (message.contains("cancel", ignoreCase = true)) {
+                            exportStatus.text = "Export cancelled."
+                            toast("Video export cancelled.")
+                        } else {
+                            exportStatus.text = "Export failed."
+                            toast("Export failed: $message")
+                        }
+
                         resetExportButton()
                     }
                 }
@@ -815,10 +847,26 @@ class VideoEditorActivity : Activity() {
         )
     }
 
+    private fun cancelCurrentExport() {
+        if (!exportInProgress) return
+
+        cancelExportButton.isEnabled = false
+        cancelExportButton.text = "Cancelling..."
+        exportStatus.text = "Cancelling video export..."
+
+        engine?.cancelExport()
+    }
+
     private fun resetExportButton() {
         exportButton.isEnabled = selectedVideo != null
         exportButton.alpha = if (selectedVideo != null) 1f else 0.5f
         exportButton.text = "Export edited video"
+
+        cancelExportButton.visibility = View.GONE
+        cancelExportButton.isEnabled = true
+        cancelExportButton.text = "Cancel export"
+
+        progressBar.visibility = View.GONE
     }
 
     private fun saveExport(file: File, requestedName: String): Uri {

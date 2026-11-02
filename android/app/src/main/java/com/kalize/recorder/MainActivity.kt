@@ -346,7 +346,9 @@ private fun KalizeHome(
             } catch (_: Exception) {
             }
         }
-    }    val folderPicker = rememberLauncherForActivityResult(
+    }
+
+    val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -694,7 +696,8 @@ private fun KalizeHome(
                     }
                 }
 
-                SectionTitle("Capture settings", "Choose how recording starts and looks", mainText, muted)               
+                SectionTitle("Capture settings", "Choose how recording starts and looks", mainText, muted)
+
                 Card(
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = panel),

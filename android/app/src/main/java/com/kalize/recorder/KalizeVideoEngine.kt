@@ -28,6 +28,7 @@ class KalizeVideoEngine(context: Context) {
     data class EditSettings(
         val startMs: Long = 0L,
         val endMs: Long,
+        val muteAudio: Boolean = false,
         val rotationDegrees: Float = 0f,
         val cropEnabled: Boolean = false,
         val cropLeft: Float = -1f,
@@ -41,6 +42,8 @@ class KalizeVideoEngine(context: Context) {
 
     private var transformer: Transformer? = null
     private var currentOutput: File? = null
+
+    private var progressRunnable: Runnable? = null
 
     fun export(
         inputUri: Uri,
@@ -74,6 +77,8 @@ class KalizeVideoEngine(context: Context) {
         }
 
         try {
+            cancelProgressUpdates()
+
             val outputDirectory = File(
                 appContext.cacheDir,
                 "kalize_exports"
@@ -103,14 +108,15 @@ class KalizeVideoEngine(context: Context) {
                 .setClippingConfiguration(clipping)
                 .build()
 
-            val videoEffects = mutableListOf<androidx.media3.common.Effect>()
+            val videoEffects =
+                mutableListOf<androidx.media3.common.Effect>()
 
             if (settings.rotationDegrees != 0f) {
-                val rotation = ScaleAndRotateTransformation.Builder()
-                    .setRotationDegrees(settings.rotationDegrees)
-                    .build()
-
-                videoEffects.add(rotation)
+                videoEffects.add(
+                    ScaleAndRotateTransformation.Builder()
+                        .setRotationDegrees(settings.rotationDegrees)
+                        .build()
+                )
             }
 
             if (settings.cropEnabled) {
@@ -131,6 +137,7 @@ class KalizeVideoEngine(context: Context) {
 
             val editedItem = EditedMediaItem.Builder(mediaItem)
                 .setEffects(effects)
+                .setRemoveAudio(settings.muteAudio)
                 .build()
 
             val exportTransformer = Transformer.Builder(appContext)
@@ -141,6 +148,8 @@ class KalizeVideoEngine(context: Context) {
                             composition: androidx.media3.transformer.Composition,
                             exportResult: ExportResult
                         ) {
+                            cancelProgressUpdates()
+
                             mainHandler.post {
                                 listener.onProgress(100)
                                 listener.onCompleted(outputFile)
@@ -152,6 +161,7 @@ class KalizeVideoEngine(context: Context) {
                             exportResult: ExportResult,
                             exportException: ExportException
                         ) {
+                            cancelProgressUpdates()
                             outputFile.delete()
 
                             mainHandler.post {
@@ -166,11 +176,17 @@ class KalizeVideoEngine(context: Context) {
                 .build()
 
             transformer = exportTransformer
-            exportTransformer.start(editedItem, outputFile.absolutePath)
 
-            reportProgress(exportTransformer, listener)
+            exportTransformer.start(
+                editedItem,
+                outputFile.absolutePath
+            )
+
+            startProgressUpdates(exportTransformer, listener)
 
         } catch (error: Exception) {
+            cancelProgressUpdates()
+
             mainHandler.post {
                 listener.onError(
                     error.message ?: "Could not start video export."
@@ -179,25 +195,57 @@ class KalizeVideoEngine(context: Context) {
         }
     }
 
-    private fun reportProgress(
+    private fun startProgressUpdates(
         activeTransformer: Transformer,
         listener: ExportListener
     ) {
         val holder = ProgressHolder()
 
-        val progressState = activeTransformer.getProgress(holder)
+        val runnable = object : Runnable {
+            override fun run() {
+                if (transformer !== activeTransformer) return
 
-        if (
-            progressState ==
-            Transformer.PROGRESS_STATE_AVAILABLE
-        ) {
-            mainHandler.post {
-                listener.onProgress(holder.progress)
+                try {
+                    val state =
+                        activeTransformer.getProgress(holder)
+
+                    if (
+                        state ==
+                        Transformer.PROGRESS_STATE_AVAILABLE
+                    ) {
+                        listener.onProgress(
+                            holder.progress.coerceIn(0, 99)
+                        )
+                    }
+
+                    if (
+                        state !=
+                        Transformer.PROGRESS_STATE_NOT_STARTED
+                    ) {
+                        mainHandler.postDelayed(this, 500L)
+                    }
+
+                } catch (_: Exception) {
+                    cancelProgressUpdates()
+                }
             }
         }
+
+        progressRunnable = runnable
+        mainHandler.post(runnable)
+    }
+
+    private fun cancelProgressUpdates() {
+        progressRunnable?.let {
+            mainHandler.removeCallbacks(it)
+        }
+
+        progressRunnable = null
     }
 
     fun cancelExport() {
+        cancelProgressUpdates()
+
         try {
             transformer?.cancel()
         } catch (_: Exception) {
@@ -209,6 +257,7 @@ class KalizeVideoEngine(context: Context) {
     }
 
     fun release() {
+        cancelProgressUpdates()
         transformer = null
         currentOutput = null
     }

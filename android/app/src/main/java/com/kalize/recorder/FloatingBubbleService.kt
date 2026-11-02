@@ -51,6 +51,7 @@ class FloatingBubbleService : Service() {
     private val red = Color.rgb(225, 55, 70)
     private val green = Color.rgb(40, 160, 105)
     private val blue = Color.rgb(55, 120, 220)
+    private val orange = Color.rgb(220, 130, 45)
 
     private val timerRunnable = object : Runnable {
         override fun run() {
@@ -207,6 +208,25 @@ class FloatingBubbleService : Service() {
         }
     }
 
+    private fun openScreenshotGallery() {
+        try {
+            val intent = Intent(
+                this,
+                ScreenshotGalleryActivity::class.java
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            startActivity(intent)
+        } catch (_: Exception) {
+            android.widget.Toast.makeText(
+                this,
+                "Could not open screenshot gallery.",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
     private fun showControls() {
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
@@ -334,6 +354,12 @@ class FloatingBubbleService : Service() {
             "Open Kalize Recorder"
         )
 
+        val galleryButton = makeButton(
+            "▧",
+            orange,
+            "Open screenshot gallery"
+        )
+
         val localPauseButton = makeButton(
             "Ⅱ",
             green,
@@ -356,6 +382,7 @@ class FloatingBubbleService : Service() {
 
         listOf(
             openButton,
+            galleryButton,
             localPauseButton,
             stopButton,
             minimizeButton
@@ -363,20 +390,20 @@ class FloatingBubbleService : Service() {
             controls.addView(
                 button,
                 LinearLayout.LayoutParams(dp(46), dp(46)).apply {
-                    marginStart = dp(5)
-                    marginEnd = dp(5)
+                    marginStart = dp(3)
+                    marginEnd = dp(3)
                 }
             )
         }
 
         mainPanel.addView(
             header,
-            LinearLayout.LayoutParams(dp(230), dp(55))
+            LinearLayout.LayoutParams(dp(270), dp(55))
         )
 
         mainPanel.addView(
             divider,
-            LinearLayout.LayoutParams(dp(230), dp(1)).apply {
+            LinearLayout.LayoutParams(dp(270), dp(1)).apply {
                 topMargin = dp(7)
             }
         )
@@ -409,6 +436,10 @@ class FloatingBubbleService : Service() {
                 )
                 startActivity(it)
             }
+        }
+
+        galleryButton.setOnClickListener {
+            openScreenshotGallery()
         }
 
         localPauseButton.setOnClickListener {

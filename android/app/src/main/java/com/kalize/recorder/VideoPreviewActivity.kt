@@ -288,7 +288,8 @@ class VideoPreviewActivity : Activity() {
         }
 
         root.addView(fullScreenButton, matchHeight(50))
-        chromeViews.add(fullScreenButton)
+
+        // Keep this button visible so full screen can always be exited.
 
         val backButton = makeButton(
             "BACK TO VIDEO EDITOR",

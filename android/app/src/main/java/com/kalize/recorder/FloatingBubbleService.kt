@@ -220,13 +220,26 @@ class FloatingBubbleService : Service() {
             "Minimize floating controls"
         )
 
+        val dragHandle = TextView(this).apply {
+            text = "☰"
+            textSize = 20f
+            setTextColor(lightPurple)
+            setTypeface(null, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            contentDescription = "Drag to move floating controls"
+            background = roundedBackground(
+                Color.rgb(48, 39, 76),
+                10
+            )
+        }
+
         val restoreButton = TextView(this).apply {
             text = "K"
             textSize = 20f
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            contentDescription = "Expand floating controls"
+            contentDescription = "Drag or tap to expand floating controls"
 
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
@@ -247,6 +260,95 @@ class FloatingBubbleService : Service() {
             panel.addView(button, params)
         }
 
+        fun snapToNearestSide() {
+            val screenWidth = resources.displayMetrics.widthPixels
+            val maxX = (screenWidth - panel.width).coerceAtLeast(0)
+
+            layoutParams.x =
+                if (layoutParams.x + panel.width / 2 < screenWidth / 2) {
+                    0
+                } else {
+                    maxX
+                }
+
+            try {
+                windowManager.updateViewLayout(panel, layoutParams)
+            } catch (_: Exception) {
+                // The overlay may already have been removed.
+            }
+        }
+
+        fun attachDragListener(
+            dragView: View,
+            onTap: (() -> Unit)? = null
+        ) {
+            var startX = 0
+            var startY = 0
+            var touchX = 0f
+            var touchY = 0f
+            var moved = false
+
+            dragView.setOnTouchListener { _, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        startX = layoutParams.x
+                        startY = layoutParams.y
+                        touchX = event.rawX
+                        touchY = event.rawY
+                        moved = false
+                        true
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = (event.rawX - touchX).toInt()
+                        val dy = (event.rawY - touchY).toInt()
+
+                        if (abs(dx) > dp(5) || abs(dy) > dp(5)) {
+                            moved = true
+                        }
+
+                        val screenWidth =
+                            resources.displayMetrics.widthPixels
+                        val screenHeight =
+                            resources.displayMetrics.heightPixels
+
+                        val maxX =
+                            (screenWidth - panel.width).coerceAtLeast(0)
+                        val maxY =
+                            (screenHeight - panel.height).coerceAtLeast(0)
+
+                        layoutParams.x =
+                            (startX + dx).coerceIn(0, maxX)
+                        layoutParams.y =
+                            (startY + dy).coerceIn(0, maxY)
+
+                        try {
+                            windowManager.updateViewLayout(
+                                panel,
+                                layoutParams
+                            )
+                        } catch (_: Exception) {
+                            // The overlay may already have been removed.
+                        }
+
+                        true
+                    }
+
+                    MotionEvent.ACTION_UP -> {
+                        if (moved) {
+                            snapToNearestSide()
+                        } else {
+                            onTap?.invoke()
+                        }
+                        true
+                    }
+
+                    MotionEvent.ACTION_CANCEL -> true
+                    else -> false
+                }
+            }
+        }
+
         fun showExpanded() {
             isMinimized = false
             panel.removeAllViews()
@@ -261,6 +363,16 @@ class FloatingBubbleService : Service() {
             panel.contentDescription = "Floating recording controls"
 
             updatePauseButton()
+
+            panel.addView(
+                dragHandle,
+                LinearLayout.LayoutParams(dp(34), dp(42)).apply {
+                    marginEnd = dp(4)
+                }
+            )
+
+            attachDragListener(dragHandle)
+
             addControlButton(openButton)
             addControlButton(localPauseButton)
             addControlButton(stopButton)
@@ -291,6 +403,10 @@ class FloatingBubbleService : Service() {
                 LinearLayout.LayoutParams(dp(52), dp(52))
             )
 
+            attachDragListener(restoreButton) {
+                showExpanded()
+            }
+
             updatePanelPosition()
         }
 
@@ -313,7 +429,6 @@ class FloatingBubbleService : Service() {
                 Context.MODE_PRIVATE
             )
 
-            // Read the latest saved state before acting.
             isRecording = prefs.getBoolean("is_recording", false)
             isPaused = prefs.getBoolean("is_paused", false)
 
@@ -339,16 +454,11 @@ class FloatingBubbleService : Service() {
         }
 
         hideButton.setOnClickListener {
-            // Hiding the bubble does not stop recording.
             stopSelf()
         }
 
         minimizeButton.setOnClickListener {
             showCollapsed()
-        }
-
-        restoreButton.setOnClickListener {
-            showExpanded()
         }
 
         val overlayType =
@@ -370,66 +480,6 @@ class FloatingBubbleService : Service() {
             gravity = Gravity.TOP or Gravity.START
             x = dp(12)
             y = dp(220)
-        }
-
-        var startX = 0
-        var startY = 0
-        var touchX = 0f
-        var touchY = 0f
-        var moved = false
-
-        panel.setOnTouchListener { view, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = layoutParams.x
-                    startY = layoutParams.y
-                    touchX = event.rawX
-                    touchY = event.rawY
-                    moved = false
-                    true
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - touchX).toInt()
-                    val dy = (event.rawY - touchY).toInt()
-
-                    if (abs(dx) > dp(5) || abs(dy) > dp(5)) {
-                        moved = true
-                    }
-
-                    val screenWidth =
-                        resources.displayMetrics.widthPixels
-                    val screenHeight =
-                        resources.displayMetrics.heightPixels
-
-                    val maxX =
-                        (screenWidth - view.width).coerceAtLeast(0)
-                    val maxY =
-                        (screenHeight - view.height).coerceAtLeast(0)
-
-                    layoutParams.x =
-                        (startX + dx).coerceIn(0, maxX)
-                    layoutParams.y =
-                        (startY + dy).coerceIn(0, maxY)
-
-                    try {
-                        windowManager.updateViewLayout(view, layoutParams)
-                    } catch (_: Exception) {
-                        // The overlay may already have been removed.
-                    }
-
-                    true
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    if (moved) {
-                        snapToNearestSide(view)
-                    }
-                    true
-                }
-
-                else -> false
-            }
         }
 
         showExpanded()
@@ -471,24 +521,6 @@ class FloatingBubbleService : Service() {
         }
     }
 
-    private fun snapToNearestSide(view: View) {
-        val screenWidth = resources.displayMetrics.widthPixels
-        val maxX = (screenWidth - view.width).coerceAtLeast(0)
-
-        layoutParams.x =
-            if (layoutParams.x + view.width / 2 < screenWidth / 2) {
-                0
-            } else {
-                maxX
-            }
-
-        try {
-            windowManager.updateViewLayout(view, layoutParams)
-        } catch (_: Exception) {
-            // Ignore if Android has removed the overlay.
-        }
-    }
-
     private fun updatePanelPosition() {
         val panel = controlPanel ?: return
 
@@ -513,7 +545,7 @@ class FloatingBubbleService : Service() {
             try {
                 windowManager.removeView(it)
             } catch (_: Exception) {
-                // Ignore if Android already removed the overlay.
+                // Ignore if Android has already removed the overlay.
             }
         }
 

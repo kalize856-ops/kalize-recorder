@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Activity
@@ -59,7 +60,7 @@ class VideoPreviewActivity : Activity() {
                     val position = videoView.currentPosition
                         .coerceIn(0, videoDuration)
 
-                    timeline.progress = position
+                    timeline.progress = positionToProgress(position)
                     updateTimeLabels(position)
                 }
             } catch (_: Exception) {
@@ -163,23 +164,15 @@ class VideoPreviewActivity : Activity() {
                     fromUser: Boolean
                 ) {
                     if (fromUser && videoDuration > 0) {
-                        val position = (
-                            progress.toFloat() / seekBar.max *
-                                videoDuration
-                            ).toInt()
-
-                        updateTimeLabels(position)
+                        updateTimeLabels(progressToPosition(progress))
                     }
                 }
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     if (videoDuration > 0) {
-                        val position = (
-                            seekBar.progress.toFloat() / seekBar.max *
-                                videoDuration
-                            ).toInt()
-
-                        videoView.seekTo(position)
+                        videoView.seekTo(
+                            progressToPosition(seekBar.progress)
+                        )
                     }
 
                     userSeeking = false
@@ -229,10 +222,7 @@ class VideoPreviewActivity : Activity() {
             togglePlayback()
         }
 
-        playbackRow.addView(
-            playPauseButton,
-            weightedButton()
-        )
+        playbackRow.addView(playPauseButton, weightedButton())
 
         playbackRow.addView(
             makeButton("+10 SEC", false) {
@@ -322,8 +312,6 @@ class VideoPreviewActivity : Activity() {
             preparedPlayer = player
             videoDuration = videoView.duration.coerceAtLeast(0)
 
-            // Keep the timeline on a fixed 0–1000 scale.
-            // Convert between timeline progress and milliseconds.
             timeline.max = 1000
             timeline.progress = 0
 
@@ -455,7 +443,7 @@ class VideoPreviewActivity : Activity() {
 
         return (
             progress.toFloat() / timeline.max * videoDuration
-            ).toInt().coerceIn(0, videoDuration)
+        ).toInt().coerceIn(0, videoDuration)
     }
 
     private fun positionToProgress(position: Int): Int {
@@ -463,7 +451,7 @@ class VideoPreviewActivity : Activity() {
 
         return (
             position.toFloat() / videoDuration * timeline.max
-            ).toInt().coerceIn(0, timeline.max)
+        ).toInt().coerceIn(0, timeline.max)
     }
 
     private fun togglePlayback() {
@@ -518,7 +506,7 @@ class VideoPreviewActivity : Activity() {
                 PlaybackParams().setSpeed(playbackSpeed)
 
             playbackStatus.text =
-                "Playing at ${playbackSpeed}× speed"
+                "Playing at ${playbackSpeed}×"
 
         } catch (_: Exception) {
             playbackStatus.text =
@@ -535,7 +523,7 @@ class VideoPreviewActivity : Activity() {
 
             val target = (
                 videoView.currentPosition + milliseconds
-                ).coerceIn(0, videoDuration)
+            ).coerceIn(0, videoDuration)
 
             videoView.seekTo(target)
             timeline.progress = positionToProgress(target)
@@ -588,7 +576,7 @@ class VideoPreviewActivity : Activity() {
             View.SYSTEM_UI_FLAG_FULLSCREEN
                 or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-            )
+        )
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

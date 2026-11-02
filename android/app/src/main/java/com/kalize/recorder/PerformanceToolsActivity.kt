@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.ActivityManager
@@ -279,6 +280,14 @@ private fun PerformanceToolsScreen(
     var sessionSeconds by remember { mutableStateOf(0L) }
 
     val handler = remember { Handler(Looper.getMainLooper()) }
+
+    // Refresh battery and RAM information every five seconds while visible.
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(5000)
+            onRefresh()
+        }
+    }
 
     LaunchedEffect(gameSessionActive) {
         while (gameSessionActive) {

@@ -1,6 +1,7 @@
 package com.kalize.recorder
 
 import android.app.Activity
+import android.media.MediaPlayer
 import android.media.PlaybackParams
 import android.net.Uri
 import android.os.Build
@@ -22,6 +23,7 @@ class VideoPreviewActivity : Activity() {
 
     private var fullScreen = false
     private var playbackSpeed = 1.0f
+    private var preparedPlayer: MediaPlayer? = null
 
     private lateinit var videoView: VideoView
     private lateinit var fullScreenButton: Button
@@ -53,42 +55,32 @@ class VideoPreviewActivity : Activity() {
         }
 
         root.addView(
-            TextView(this).apply {
-                text = "ƘALIZE  /  STUDIO"
-                textSize = 13f
-                letterSpacing = 0.12f
-                setTextColor(accent)
-                setTypeface(null, android.graphics.Typeface.BOLD)
-                gravity = Gravity.CENTER
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 44
-            )
+            makeLabel(
+                "ƘALIZE  /  STUDIO",
+                13f,
+                accent,
+                true
+            ),
+            matchHeight(44)
         )
 
         root.addView(
-            TextView(this).apply {
-                text = "VIDEO PREVIEW"
-                textSize = 25f
-                setTextColor(white)
-                setTypeface(null, android.graphics.Typeface.BOLD)
-                gravity = Gravity.CENTER
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 60
-            )
+            makeLabel(
+                "VIDEO PREVIEW",
+                25f,
+                white,
+                true
+            ),
+            matchHeight(60)
         )
 
         root.addView(
-            TextView(this).apply {
-                text = "Preview your clip and adjust playback speed."
-                textSize = 13f
-                setTextColor(muted)
-                gravity = Gravity.CENTER
-            },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 38
-            )
+            makeLabel(
+                "Preview your clip and control playback.",
+                13f,
+                muted
+            ),
+            matchHeight(38)
         )
 
         videoView = VideoView(this).apply {
@@ -112,47 +104,68 @@ class VideoPreviewActivity : Activity() {
         controller.setAnchorView(videoView)
         videoView.setMediaController(controller)
 
-        playbackStatus = TextView(this).apply {
-            text = "Loading video..."
-            textSize = 12f
-            setTextColor(muted)
+        playbackStatus = makeLabel(
+            "Loading video...",
+            12f,
+            muted
+        )
+
+        root.addView(playbackStatus, matchHeight(36))
+
+        root.addView(
+            makeLabel(
+                "SEEK CONTROLS",
+                11f,
+                accent,
+                true
+            ),
+            matchHeight(30)
+        )
+
+        val seekRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
 
-        root.addView(
-            playbackStatus,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 36
-            )
-        )
-
-        root.addView(
-            TextView(this).apply {
-                text = "PLAYBACK SPEED"
-                textSize = 11f
-                letterSpacing = 0.1f
-                setTextColor(accent)
-                gravity = Gravity.CENTER
-                setTypeface(null, android.graphics.Typeface.BOLD)
+        seekRow.addView(
+            makeButton("−10 SEC", false) {
+                seekVideo(-10000)
             },
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 32
-            )
+            weightedButton()
         )
 
-        speedLabel = TextView(this).apply {
-            text = "Current speed: 1.0×"
-            textSize = 15f
-            setTextColor(white)
-            gravity = Gravity.CENTER
-        }
+        seekRow.addView(
+            makeButton("+10 SEC", false) {
+                seekVideo(10000)
+            },
+            weightedButton()
+        )
 
         root.addView(
-            speedLabel,
+            seekRow,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 36
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                50
             )
         )
+
+        root.addView(
+            makeLabel(
+                "PLAYBACK SPEED",
+                11f,
+                accent,
+                true
+            ),
+            matchHeight(32)
+        )
+
+        speedLabel = makeLabel(
+            "Current speed: 1.0×",
+            15f,
+            white
+        )
+
+        root.addView(speedLabel, matchHeight(36))
 
         val speedRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -160,29 +173,15 @@ class VideoPreviewActivity : Activity() {
         }
 
         listOf(0.5f, 1.0f, 1.5f, 2.0f).forEach { speed ->
-            val button = Button(this).apply {
-                text = "${speed}×"
-                textSize = 12f
-                isAllCaps = false
-                setTextColor(white)
-                backgroundTintList = android.content.res.ColorStateList.valueOf(
-                    if (speed == 1.0f) accent else
-                        android.graphics.Color.rgb(49, 55, 76)
-                )
-                setOnClickListener {
-                    setPlaybackSpeed(speed)
-                }
-            }
 
             speedRow.addView(
-                button,
-                LinearLayout.LayoutParams(
-                    0,
-                    48,
-                    1f
-                ).apply {
-                    marginEnd = 4
-                }
+                makeButton(
+                    "${speed}×",
+                    speed == 1.0f
+                ) {
+                    setPlaybackSpeed(speed)
+                },
+                weightedButton()
             )
         }
 
@@ -198,60 +197,51 @@ class VideoPreviewActivity : Activity() {
         )
 
         videoView.setOnPreparedListener { player ->
-            playbackStatus.text = "Video ready • Playback controls available"
+
+            preparedPlayer = player
+
+            playbackStatus.text =
+                "Video ready • Playback controls available"
+
+            applyPlaybackSpeed()
+
             player.start()
-            setPlaybackSpeed(playbackSpeed)
         }
 
         videoView.setOnCompletionListener {
-            playbackStatus.text = "Preview finished • Replay using the controls"
+            playbackStatus.text =
+                "Preview finished • Replay using the controls"
         }
 
         videoView.setOnErrorListener { _, _, _ ->
-            playbackStatus.text = "Could not play this video format."
+            playbackStatus.text =
+                "Could not play this video format."
             true
         }
 
-        fullScreenButton = Button(this).apply {
-            text = "⛶  ENTER FULL SCREEN"
-            isAllCaps = false
-            setTextColor(white)
-            backgroundTintList =
-                android.content.res.ColorStateList.valueOf(accent)
-            setOnClickListener {
-                toggleFullScreen()
-            }
+        fullScreenButton = makeButton(
+            "⛶  ENTER FULL SCREEN",
+            true
+        ) {
+            toggleFullScreen()
         }
 
         root.addView(
             fullScreenButton,
-            LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 52
-            ).apply {
-                topMargin = 10
-            }
+            matchHeight(52)
         )
 
-        val closeButton = Button(this).apply {
-            text = "BACK TO VIDEO EDITOR"
-            isAllCaps = false
-            setTextColor(white)
-            backgroundTintList =
-                android.content.res.ColorStateList.valueOf(
-                    android.graphics.Color.rgb(49, 55, 76)
-                )
-            setOnClickListener {
-                if (videoView.isPlaying) {
-                    videoView.stopPlayback()
-                }
-                finish()
-            }
-        }
-
         root.addView(
-            closeButton,
+            makeButton(
+                "BACK TO VIDEO EDITOR",
+                false
+            ) {
+                videoView.stopPlayback()
+                finish()
+            },
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 54
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                54
             ).apply {
                 topMargin = 8
             }
@@ -260,57 +250,169 @@ class VideoPreviewActivity : Activity() {
         setContentView(root)
     }
 
+    private fun makeLabel(
+        value: String,
+        size: Float,
+        color: Int,
+        bold: Boolean = false
+    ): TextView {
+        return TextView(this).apply {
+            text = value
+            textSize = size
+            setTextColor(color)
+            gravity = Gravity.CENTER
+
+            if (bold) {
+                setTypeface(
+                    null,
+                    android.graphics.Typeface.BOLD
+                )
+            }
+        }
+    }
+
+    private fun makeButton(
+        value: String,
+        primary: Boolean,
+        action: () -> Unit
+    ): Button {
+        return Button(this).apply {
+            text = value
+            textSize = 12f
+            isAllCaps = false
+            setTextColor(white)
+
+            backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    if (primary) {
+                        accent
+                    } else {
+                        android.graphics.Color.rgb(49, 55, 76)
+                    }
+                )
+
+            setOnClickListener {
+                action()
+            }
+        }
+    }
+
+    private fun matchHeight(height: Int): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            height
+        )
+    }
+
+    private fun weightedButton(): LinearLayout.LayoutParams {
+        return LinearLayout.LayoutParams(
+            0,
+            48,
+            1f
+        ).apply {
+            marginEnd = 4
+        }
+    }
+
     private fun setPlaybackSpeed(speed: Float) {
+
         playbackSpeed = speed
 
-        speedLabel.text = "Current speed: ${speed}×"
+        speedLabel.text =
+            "Current speed: ${speed}×"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            try {
-                videoView.setOnPreparedListener { player ->
-                    player.playbackParams = PlaybackParams().setSpeed(speed)
-                    playbackStatus.text =
-                        "Video ready • Playback speed ${speed}×"
-                    player.start()
-                }
-
-                // Apply immediately if the video is already prepared.
-                if (videoView.isPlaying) {
-                    videoView.setOnPreparedListener { player ->
-                        player.playbackParams =
-                            PlaybackParams().setSpeed(speed)
-                    }
-                }
-            } catch (_: Exception) {
-                playbackStatus.text =
-                    "This device does not support the selected speed."
-            }
-        } else {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             playbackStatus.text =
-                "Playback speed controls require Android 6.0 or newer."
+                "Playback speed requires Android 6.0 or newer."
+            return
+        }
+
+        if (preparedPlayer == null) {
+            playbackStatus.text =
+                "Speed selected. It will apply when the video loads."
+            return
+        }
+
+        applyPlaybackSpeed()
+    }
+
+    private fun applyPlaybackSpeed() {
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+
+        try {
+            val player = preparedPlayer ?: return
+
+            player.playbackParams =
+                PlaybackParams().setSpeed(playbackSpeed)
+
+            playbackStatus.text =
+                "Video ready • Playback speed ${playbackSpeed}×"
+
+        } catch (_: Exception) {
+
+            playbackStatus.text =
+                "This device does not support the selected speed."
+        }
+    }
+
+    private fun seekVideo(milliseconds: Int) {
+
+        if (!videoView.isPlaying && preparedPlayer == null) {
+            playbackStatus.text = "Wait for the video to load."
+            return
+        }
+
+        try {
+            val current = videoView.currentPosition
+
+            val duration = videoView.duration
+
+            val target = (current + milliseconds)
+                .coerceIn(0, duration.coerceAtLeast(0))
+
+            videoView.seekTo(target)
+
+            playbackStatus.text =
+                "Position: ${target / 1000} seconds"
+
+        } catch (_: Exception) {
+
+            playbackStatus.text =
+                "Could not change video position."
         }
     }
 
     private fun toggleFullScreen() {
+
         fullScreen = !fullScreen
 
         if (fullScreen) {
+
             window.decorView.systemUiVisibility = (
                 View.SYSTEM_UI_FLAG_FULLSCREEN
                     or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                     or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 )
 
-            fullScreenButton.text = "⛶  EXIT FULL SCREEN"
+            fullScreenButton.text =
+                "⛶  EXIT FULL SCREEN"
+
         } else {
+
             window.decorView.systemUiVisibility =
                 View.SYSTEM_UI_FLAG_VISIBLE
 
-            fullScreenButton.text = "⛶  ENTER FULL SCREEN"
+            fullScreenButton.text =
+                "⛶  ENTER FULL SCREEN"
         }
     }
 
+    @Deprecated("Uses legacy back callback")
     override fun onBackPressed() {
+
         if (fullScreen) {
             toggleFullScreen()
         } else {
@@ -319,9 +421,13 @@ class VideoPreviewActivity : Activity() {
     }
 
     override fun onDestroy() {
+
+        preparedPlayer = null
+
         if (::videoView.isInitialized) {
             videoView.stopPlayback()
         }
+
         super.onDestroy()
     }
 }

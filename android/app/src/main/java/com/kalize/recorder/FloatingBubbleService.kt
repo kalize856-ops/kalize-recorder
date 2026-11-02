@@ -10,7 +10,10 @@ import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.MotionEvent
@@ -32,11 +35,16 @@ class FloatingBubbleService : Service() {
 
     private var pauseButton: Button? = null
     private var statusText: TextView? = null
+    private var timerText: TextView? = null
 
-    private var minimized = false
     private var recording = false
     private var paused = false
     private var receiverRegistered = false
+
+    private var recordingStartedAt = 0L
+    private var elapsedBeforePause = 0L
+
+    private val handler = Handler(Looper.getMainLooper())
 
     private val purple = Color.rgb(139, 92, 246)
     private val palePurple = Color.rgb(205, 185, 255)
@@ -44,22 +52,52 @@ class FloatingBubbleService : Service() {
     private val green = Color.rgb(40, 160, 105)
     private val blue = Color.rgb(55, 120, 220)
 
+    private val timerRunnable = object : Runnable {
+        override fun run() {
+            updateTimer()
+            handler.postDelayed(this, 1000L)
+        }
+    }
+
     private val stateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action != ScreenRecordingService.ACTION_STATE_CHANGED) return
+            if (intent?.action != ScreenRecordingService.ACTION_STATE_CHANGED) {
+                return
+            }
 
-            recording = intent.getBooleanExtra(
+            val wasRecording = recording
+            val wasPaused = paused
+
+            val newRecording = intent.getBooleanExtra(
                 ScreenRecordingService.EXTRA_IS_RECORDING,
                 false
             )
 
-            paused = intent.getBooleanExtra(
+            val newPaused = intent.getBooleanExtra(
                 ScreenRecordingService.EXTRA_IS_PAUSED,
                 false
             )
 
-            if (!recording) paused = false
+            val now = SystemClock.elapsedRealtime()
+
+            if (!wasRecording && newRecording) {
+                recordingStartedAt = now
+                elapsedBeforePause = 0L
+            } else if (wasRecording && !wasPaused && newPaused) {
+                elapsedBeforePause += now - recordingStartedAt
+                recordingStartedAt = 0L
+            } else if (wasRecording && wasPaused && !newPaused) {
+                recordingStartedAt = now
+            } else if (wasRecording && !newRecording) {
+                recordingStartedAt = 0L
+                elapsedBeforePause = 0L
+            }
+
+            recording = newRecording
+            paused = newPaused
+
             updateControls()
+            updateTimer()
         }
     }
 
@@ -89,7 +127,13 @@ class FloatingBubbleService : Service() {
         recording = prefs.getBoolean("is_recording", false)
         paused = prefs.getBoolean("is_paused", false)
 
-        if (!recording) paused = false
+        if (!recording) {
+            paused = false
+        } else if (!paused) {
+            recordingStartedAt = SystemClock.elapsedRealtime()
+        }
+
+        handler.post(timerRunnable)
     }
 
     override fun onStartCommand(
@@ -237,10 +281,19 @@ class FloatingBubbleService : Service() {
             setTextColor(palePurple)
         }
 
+        val timer = TextView(this).apply {
+            text = "00:00"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+        }
+
         statusText = status
+        timerText = timer
 
         titleColumn.addView(title)
         titleColumn.addView(status)
+        titleColumn.addView(timer)
 
         val dragHandle = TextView(this).apply {
             text = "⠿"
@@ -250,14 +303,19 @@ class FloatingBubbleService : Service() {
             contentDescription = "Drag floating controls"
         }
 
-        header.addView(logo, LinearLayout.LayoutParams(dp(35), dp(35)))
+        header.addView(
+            logo,
+            LinearLayout.LayoutParams(dp(35), dp(35))
+        )
+
         header.addView(
             titleColumn,
-            LinearLayout.LayoutParams(0, dp(40), 1f)
+            LinearLayout.LayoutParams(0, dp(55), 1f)
         )
+
         header.addView(
             dragHandle,
-            LinearLayout.LayoutParams(dp(35), dp(40))
+            LinearLayout.LayoutParams(dp(35), dp(45))
         )
 
         val divider = View(this).apply {
@@ -313,7 +371,7 @@ class FloatingBubbleService : Service() {
 
         mainPanel.addView(
             header,
-            LinearLayout.LayoutParams(dp(230), dp(40))
+            LinearLayout.LayoutParams(dp(230), dp(55))
         )
 
         mainPanel.addView(
@@ -398,6 +456,7 @@ class FloatingBubbleService : Service() {
         }
 
         updateControls()
+        updateTimer()
     }
 
     private fun attachDrag(
@@ -489,7 +548,6 @@ class FloatingBubbleService : Service() {
             wm.removeView(currentPanel)
             wm.addView(bubble, params)
             activeView = bubble
-            minimized = true
         } catch (_: Exception) {
             stopSelf()
         }
@@ -503,11 +561,41 @@ class FloatingBubbleService : Service() {
             wm.removeView(bubble)
             wm.addView(currentPanel, params)
             activeView = currentPanel
-            minimized = false
             updateControls()
         } catch (_: Exception) {
             stopSelf()
         }
+    }
+
+    private fun updateTimer() {
+        val totalMillis = elapsedBeforePause +
+            if (recording && !paused && recordingStartedAt > 0L) {
+                SystemClock.elapsedRealtime() - recordingStartedAt
+            } else {
+                0L
+            }
+
+        val totalSeconds = totalMillis / 1000L
+        val hours = totalSeconds / 3600L
+        val minutes = (totalSeconds % 3600L) / 60L
+        val seconds = totalSeconds % 60L
+
+        val formatted = if (hours > 0) {
+            String.format(
+                "%02d:%02d:%02d",
+                hours,
+                minutes,
+                seconds
+            )
+        } else {
+            String.format(
+                "%02d:%02d",
+                minutes,
+                seconds
+            )
+        }
+
+        timerText?.text = formatted
     }
 
     private fun updateControls() {
@@ -559,6 +647,8 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(timerRunnable)
+
         if (receiverRegistered) {
             try {
                 unregisterReceiver(stateReceiver)
@@ -586,6 +676,7 @@ class FloatingBubbleService : Service() {
         activeView = null
         pauseButton = null
         statusText = null
+        timerText = null
 
         super.onDestroy()
     }

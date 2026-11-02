@@ -61,6 +61,7 @@ class FloatingBubbleService : Service() {
             }
 
             updatePauseButton()
+            updateRecordingAppearance()
         }
     }
 
@@ -380,6 +381,7 @@ class FloatingBubbleService : Service() {
             addControlButton(minimizeButton)
 
             updatePanelPosition()
+            updateRecordingAppearance()
         }
 
         fun showCollapsed() {
@@ -408,6 +410,7 @@ class FloatingBubbleService : Service() {
             }
 
             updatePanelPosition()
+            updateRecordingAppearance()
         }
 
         openButton.setOnClickListener {
@@ -434,6 +437,7 @@ class FloatingBubbleService : Service() {
 
             if (!isRecording) {
                 updatePauseButton()
+                updateRecordingAppearance()
                 return@setOnClickListener
             }
 
@@ -487,10 +491,18 @@ class FloatingBubbleService : Service() {
         try {
             windowManager.addView(panel, layoutParams)
             controlPanel = panel
+            updateRecordingAppearance()
         } catch (_: Exception) {
             controlPanel = null
             stopSelf()
         }
+    }
+
+    private fun updateRecordingAppearance() {
+        // Fade the entire floating panel during recording.
+        // Alpha changes visibility, not touch interaction.
+        val panel = controlPanel ?: return
+        panel.alpha = if (isRecording) 0.45f else 1.0f
     }
 
     private fun updatePauseButton() {

@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Activity
@@ -1078,15 +1079,22 @@ class SavedVideosActivity : Activity() {
 
     private fun playVideo(video: SavedVideo) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(video.uri, "video/*")
+            val intent = Intent(
+                this,
+                VideoPreviewActivity::class.java
+            ).apply {
+                putExtra(
+                    VideoPreviewActivity.EXTRA_VIDEO_URI,
+                    video.uri.toString()
+                )
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
+
             startActivity(intent)
         } catch (_: Exception) {
             Toast.makeText(
                 this,
-                "No compatible video player was found.",
+                "Could not open the Kalize video preview.",
                 Toast.LENGTH_LONG
             ).show()
         }

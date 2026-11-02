@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.Manifest
@@ -347,9 +346,7 @@ private fun KalizeHome(
             } catch (_: Exception) {
             }
         }
-    }
-
-    val folderPicker = rememberLauncherForActivityResult(
+    }    val folderPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
@@ -697,8 +694,7 @@ private fun KalizeHome(
                     }
                 }
 
-                SectionTitle("Capture settings", "Choose how recording starts and looks", mainText, muted)
-
+                SectionTitle("Capture settings", "Choose how recording starts and looks", mainText, muted)               
                 Card(
                     shape = RoundedCornerShape(22.dp),
                     colors = CardDefaults.cardColors(containerColor = panel),
@@ -728,7 +724,17 @@ private fun KalizeHome(
                             "Frame rate",
                             "Target frames per second",
                             fps,
-                            listOf("30 FPS", "60 FPS"),
+                            listOf(
+                                "30 FPS",
+                                "60 FPS",
+                                "90 FPS",
+                                "120 FPS",
+                                "144 FPS",
+                                "165 FPS",
+                                "180 FPS",
+                                "200 FPS",
+                                "240 FPS"
+                            ),
                             mainText,
                             muted,
                             primary

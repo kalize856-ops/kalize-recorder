@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Activity
@@ -30,6 +29,7 @@ class VideoPreviewActivity : Activity() {
 
     private var fullScreen = false
     private var playbackSpeed = 1.0f
+    private var repeatEnabled = false
     private var preparedPlayer: MediaPlayer? = null
     private var userSeeking = false
     private var videoDuration = 0
@@ -42,6 +42,7 @@ class VideoPreviewActivity : Activity() {
     private lateinit var currentTimeLabel: TextView
     private lateinit var remainingTimeLabel: TextView
     private lateinit var playPauseButton: Button
+    private lateinit var repeatButton: Button
 
     private val chromeViews = mutableListOf<View>()
     private val handler = Handler(Looper.getMainLooper())
@@ -280,6 +281,16 @@ class VideoPreviewActivity : Activity() {
         )
         chromeViews.add(speedRow)
 
+        repeatButton = makeButton(
+            "REPEAT: OFF",
+            false
+        ) {
+            toggleRepeat()
+        }
+
+        root.addView(repeatButton, matchHeight(48))
+        chromeViews.add(repeatButton)
+
         fullScreenButton = makeButton(
             "ENTER FULL SCREEN",
             true
@@ -289,7 +300,7 @@ class VideoPreviewActivity : Activity() {
 
         root.addView(fullScreenButton, matchHeight(50))
 
-        // Keep this button visible so full screen can always be exited.
+        // This button remains visible so full screen can always be exited.
 
         val backButton = makeButton(
             "BACK TO VIDEO EDITOR",
@@ -329,12 +340,21 @@ class VideoPreviewActivity : Activity() {
         }
 
         videoView.setOnCompletionListener {
-            playbackStatus.text =
-                "Preview finished • Replay available"
+            if (repeatEnabled) {
+                videoView.seekTo(0)
+                videoView.start()
+                playPauseButton.text = "PAUSE"
+                playbackStatus.text = "Repeating video"
+                timeline.progress = 0
+                updateTimeLabels(0)
+            } else {
+                playbackStatus.text =
+                    "Preview finished • Replay available"
 
-            playPauseButton.text = "REPLAY"
-            timeline.progress = timeline.max
-            updateTimeLabels(videoDuration)
+                playPauseButton.text = "REPLAY"
+                timeline.progress = timeline.max
+                updateTimeLabels(videoDuration)
+            }
         }
 
         videoView.setOnErrorListener { _, _, _ ->
@@ -475,6 +495,21 @@ class VideoPreviewActivity : Activity() {
             }
         } catch (_: Exception) {
             playbackStatus.text = "Playback is not ready yet."
+        }
+    }
+
+    private fun toggleRepeat() {
+        repeatEnabled = !repeatEnabled
+        repeatButton.text = if (repeatEnabled) {
+            "REPEAT: ON"
+        } else {
+            "REPEAT: OFF"
+        }
+
+        playbackStatus.text = if (repeatEnabled) {
+            "Repeat enabled • Video loops at the end"
+        } else {
+            "Repeat disabled"
         }
     }
 

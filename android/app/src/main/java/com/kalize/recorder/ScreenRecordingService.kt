@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Notification
@@ -90,7 +91,7 @@ class ScreenRecordingService : Service() {
             return 0L
         }
 
-        val now = System.currentTimeMillis()
+        val now = SystemClock.elapsedRealtime()
         val currentPause = if (recordingPaused && pauseStartedAt > 0L) {
             now - pauseStartedAt
         } else {
@@ -255,7 +256,7 @@ class ScreenRecordingService : Service() {
 
         try {
             recorder?.pause()
-            pauseStartedAt = System.currentTimeMillis()
+            pauseStartedAt = SystemClock.elapsedRealtime()
             recordingPaused = true
 
             publishRecordingState()
@@ -277,7 +278,8 @@ class ScreenRecordingService : Service() {
             recorder?.resume()
 
             if (pauseStartedAt > 0L) {
-                totalPausedMillis += System.currentTimeMillis() - pauseStartedAt
+                totalPausedMillis +=
+                    SystemClock.elapsedRealtime() - pauseStartedAt
             }
 
             pauseStartedAt = 0L
@@ -445,7 +447,7 @@ class ScreenRecordingService : Service() {
 
         recordingStarted = true
         recordingPaused = false
-        recordingStartTime = System.currentTimeMillis()
+        recordingStartTime = SystemClock.elapsedRealtime()
         totalPausedMillis = 0L
         pauseStartedAt = 0L
 
@@ -754,7 +756,7 @@ class ScreenRecordingService : Service() {
 
         if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
             val effectiveStartTime =
-                System.currentTimeMillis() - elapsedRecordingMillis()
+                SystemClock.elapsedRealtime() - elapsedRecordingMillis()
 
             builder.setWhen(effectiveStartTime)
                 .setUsesChronometer(true)

@@ -85,20 +85,16 @@ class VideoPreviewActivity : Activity() {
 
         savedPosition = savedInstanceState?.getInt(STATE_POSITION, 0) ?: 0
         shouldResume = savedInstanceState?.getBoolean(
-            STATE_WAS_PLAYING,
-            true
+            STATE_WAS_PLAYING, true
         ) ?: true
         playbackSpeed = savedInstanceState?.getFloat(
-            STATE_SPEED,
-            1.0f
+            STATE_SPEED, 1.0f
         ) ?: 1.0f
         repeatEnabled = savedInstanceState?.getBoolean(
-            STATE_REPEAT,
-            false
+            STATE_REPEAT, false
         ) ?: false
 
         val uriText = intent.getStringExtra(EXTRA_VIDEO_URI)
-
         if (uriText.isNullOrBlank()) {
             finish()
             return
@@ -122,9 +118,7 @@ class VideoPreviewActivity : Activity() {
         chromeViews.add(heading)
 
         val subtitle = makeLabel(
-            "Your video, your playback controls.",
-            13f,
-            muted
+            "Your video, your playback controls.", 13f, muted
         )
         root.addView(subtitle, matchHeight(35))
         chromeViews.add(subtitle)
@@ -138,9 +132,7 @@ class VideoPreviewActivity : Activity() {
         root.addView(
             videoView,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                0,
-                1f
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f
             ).apply {
                 topMargin = dp(10)
                 bottomMargin = dp(10)
@@ -156,10 +148,7 @@ class VideoPreviewActivity : Activity() {
         chromeViews.add(playbackStatus)
 
         val timelineTitle = makeLabel(
-            "PLAYBACK TIMELINE",
-            11f,
-            accent,
-            true
+            "PLAYBACK TIMELINE", 11f, accent, true
         )
         root.addView(timelineTitle, matchHeight(28))
         chromeViews.add(timelineTitle)
@@ -212,7 +201,6 @@ class VideoPreviewActivity : Activity() {
             currentTimeLabel,
             LinearLayout.LayoutParams(0, dp(35), 1f)
         )
-
         timeRow.addView(
             remainingTimeLabel,
             LinearLayout.LayoutParams(0, dp(35), 1f).apply {
@@ -229,44 +217,37 @@ class VideoPreviewActivity : Activity() {
         }
 
         playbackRow.addView(
-            makeButton("−10 SEC", false) {
-                seekVideo(-10000)
-            },
+            makeButton("−10 SEC", false) { seekVideo(-10000) },
             weightedButton()
         )
 
         playPauseButton = makeButton("PAUSE", true) {
             togglePlayback()
         }
-
         playbackRow.addView(playPauseButton, weightedButton())
 
         playbackRow.addView(
-            makeButton("+10 SEC", false) {
-                seekVideo(10000)
-            },
+            makeButton("+10 SEC", false) { seekVideo(10000) },
             weightedButton()
         )
 
         root.addView(
             playbackRow,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(52)
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(52)
             )
         )
         chromeViews.add(playbackRow)
 
         val speedTitle = makeLabel(
-            "PLAYBACK SPEED",
-            11f,
-            accent,
-            true
+            "PLAYBACK SPEED", 11f, accent, true
         )
         root.addView(speedTitle, matchHeight(30))
         chromeViews.add(speedTitle)
 
-        speedLabel = makeLabel("Current speed: ${playbackSpeed}×", 14f, white)
+        speedLabel = makeLabel(
+            "Current speed: ${playbackSpeed}×", 14f, white
+        )
         root.addView(speedLabel, matchHeight(32))
         chromeViews.add(speedLabel)
 
@@ -287,8 +268,7 @@ class VideoPreviewActivity : Activity() {
         root.addView(
             speedRow,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(48)
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48)
             )
         )
         chromeViews.add(speedRow)
@@ -299,25 +279,21 @@ class VideoPreviewActivity : Activity() {
         ) {
             toggleRepeat()
         }
-
         root.addView(repeatButton, matchHeight(48))
         chromeViews.add(repeatButton)
 
         fullScreenButton = makeButton("ENTER FULL SCREEN", true) {
             toggleFullScreen()
         }
-
         root.addView(fullScreenButton, matchHeight(50))
 
         val backButton = makeButton("BACK TO VIDEO EDITOR", false) {
             finish()
         }
-
         root.addView(
             backButton,
             LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                dp(50)
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50)
             ).apply {
                 topMargin = dp(7)
             }
@@ -329,7 +305,8 @@ class VideoPreviewActivity : Activity() {
             isPrepared = true
             videoDuration = videoView.duration.coerceAtLeast(0)
 
-            player.setOnVideoSizeChangedListener { _, _, _, _ ->
+            // MediaPlayer.OnVideoSizeChangedListener takes exactly 3 parameters.
+            player.setOnVideoSizeChangedListener { _, _, _ ->
                 videoView.requestLayout()
             }
 
@@ -395,7 +372,6 @@ class VideoPreviewActivity : Activity() {
         outState.putBoolean(STATE_WAS_PLAYING, shouldResume)
         outState.putFloat(STATE_SPEED, playbackSpeed)
         outState.putBoolean(STATE_REPEAT, repeatEnabled)
-
         super.onSaveInstanceState(outState)
     }
 
@@ -433,8 +409,7 @@ class VideoPreviewActivity : Activity() {
 
     private fun matchHeight(height: Int): LinearLayout.LayoutParams {
         return LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            dp(height)
+            ViewGroup.LayoutParams.MATCH_PARENT, dp(height)
         )
     }
 
@@ -456,11 +431,8 @@ class VideoPreviewActivity : Activity() {
 
         return if (hours > 0) {
             String.format(
-                Locale.US,
-                "%d:%02d:%02d",
-                hours,
-                remainingMinutes,
-                seconds
+                Locale.US, "%d:%02d:%02d",
+                hours, remainingMinutes, seconds
             )
         } else {
             String.format(Locale.US, "%02d:%02d", minutes, seconds)
@@ -494,7 +466,9 @@ class VideoPreviewActivity : Activity() {
                 playPauseButton.text = "PLAY"
                 playbackStatus.text = "Playback paused"
             } else {
-                if (videoDuration > 0 && videoView.currentPosition >= videoDuration) {
+                if (videoDuration > 0 &&
+                    videoView.currentPosition >= videoDuration
+                ) {
                     videoView.seekTo(0)
                     savedPosition = 0
                 }
@@ -510,7 +484,8 @@ class VideoPreviewActivity : Activity() {
 
     private fun toggleRepeat() {
         repeatEnabled = !repeatEnabled
-        repeatButton.text = if (repeatEnabled) "REPEAT: ON" else "REPEAT: OFF"
+        repeatButton.text =
+            if (repeatEnabled) "REPEAT: ON" else "REPEAT: OFF"
         playbackStatus.text = if (repeatEnabled) {
             "Repeat enabled • Video loops at the end"
         } else {
@@ -523,12 +498,14 @@ class VideoPreviewActivity : Activity() {
         speedLabel.text = "Current speed: ${speed}×"
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            playbackStatus.text = "Speed control requires Android 6.0 or newer."
+            playbackStatus.text =
+                "Speed control requires Android 6.0 or newer."
             return
         }
 
         if (preparedPlayer == null) {
-            playbackStatus.text = "Speed selected. It will apply when ready."
+            playbackStatus.text =
+                "Speed selected. It will apply when ready."
             return
         }
 
@@ -540,9 +517,11 @@ class VideoPreviewActivity : Activity() {
 
         try {
             val player = preparedPlayer ?: return
-            player.playbackParams = PlaybackParams().setSpeed(playbackSpeed)
+            player.playbackParams =
+                PlaybackParams().setSpeed(playbackSpeed)
         } catch (_: Exception) {
-            playbackStatus.text = "This device does not support that speed."
+            playbackStatus.text =
+                "This device does not support that speed."
         }
     }
 
@@ -590,7 +569,8 @@ class VideoPreviewActivity : Activity() {
                 }
 
             videoView.requestLayout()
-            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
+            window.decorView.systemUiVisibility =
+                View.SYSTEM_UI_FLAG_VISIBLE
         }
     }
 
@@ -621,7 +601,6 @@ class VideoPreviewActivity : Activity() {
             } catch (_: Exception) {
             }
         }
-
         super.onPause()
     }
 

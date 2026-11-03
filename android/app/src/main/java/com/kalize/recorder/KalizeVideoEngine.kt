@@ -1,9 +1,11 @@
+
 package com.kalize.recorder
 
 import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.Effect
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.effect.Crop
@@ -47,28 +49,54 @@ class KalizeVideoEngine(context: Context) {
     private var currentListener: ExportListener? = null
 
     private val exporting = AtomicBoolean(false)
+    private val lock = Any()
+
+    private var exportGeneration = 0
 
     private val progressHolder = ProgressHolder()
 
     private val progressRunnable = object : Runnable {
         override fun run() {
-            val activeTransformer = transformer ?: return
+            val activeTransformer: Transformer
+            val activeGeneration: Int
 
-            if (!exporting.get()) return
+            synchronized(lock) {
+                if (!exporting.get()) return
+
+                activeTransformer = transformer ?: return
+                activeGeneration = exportGeneration
+            }
 
             try {
                 val state = activeTransformer.getProgress(progressHolder)
 
                 if (state == Transformer.PROGRESS_STATE_AVAILABLE) {
                     val progress = progressHolder.progress.coerceIn(0, 99)
-                    currentListener?.onProgress(progress)
+
+                    val listener = synchronized(lock) {
+                        if (
+                            exporting.get() &&
+                            exportGeneration == activeGeneration
+                        ) {
+                            currentListener
+                        } else {
+                            null
+                        }
+                    }
+
+                    listener?.onProgress(progress)
                 }
             } catch (_: Exception) {
-                // Progress reporting must not interrupt an export.
+                // Progress reporting must never interrupt video processing.
             }
 
-            if (exporting.get()) {
-                mainHandler.postDelayed(this, 500)
+            synchronized(lock) {
+                if (
+                    exporting.get() &&
+                    exportGeneration == activeGeneration
+                ) {
+                    mainHandler.postDelayed(this, 500)
+                }
             }
         }
     }
@@ -78,38 +106,22 @@ class KalizeVideoEngine(context: Context) {
         settings: EditSettings,
         listener: ExportListener
     ) {
-        if (!exporting.compareAndSet(false, true)) {
-            listener.onError("Another video export is already running.")
-            return
+        synchronized(lock) {
+            if (!exporting.compareAndSet(false, true)) {
+                mainHandler.post {
+                    listener.onError(
+                        "Another video export is already running."
+                    )
+                }
+                return
+            }
+
+            exportGeneration++
+            currentListener = listener
         }
 
-        currentListener = listener
-
         try {
-            require(settings.startMs >= 0L) {
-                "The start time cannot be negative."
-            }
-
-            require(settings.endMs > settings.startMs) {
-                "The end time must be after the start time."
-            }
-
-            require(settings.rotationDegrees in 0f..360f) {
-                "The selected rotation is invalid."
-            }
-
-            if (settings.cropEnabled) {
-                require(
-                    settings.cropLeft >= -1f &&
-                    settings.cropRight <= 1f &&
-                    settings.cropBottom >= -1f &&
-                    settings.cropTop <= 1f &&
-                    settings.cropLeft < settings.cropRight &&
-                    settings.cropBottom < settings.cropTop
-                ) {
-                    "The selected crop area is invalid."
-                }
-            }
+            validateSettings(settings)
 
             val clipping = MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs(settings.startMs)
@@ -121,7 +133,7 @@ class KalizeVideoEngine(context: Context) {
                 .setClippingConfiguration(clipping)
                 .build()
 
-            val videoEffects = mutableListOf<androidx.media3.common.Effect>()
+            val videoEffects = mutableListOf<Effect>()
 
             if (settings.rotationDegrees != 0f) {
                 videoEffects.add(
@@ -158,7 +170,17 @@ class KalizeVideoEngine(context: Context) {
                 appContext.cacheDir
             )
 
-            currentOutput = output
+            val generation: Int
+
+            synchronized(lock) {
+                if (!exporting.get()) {
+                    output.delete()
+                    return
+                }
+
+                generation = exportGeneration
+                currentOutput = output
+            }
 
             val newTransformer = Transformer.Builder(appContext)
                 .addListener(
@@ -168,17 +190,31 @@ class KalizeVideoEngine(context: Context) {
                             composition: Composition,
                             exportResult: ExportResult
                         ) {
-                            exporting.set(false)
-                            mainHandler.removeCallbacks(progressRunnable)
+                            val completedListener: ExportListener?
 
-                            transformer = null
-                            currentOutput = null
+                            synchronized(lock) {
+                                if (
+                                    !exporting.get() ||
+                                    exportGeneration != generation
+                                ) {
+                                    output.delete()
+                                    return
+                                }
 
-                            val completedListener = currentListener
-                            currentListener = null
+                                exporting.set(false)
+                                mainHandler.removeCallbacks(progressRunnable)
 
-                            completedListener?.onProgress(100)
-                            completedListener?.onCompleted(output)
+                                transformer = null
+                                currentOutput = null
+
+                                completedListener = currentListener
+                                currentListener = null
+                            }
+
+                            mainHandler.post {
+                                completedListener?.onProgress(100)
+                                completedListener?.onCompleted(output)
+                            }
                         }
 
                         override fun onError(
@@ -186,27 +222,48 @@ class KalizeVideoEngine(context: Context) {
                             exportResult: ExportResult,
                             exportException: ExportException
                         ) {
-                            exporting.set(false)
-                            mainHandler.removeCallbacks(progressRunnable)
+                            val errorListener: ExportListener?
 
-                            transformer = null
+                            synchronized(lock) {
+                                if (exportGeneration != generation) {
+                                    output.delete()
+                                    return
+                                }
+
+                                exporting.set(false)
+                                mainHandler.removeCallbacks(progressRunnable)
+
+                                transformer = null
+                                currentOutput = null
+
+                                errorListener = currentListener
+                                currentListener = null
+                            }
 
                             output.delete()
-                            currentOutput = null
 
-                            val errorListener = currentListener
-                            currentListener = null
+                            val message = exportException.message
+                                ?: "The video could not be processed."
 
-                            errorListener?.onError(
-                                exportException.message
-                                    ?: "The video could not be processed."
-                            )
+                            mainHandler.post {
+                                errorListener?.onError(message)
+                            }
                         }
                     }
                 )
                 .build()
 
-            transformer = newTransformer
+            synchronized(lock) {
+                if (
+                    !exporting.get() ||
+                    exportGeneration != generation
+                ) {
+                    output.delete()
+                    return
+                }
+
+                transformer = newTransformer
+            }
 
             newTransformer.start(
                 editedItem,
@@ -216,48 +273,104 @@ class KalizeVideoEngine(context: Context) {
             mainHandler.post(progressRunnable)
 
         } catch (error: Exception) {
-            exporting.set(false)
-            mainHandler.removeCallbacks(progressRunnable)
+            val errorListener: ExportListener?
 
-            transformer = null
+            synchronized(lock) {
+                exporting.set(false)
+                mainHandler.removeCallbacks(progressRunnable)
 
-            currentOutput?.delete()
-            currentOutput = null
+                transformer = null
+                currentOutput?.delete()
+                currentOutput = null
 
-            currentListener?.onError(
-                error.message ?: "Could not start video export."
-            )
+                errorListener = currentListener
+                currentListener = null
+            }
 
-            currentListener = null
+            val message = error.message
+                ?: "Could not start video export."
+
+            mainHandler.post {
+                errorListener?.onError(message)
+            }
+        }
+    }
+
+    private fun validateSettings(settings: EditSettings) {
+        require(settings.startMs >= 0L) {
+            "The start time cannot be negative."
+        }
+
+        require(settings.endMs > settings.startMs) {
+            "The end time must be after the start time."
+        }
+
+        require(
+            settings.rotationDegrees.isFinite() &&
+                settings.rotationDegrees in 0f..360f
+        ) {
+            "The selected rotation is invalid."
+        }
+
+        if (settings.cropEnabled) {
+            require(
+                settings.cropLeft.isFinite() &&
+                    settings.cropRight.isFinite() &&
+                    settings.cropBottom.isFinite() &&
+                    settings.cropTop.isFinite() &&
+                    settings.cropLeft >= -1f &&
+                    settings.cropRight <= 1f &&
+                    settings.cropBottom >= -1f &&
+                    settings.cropTop <= 1f &&
+                    settings.cropLeft < settings.cropRight &&
+                    settings.cropBottom < settings.cropTop
+            ) {
+                "The selected crop area is invalid."
+            }
         }
     }
 
     fun cancelExport() {
-        mainHandler.removeCallbacks(progressRunnable)
+        val activeTransformer: Transformer?
+        val output: File?
+        val listener: ExportListener?
+
+        synchronized(lock) {
+            if (!exporting.get()) return
+
+            exportGeneration++
+
+            exporting.set(false)
+            mainHandler.removeCallbacks(progressRunnable)
+
+            activeTransformer = transformer
+            transformer = null
+
+            output = currentOutput
+            currentOutput = null
+
+            listener = currentListener
+            currentListener = null
+        }
 
         try {
-            transformer?.cancel()
+            activeTransformer?.cancel()
         } catch (_: Exception) {
         }
 
-        transformer = null
+        output?.delete()
 
-        currentOutput?.delete()
-        currentOutput = null
-
-        exporting.set(false)
-
-        val listener = currentListener
-        currentListener = null
-
-        listener?.onError("Video export was cancelled.")
+        mainHandler.post {
+            listener?.onError("Video export was cancelled.")
+        }
     }
 
     fun release() {
-        if (exporting.get()) {
-            cancelExport()
-        } else {
+        cancelExport()
+
+        synchronized(lock) {
             mainHandler.removeCallbacks(progressRunnable)
+
             transformer = null
             currentOutput?.delete()
             currentOutput = null

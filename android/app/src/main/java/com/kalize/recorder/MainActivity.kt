@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.Manifest
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -247,7 +249,8 @@ private fun KalizeHome(
     var recording by remember { mutableStateOf(false) }
     var paused by remember { mutableStateOf(false) }
     var requesting by remember { mutableStateOf(false) }
-    var elapsedSeconds by remember { mutableIntStateOf(0) }
+    var elapsedMillis by remember { mutableLongStateOf(0L) }
+    var savedElapsedRealtime by remember { mutableLongStateOf(0L) }
     var showAbout by remember { mutableStateOf(false) }
 
     var quality by remember { mutableStateOf(initialQuality) }
@@ -274,16 +277,32 @@ private fun KalizeHome(
     val accent = if (darkMode) Color(0xFFB7A0FF) else Color(0xFF6846C6)
 
     LaunchedEffect(recording, paused) {
-        while (recording && !paused) {
-            delay(1000)
-            elapsedSeconds++
+        while (recording) {
+            if (!paused && savedElapsedRealtime > 0L) {
+                elapsedMillis = recordingPrefs.getLong("recording_elapsed_ms", elapsedMillis) +
+                    (SystemClock.elapsedRealtime() - savedElapsedRealtime).coerceAtLeast(0L)
+            } else {
+                elapsedMillis = recordingPrefs.getLong("recording_elapsed_ms", elapsedMillis)
+            }
+            delay(250)
         }
     }
 
     DisposableEffect(context) {
 
-        fun refresh(isRecording: Boolean, isPaused: Boolean) {
-            if (isRecording && !recording) elapsedSeconds = 0
+        fun refresh(isRecording: Boolean, isPaused: Boolean, broadcastElapsed: Long? = null) {
+            val storedElapsed = recordingPrefs.getLong("recording_elapsed_ms", 0L)
+            val storedRealtime = recordingPrefs.getLong("recording_elapsed_realtime_ms", 0L)
+            elapsedMillis = broadcastElapsed ?: storedElapsed
+            savedElapsedRealtime = storedRealtime
+            if (isRecording && !isPaused && storedRealtime > 0L) {
+                elapsedMillis = storedElapsed +
+                    (SystemClock.elapsedRealtime() - storedRealtime).coerceAtLeast(0L)
+            }
+            if (!isRecording) {
+                elapsedMillis = 0L
+                savedElapsedRealtime = 0L
+            }
             recording = isRecording
             paused = isPaused
             requesting = false
@@ -305,6 +324,10 @@ private fun KalizeHome(
                         intent.getBooleanExtra(
                             ScreenRecordingService.EXTRA_IS_PAUSED,
                             false
+                        ),
+                        intent.getLongExtra(
+                            ScreenRecordingService.EXTRA_ELAPSED_MILLIS,
+                            recordingPrefs.getLong("recording_elapsed_ms", 0L)
                         )
                     )
                 }
@@ -482,9 +505,9 @@ private fun KalizeHome(
 
                             Text(
                                 "%02d:%02d:%02d".format(
-                                    elapsedSeconds / 3600,
-                                    (elapsedSeconds % 3600) / 60,
-                                    elapsedSeconds % 60
+                                    elapsedMillis / 3_600_000L,
+                                    (elapsedMillis / 60_000L) % 60L,
+                                    (elapsedMillis / 1_000L) % 60L
                                 ),
                                 color = accent,
                                 fontSize = 36.sp,
@@ -504,10 +527,10 @@ private fun KalizeHome(
                                         recording = false
                                         paused = false
                                         requesting = false
-                                        elapsedSeconds = 0
+                                        elapsedMillis = 0L
                                         status = "Stop requested. Check your library."
                                     } else {
-                                        elapsedSeconds = 0
+                                        elapsedMillis = 0L
                                         requesting = true
                                         status = "Approve Android's screen-capture prompt."
 

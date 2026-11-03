@@ -761,6 +761,9 @@ class VideoEditorActivity : Activity() {
             cropTop = crop?.get(3) ?: 1f
         )
 
+        // Capture the filename on the UI thread before background work.
+        val requestedName = exportNameInput.text.toString()
+
         exportInProgress = true
         exportButton.isEnabled = false
         exportButton.text = "Processing video..."
@@ -793,7 +796,7 @@ class VideoEditorActivity : Activity() {
 
                     executor.execute {
                         try {
-                            val requestedName = exportNameInput.text.toString()
+                            // Use the captured filename, not the UI field.
                             val savedUri = saveExport(outputFile, requestedName)
                             outputFile.delete()
 

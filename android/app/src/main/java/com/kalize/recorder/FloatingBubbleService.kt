@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Service
@@ -46,15 +45,58 @@ class FloatingBubbleService : Service() {
     private var recordingStartedAt = 0L
     private var elapsedBeforePause = 0L
 
+    private var savedBubbleX = 0
+    private var savedBubbleY = 0
+
     private val positionPrefs by lazy {
         getSharedPreferences("kalize_bubble_position", Context.MODE_PRIVATE)
     }
 
+    private fun loadBubblePosition() {
+        savedBubbleX = positionPrefs.getInt("bubble_x", dp(12))
+        savedBubbleY = positionPrefs.getInt("bubble_y", dp(220))
+    }
+
     private fun saveBubblePosition() {
+        savedBubbleX = params.x
+        savedBubbleY = params.y
+
         positionPrefs.edit()
-            .putInt("bubble_x", params.x)
-            .putInt("bubble_y", params.y)
+            .putInt("bubble_x", savedBubbleX)
+            .putInt("bubble_y", savedBubbleY)
             .apply()
+    }
+
+    private fun restoreBubblePosition() {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+
+        params.x = savedBubbleX.coerceIn(
+            0, (screenWidth - dp(60)).coerceAtLeast(0)
+        )
+        params.y = savedBubbleY.coerceIn(
+            0, (screenHeight - dp(60)).coerceAtLeast(0)
+        )
+    }
+
+    private fun positionExpandedPanel(view: View) {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+
+        val panelWidth = if (view.width > 0) view.width else dp(286)
+        val panelHeight = if (view.height > 0) view.height else dp(120)
+
+        params.x = savedBubbleX.coerceIn(
+            0, (screenWidth - panelWidth).coerceAtLeast(0)
+        )
+        params.y = savedBubbleY.coerceIn(
+            0, (screenHeight - panelHeight).coerceAtLeast(0)
+        )
+
+        try {
+            wm.updateViewLayout(view, params)
+        } catch (_: Exception) {
+        }
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -131,6 +173,8 @@ class FloatingBubbleService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+
+        loadBubblePosition()
 
         val filter = IntentFilter(ScreenRecordingService.ACTION_STATE_CHANGED)
 
@@ -318,13 +362,10 @@ class FloatingBubbleService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
 
-            val savedX = positionPrefs.getInt("bubble_x", dp(12))
-            val savedY = positionPrefs.getInt("bubble_y", dp(220))
-
-            x = savedX.coerceIn(
+            x = savedBubbleX.coerceIn(
                 0, (screenWidth - dp(60)).coerceAtLeast(0)
             )
-            y = savedY.coerceIn(
+            y = savedBubbleY.coerceIn(
                 0, (screenHeight - dp(60)).coerceAtLeast(0)
             )
 
@@ -439,10 +480,7 @@ class FloatingBubbleService : Service() {
         ).forEach { button ->
             controls.addView(
                 button,
-                LinearLayout.LayoutParams(
-                    buttonWidth,
-                    dp(38)
-                ).apply {
+                LinearLayout.LayoutParams(buttonWidth, dp(38)).apply {
                     marginStart = dp(1)
                     marginEnd = dp(1)
                 }
@@ -515,6 +553,12 @@ class FloatingBubbleService : Service() {
         } catch (_: Exception) {
             stopSelf()
             return
+        }
+
+        mainPanel.post {
+            if (activeView === mainPanel) {
+                positionExpandedPanel(mainPanel)
+            }
         }
 
         updateControls()
@@ -608,7 +652,10 @@ class FloatingBubbleService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (moved) {
                         snapToSide(view)
-                        saveBubblePosition()
+
+                        if (view === miniBubble) {
+                            saveBubblePosition()
+                        }
                     } else {
                         onTap?.invoke()
                     }
@@ -635,8 +682,6 @@ class FloatingBubbleService : Service() {
             wm.updateViewLayout(view, params)
         } catch (_: Exception) {
         }
-
-        saveBubblePosition()
     }
 
     private fun minimizeControls() {
@@ -647,6 +692,7 @@ class FloatingBubbleService : Service() {
 
         try {
             wm.removeView(currentPanel)
+            restoreBubblePosition()
             wm.addView(bubble, params)
             activeView = bubble
         } catch (_: Exception) {
@@ -660,8 +706,17 @@ class FloatingBubbleService : Service() {
 
         try {
             wm.removeView(bubble)
+
+            restoreBubblePosition()
             wm.addView(currentPanel, params)
             activeView = currentPanel
+
+            currentPanel.post {
+                if (activeView === currentPanel) {
+                    positionExpandedPanel(currentPanel)
+                }
+            }
+
             updateControls()
             updateTimer()
         } catch (_: Exception) {

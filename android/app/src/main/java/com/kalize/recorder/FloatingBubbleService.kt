@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Service
@@ -52,6 +53,19 @@ class FloatingBubbleService : Service() {
         getSharedPreferences("kalize_bubble_position", Context.MODE_PRIVATE)
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val purple = Color.rgb(139, 92, 246)
+    private val palePurple = Color.rgb(205, 185, 255)
+    private val red = Color.rgb(225, 55, 70)
+    private val green = Color.rgb(40, 160, 105)
+    private val blue = Color.rgb(55, 120, 220)
+    private val orange = Color.rgb(220, 130, 45)
+    private val amber = Color.rgb(235, 165, 55)
+
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
+
     private fun loadBubblePosition() {
         savedBubbleX = positionPrefs.getInt("bubble_x", dp(12))
         savedBubbleY = positionPrefs.getInt("bubble_y", dp(220))
@@ -98,16 +112,6 @@ class FloatingBubbleService : Service() {
         } catch (_: Exception) {
         }
     }
-
-    private val handler = Handler(Looper.getMainLooper())
-
-    private val purple = Color.rgb(139, 92, 246)
-    private val palePurple = Color.rgb(205, 185, 255)
-    private val red = Color.rgb(225, 55, 70)
-    private val green = Color.rgb(40, 160, 105)
-    private val blue = Color.rgb(55, 120, 220)
-    private val orange = Color.rgb(220, 130, 45)
-    private val amber = Color.rgb(235, 165, 55)
 
     private val timerRunnable = object : Runnable {
         override fun run() {
@@ -235,9 +239,6 @@ class FloatingBubbleService : Service() {
 
         return START_NOT_STICKY
     }
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
 
     private fun rounded(
         color: Int,
@@ -545,8 +546,9 @@ class FloatingBubbleService : Service() {
 
         minimizeButton.setOnClickListener { minimizeControls() }
 
-        attachDrag(dragHandle)
-        attachDrag(bubble) { expandControls() }
+        // Move the actual floating panel, not its child drag handle.
+        attachDrag(dragHandle, mainPanel)
+        attachDrag(bubble, bubble) { expandControls() }
 
         try {
             wm.addView(mainPanel, params)
@@ -604,7 +606,8 @@ class FloatingBubbleService : Service() {
     }
 
     private fun attachDrag(
-        view: View,
+        touchHandle: View,
+        windowView: View,
         onTap: (() -> Unit)? = null
     ) {
         var startX = 0
@@ -613,7 +616,7 @@ class FloatingBubbleService : Service() {
         var touchY = 0f
         var moved = false
 
-        view.setOnTouchListener { _, event ->
+        touchHandle.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     startX = params.x
@@ -636,14 +639,14 @@ class FloatingBubbleService : Service() {
                     val height = resources.displayMetrics.heightPixels
 
                     params.x = (startX + dx).coerceIn(
-                        0, (width - view.width).coerceAtLeast(0)
+                        0, (width - windowView.width).coerceAtLeast(0)
                     )
                     params.y = (startY + dy).coerceIn(
-                        0, (height - view.height).coerceAtLeast(0)
+                        0, (height - windowView.height).coerceAtLeast(0)
                     )
 
                     try {
-                        wm.updateViewLayout(view, params)
+                        wm.updateViewLayout(windowView, params)
                     } catch (_: Exception) {
                     }
                     true
@@ -651,11 +654,8 @@ class FloatingBubbleService : Service() {
 
                 MotionEvent.ACTION_UP -> {
                     if (moved) {
-                        snapToSide(view)
-
-                        if (view === miniBubble) {
-                            saveBubblePosition()
-                        }
+                        snapToSide(windowView)
+                        saveBubblePosition()
                     } else {
                         onTap?.invoke()
                     }
@@ -688,6 +688,8 @@ class FloatingBubbleService : Service() {
         val currentPanel = panel ?: return
         val bubble = miniBubble ?: return
 
+        // Save the panel's final position before replacing it with the bubble.
+        saveBubblePosition()
         updateBubbleAppearance()
 
         try {

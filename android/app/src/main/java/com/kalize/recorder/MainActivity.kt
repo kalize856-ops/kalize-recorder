@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.Manifest
@@ -235,9 +234,11 @@ private fun KalizeHome(
     onEnableBubble: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+
     val prefs = remember {
         context.getSharedPreferences("kalize_settings", Context.MODE_PRIVATE)
     }
+
     val recordingPrefs = remember {
         context.getSharedPreferences("kalize_recording_state", Context.MODE_PRIVATE)
     }
@@ -258,6 +259,7 @@ private fun KalizeHome(
     var status by remember { mutableStateOf("Ready when you are.") }
 
     val systemDark = isSystemInDarkTheme()
+
     val darkMode = when (themeMode) {
         "Dark" -> true
         "Light" -> false
@@ -279,6 +281,7 @@ private fun KalizeHome(
     }
 
     DisposableEffect(context) {
+
         fun refresh(isRecording: Boolean, isPaused: Boolean) {
             if (isRecording && !recording) elapsedSeconds = 0
             recording = isRecording
@@ -295,8 +298,14 @@ private fun KalizeHome(
             override fun onReceive(c: Context?, intent: Intent?) {
                 if (intent?.action == ScreenRecordingService.ACTION_STATE_CHANGED) {
                     refresh(
-                        intent.getBooleanExtra(ScreenRecordingService.EXTRA_IS_RECORDING, false),
-                        intent.getBooleanExtra(ScreenRecordingService.EXTRA_IS_PAUSED, false)
+                        intent.getBooleanExtra(
+                            ScreenRecordingService.EXTRA_IS_RECORDING,
+                            false
+                        ),
+                        intent.getBooleanExtra(
+                            ScreenRecordingService.EXTRA_IS_PAUSED,
+                            false
+                        )
                     )
                 }
             }
@@ -327,6 +336,7 @@ private fun KalizeHome(
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
+
                 folderUri = uri.toString()
                 prefs.edit().putString("save_tree_uri", folderUri).apply()
                 status = "Recording folder updated."
@@ -337,19 +347,23 @@ private fun KalizeHome(
     }
 
     MaterialTheme(
-        colorScheme = if (darkMode) darkColorScheme(
-            primary = accent,
-            background = background,
-            surface = panel,
-            onBackground = textColor,
-            onSurface = textColor
-        ) else lightColorScheme(
-            primary = accent,
-            background = background,
-            surface = panel,
-            onBackground = textColor,
-            onSurface = textColor
-        )
+        colorScheme = if (darkMode) {
+            darkColorScheme(
+                primary = accent,
+                background = background,
+                surface = panel,
+                onBackground = textColor,
+                onSurface = textColor
+            )
+        } else {
+            lightColorScheme(
+                primary = accent,
+                background = background,
+                surface = panel,
+                onBackground = textColor,
+                onSurface = textColor
+            )
+        }
     ) {
         Scaffold(
             containerColor = background,
@@ -379,6 +393,7 @@ private fun KalizeHome(
                 }
             }
         ) { padding ->
+
             Column(
                 Modifier
                     .fillMaxSize()
@@ -386,7 +401,8 @@ private fun KalizeHome(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                if (darkMode) Color(0xFF17132D) else Color(0xFFECE7FA),
+                                if (darkMode) Color(0xFF17132D)
+                                else Color(0xFFECE7FA),
                                 background
                             )
                         )
@@ -395,6 +411,7 @@ private fun KalizeHome(
                     .padding(horizontal = 18.dp, vertical = 18.dp),
                 verticalArrangement = Arrangement.spacedBy(15.dp)
             ) {
+
                 Row(
                     Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -406,6 +423,7 @@ private fun KalizeHome(
                             fontSize = 19.sp,
                             fontWeight = FontWeight.Black
                         )
+
                         Text(
                             when (page) {
                                 "Home" -> "Your screen. Your story."
@@ -417,26 +435,39 @@ private fun KalizeHome(
                             fontSize = 12.sp
                         )
                     }
+
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = if (recording) Color(0xFFB9475B) else panel,
                         border = BorderStroke(1.dp, border)
                     ) {
                         Text(
-                            if (recording && paused) " PAUSED " else if (recording) " ● LIVE " else " READY ",
+                            if (recording && paused) " PAUSED "
+                            else if (recording) " ● LIVE "
+                            else " READY ",
                             color = if (recording) Color.White else accent,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
+                            modifier = Modifier.padding(
+                                horizontal = 10.dp,
+                                vertical = 7.dp
+                            )
                         )
                     }
                 }
 
                 when (page) {
+
                     "Home" -> {
-                        SectionHeading("Capture studio", "Start a recording or take a screenshot", textColor, muted)
+                        SectionHeading(
+                            "Capture studio",
+                            "Start a recording or take a screenshot",
+                            textColor,
+                            muted
+                        )
 
                         CardPanel(panel, border) {
+
                             Text(
                                 when {
                                     recording && paused -> "Recording paused"
@@ -479,6 +510,7 @@ private fun KalizeHome(
                                         elapsedSeconds = 0
                                         requesting = true
                                         status = "Approve Android's screen-capture prompt."
+
                                         onStartRecording(
                                             quality,
                                             fps.removeSuffix(" FPS").toIntOrNull() ?: 30,
@@ -489,6 +521,7 @@ private fun KalizeHome(
                                             requesting = false
                                             recording = approved
                                             paused = false
+
                                             status = if (approved) {
                                                 "Recording started."
                                             } else {
@@ -497,7 +530,9 @@ private fun KalizeHome(
                                         }
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth().height(54.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(54.dp),
                                 shape = RoundedCornerShape(15.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = if (recording || requesting) {
@@ -523,53 +558,186 @@ private fun KalizeHome(
                             }
                         }
 
-                        SectionHeading("Quick access", "Your most-used recording tools", textColor, muted)
-                        NavigationCard("Saved videos", "Browse and manage recordings", "▣", panel, border, textColor, muted) {
+                        SectionHeading(
+                            "Quick access",
+                            "Your most-used recording tools",
+                            textColor,
+                            muted
+                        )
+
+                        NavigationCard(
+                            "Saved videos",
+                            "Browse and manage recordings",
+                            "▣",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             page = "Library"
                         }
-                        NavigationCard("Video editor", "Edit, trim and export your clips", "✂", panel, border, textColor, muted) {
-                            context.startActivity(Intent(context, VideoEditorActivity::class.java))
+
+                        NavigationCard(
+                            "Video editor",
+                            "Edit, trim and export your clips",
+                            "✂",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, VideoEditorActivity::class.java)
+                            )
                         }
-                        NavigationCard("Performance tools", "Game Booster, benchmark and network test", "⚡", panel, border, textColor, muted) {
+
+                        NavigationCard(
+                            "Performance tools",
+                            "Game Booster, benchmark and network test",
+                            "⚡",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             page = "Tools"
                         }
                     }
 
                     "Library" -> {
-                        SectionHeading("Media library", "Everything you capture, in one place", textColor, muted)
-                        NavigationCard("Saved videos", "Play, share or delete recordings", "▣", panel, border, textColor, muted) {
-                            context.startActivity(Intent(context, SavedVideosActivity::class.java))
+                        SectionHeading(
+                            "Media library",
+                            "Your videos, screenshots and storage",
+                            textColor,
+                            muted
+                        )
+
+                        NavigationCard(
+                            "Open Media Library",
+                            "Browse captures and view phone storage",
+                            "▣",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, MediaLibraryActivity::class.java)
+                            )
                         }
-                        NavigationCard("Screenshot gallery", "View and manage your screenshots", "▧", panel, border, textColor, muted) {
-                            context.startActivity(Intent(context, ScreenshotGalleryActivity::class.java))
+
+                        NavigationCard(
+                            "Saved videos",
+                            "Play, share or manage recordings",
+                            "▶",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, SavedVideosActivity::class.java)
+                            )
                         }
-                        NavigationCard("Video editor", "Trim and prepare videos for export", "✂", panel, border, textColor, muted) {
-                            context.startActivity(Intent(context, VideoEditorActivity::class.java))
+
+                        NavigationCard(
+                            "Screenshot gallery",
+                            "View and organise screenshots",
+                            "▧",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, ScreenshotGalleryActivity::class.java)
+                            )
+                        }
+
+                        NavigationCard(
+                            "Video editor",
+                            "Trim, crop and export clips",
+                            "✂",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, VideoEditorActivity::class.java)
+                            )
                         }
                     }
 
                     "Tools" -> {
-                        SectionHeading("Performance centre", "Utilities for your phone and recordings", textColor, muted)
-                        NavigationCard("Game Booster & device monitor", "Device information and performance tools", "⚡", panel, border, textColor, muted) {
-                            context.startActivity(Intent(context, PerformanceToolsActivity::class.java))
+                        SectionHeading(
+                            "Performance centre",
+                            "Utilities for your phone and recordings",
+                            textColor,
+                            muted
+                        )
+
+                        NavigationCard(
+                            "Game Booster & device monitor",
+                            "Device information and performance tools",
+                            "⚡",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            context.startActivity(
+                                Intent(context, PerformanceToolsActivity::class.java)
+                            )
                         }
-                        NavigationCard("Floating recording controls", "Enable the on-screen recording bubble", "◉", panel, border, textColor, muted) {
+
+                        NavigationCard(
+                            "Floating recording controls",
+                            "Enable the on-screen recording bubble",
+                            "◉",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             onEnableBubble()
+
                             status = if (Settings.canDrawOverlays(context)) {
                                 "Floating controls requested."
                             } else {
                                 "Allow display over other apps in Android Settings."
                             }
                         }
-                        NavigationCard("Take a screenshot", "Capture your current screen", "▧", panel, border, textColor, muted) {
+
+                        NavigationCard(
+                            "Take a screenshot",
+                            "Capture your current screen",
+                            "▧",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             onTakeScreenshot()
                         }
                     }
 
                     "Settings" -> {
-                        SectionHeading("Settings centre", "Preferences are grouped by category", textColor, muted)
+                        SectionHeading(
+                            "Settings centre",
+                            "Preferences are grouped by category",
+                            textColor,
+                            muted
+                        )
 
-                        SettingsGroup("Appearance", "Theme and visual preferences", panel, border, textColor, muted) {
+                        SettingsGroup(
+                            "Appearance",
+                            "Theme and visual preferences",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             listOf("System Default", "Dark", "Light").forEach { option ->
                                 Row(
                                     Modifier.fillMaxWidth(),
@@ -579,24 +747,43 @@ private fun KalizeHome(
                                         selected = themeMode == option,
                                         onClick = {
                                             themeMode = option
-                                            prefs.edit().putString("theme_mode", option).apply()
+                                            prefs.edit()
+                                                .putString("theme_mode", option)
+                                                .apply()
                                         }
                                     )
+
                                     Text(option, color = textColor)
                                 }
                             }
                         }
 
-                        SettingsGroup("Recording quality", "Resolution and frame rate", panel, border, textColor, muted) {
+                        SettingsGroup(
+                            "Recording quality",
+                            "Resolution and frame rate",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             SettingDropdown(
                                 "Resolution",
                                 quality,
-                                listOf("360p", "480p", "720p", "1080p", "1440p", "4K"),
+                                listOf(
+                                    "360p",
+                                    "480p",
+                                    "720p",
+                                    "1080p",
+                                    "1440p",
+                                    "4K"
+                                ),
                                 textColor,
                                 accent
                             ) {
                                 quality = it
-                                prefs.edit().putString("recording_quality", it).apply()
+                                prefs.edit()
+                                    .putString("recording_quality", it)
+                                    .apply()
                                 status = "Resolution saved: $it"
                             }
 
@@ -605,14 +792,27 @@ private fun KalizeHome(
                             SettingDropdown(
                                 "Frame rate",
                                 fps,
-                                listOf("30 FPS", "60 FPS", "90 FPS", "120 FPS", "144 FPS", "165 FPS", "180 FPS", "200 FPS", "240 FPS"),
+                                listOf(
+                                    "30 FPS",
+                                    "60 FPS",
+                                    "90 FPS",
+                                    "120 FPS",
+                                    "144 FPS",
+                                    "165 FPS",
+                                    "180 FPS",
+                                    "200 FPS",
+                                    "240 FPS"
+                                ),
                                 textColor,
                                 accent
                             ) {
                                 fps = it
-                                prefs.edit().putString("recording_fps", it).apply()
+                                prefs.edit()
+                                    .putString("recording_fps", it)
+                                    .apply()
                                 status = "Frame rate saved: $it"
                             }
+
                             Text(
                                 "Available quality and frame rate depend on your phone.",
                                 color = muted,
@@ -620,20 +820,39 @@ private fun KalizeHome(
                             )
                         }
 
-                        SettingsGroup("Recording behaviour", "Audio and countdown options", panel, border, textColor, muted) {
+                        SettingsGroup(
+                            "Recording behaviour",
+                            "Audio and countdown options",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             Row(
                                 Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text("Microphone audio", color = textColor, fontWeight = FontWeight.SemiBold)
-                                    Text("Include your voice in recordings", color = muted, fontSize = 11.sp)
+                                    Text(
+                                        "Microphone audio",
+                                        color = textColor,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+
+                                    Text(
+                                        "Include your voice in recordings",
+                                        color = muted,
+                                        fontSize = 11.sp
+                                    )
                                 }
+
                                 Switch(
                                     checked = audioEnabled,
                                     onCheckedChange = {
                                         audioEnabled = it
-                                        prefs.edit().putBoolean("recording_audio_enabled", it).apply()
+                                        prefs.edit()
+                                            .putBoolean("recording_audio_enabled", it)
+                                            .apply()
                                     },
                                     enabled = !recording && !requesting
                                 )
@@ -644,17 +863,35 @@ private fun KalizeHome(
                             SettingDropdown(
                                 "Countdown",
                                 if (countdown == 0) "Off" else "$countdown seconds",
-                                listOf("Off", "3 seconds", "5 seconds", "10 seconds", "15 seconds", "30 seconds"),
+                                listOf(
+                                    "Off",
+                                    "3 seconds",
+                                    "5 seconds",
+                                    "10 seconds",
+                                    "15 seconds",
+                                    "30 seconds"
+                                ),
                                 textColor,
                                 accent
                             ) { selected ->
                                 countdown = if (selected == "Off") 0
-                                else selected.substringBefore(" ").toIntOrNull() ?: 0
-                                prefs.edit().putInt("recording_countdown_seconds", countdown).apply()
+                                else selected.substringBefore(" ")
+                                    .toIntOrNull() ?: 0
+
+                                prefs.edit()
+                                    .putInt("recording_countdown_seconds", countdown)
+                                    .apply()
                             }
                         }
 
-                        SettingsGroup("Storage", "Choose where recordings are saved", panel, border, textColor, muted) {
+                        SettingsGroup(
+                            "Storage",
+                            "Choose where recordings are saved",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             Text(
                                 if (folderUri == null) {
                                     "Default: Movies/Kalize Recorder"
@@ -667,7 +904,9 @@ private fun KalizeHome(
 
                             Button(
                                 onClick = {
-                                    folderPicker.launch(folderUri?.let { Uri.parse(it) })
+                                    folderPicker.launch(
+                                        folderUri?.let { Uri.parse(it) }
+                                    )
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -677,7 +916,9 @@ private fun KalizeHome(
                             OutlinedButton(
                                 onClick = {
                                     folderUri = null
-                                    prefs.edit().remove("save_tree_uri").apply()
+                                    prefs.edit()
+                                        .remove("save_tree_uri")
+                                        .apply()
                                     status = "Default storage selected."
                                 },
                                 modifier = Modifier.fillMaxWidth()
@@ -686,12 +927,20 @@ private fun KalizeHome(
                             }
                         }
 
-                        SettingsGroup("Floating controls", "On-screen bubble permission", panel, border, textColor, muted) {
+                        SettingsGroup(
+                            "Floating controls",
+                            "On-screen bubble permission",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
                             Text(
                                 "Enable the floating bubble to control recording while using other apps.",
                                 color = muted,
                                 fontSize = 12.sp
                             )
+
                             Button(
                                 onClick = onEnableBubble,
                                 modifier = Modifier.fillMaxWidth()
@@ -700,13 +949,25 @@ private fun KalizeHome(
                             }
                         }
 
-                        SettingsGroup("About", "App information and privacy", panel, border, textColor, muted) {
-                            Text("Kalize Recorder • Version 0.2.0", color = textColor)
+                        SettingsGroup(
+                            "About",
+                            "App information and privacy",
+                            panel,
+                            border,
+                            textColor,
+                            muted
+                        ) {
+                            Text(
+                                "Kalize Recorder • Version 0.2.0",
+                                color = textColor
+                            )
+
                             Text(
                                 "Screen recording requires Android's capture approval. Always respect other people's privacy.",
                                 color = muted,
                                 fontSize = 12.sp
                             )
+
                             OutlinedButton(
                                 onClick = { showAbout = true },
                                 modifier = Modifier.fillMaxWidth()
@@ -722,7 +983,9 @@ private fun KalizeHome(
         if (showAbout) {
             AlertDialog(
                 onDismissRequest = { showAbout = false },
-                title = { Text("About Kalize Recorder") },
+                title = {
+                    Text("About Kalize Recorder")
+                },
                 text = {
                     Text(
                         "Kalize Recorder brings screen recording, screenshots, video editing, a media library and performance tools together in one app."
@@ -745,9 +1008,21 @@ private fun SectionHeading(
     textColor: Color,
     muted: Color
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, color = textColor, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-        Text(subtitle, color = muted, fontSize = 12.sp)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text(
+            title,
+            color = textColor,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+
+        Text(
+            subtitle,
+            color = muted,
+            fontSize = 12.sp
+        )
     }
 }
 
@@ -805,11 +1080,29 @@ private fun NavigationCard(
                     modifier = Modifier.padding(12.dp)
                 )
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(title, color = textColor, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = muted, fontSize = 11.sp)
+
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    title,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    subtitle,
+                    color = muted,
+                    fontSize = 11.sp
+                )
             }
-            Text("›", color = KalizePurple, fontSize = 25.sp)
+
+            Text(
+                "›",
+                color = KalizePurple,
+                fontSize = 25.sp
+            )
         }
     }
 }
@@ -834,9 +1127,21 @@ private fun SettingsGroup(
             Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(title, color = textColor, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-            Text(subtitle, color = muted, fontSize = 11.sp)
+            Text(
+                title,
+                color = textColor,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+
+            Text(
+                subtitle,
+                color = muted,
+                fontSize = 11.sp
+            )
+
             HorizontalDivider(color = border)
+
             content()
         }
     }

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Internet and system permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
@@ -16,6 +17,7 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
+        <!-- Main launcher screen -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
@@ -26,6 +28,11 @@
             </intent-filter>
 
         </activity>
+
+        <!-- App activities -->
+        <activity
+            android:name=".MediaLibraryActivity"
+            android:exported="false" />
 
         <activity
             android:name=".PerformanceToolsActivity"
@@ -51,6 +58,7 @@
             android:name=".QuickScreenshotActivity"
             android:exported="false" />
 
+        <!-- Background services -->
         <service
             android:name=".ScreenRecordingService"
             android:exported="false"

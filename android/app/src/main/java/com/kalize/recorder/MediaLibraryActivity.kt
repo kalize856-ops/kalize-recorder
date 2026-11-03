@@ -7,12 +7,13 @@ import android.os.StatFs
 import android.os.Environment
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
-import android.graphics.drawable.GradientDrawable
 import java.util.Locale
 
 class MediaLibraryActivity : Activity() {
@@ -25,6 +26,11 @@ class MediaLibraryActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        buildScreen()
+    }
+
+    override fun onResume() {
+        super.onResume()
         buildScreen()
     }
 
@@ -107,6 +113,7 @@ class MediaLibraryActivity : Activity() {
         }
 
         val scroll = ScrollView(this)
+
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(19), dp(22), dp(19), dp(20))
@@ -130,18 +137,64 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(18), dp(17), dp(18), dp(17))
         }
 
+        val storage = getStorageInfo()
+
         storageCard.addView(label("DEVICE STORAGE", 11f, purple, true))
         storageCard.addView(label("Your phone storage", 18f, white, true))
+
         storageCard.addView(
             label(
-                storageSummary(),
-                13f,
+                "${formatSize(storage.used)} used  •  ${storage.percent}% full",
+                14f,
+                Color.rgb(220, 213, 245),
+                true
+            )
+        )
+
+        val storageProgress = ProgressBar(
+            this,
+            null,
+            android.R.attr.progressBarStyleHorizontal
+        ).apply {
+            max = 100
+            progress = storage.percent
+            progressTintList =
+                android.content.res.ColorStateList.valueOf(purple)
+            progressBackgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    Color.rgb(69, 57, 99)
+                )
+        }
+
+        val progressParams = LinearLayout.LayoutParams(
+            -1,
+            dp(9)
+        ).apply {
+            topMargin = dp(12)
+            bottomMargin = dp(10)
+        }
+
+        storageCard.addView(storageProgress, progressParams)
+
+        storageCard.addView(
+            label(
+                "${formatSize(storage.free)} available",
+                12f,
                 Color.rgb(220, 213, 245)
             )
         )
+
         storageCard.addView(
             label(
-                "This is your device's storage overview, not a count of Kalize files.",
+                "${formatSize(storage.total)} total device storage",
+                11f,
+                muted
+            )
+        )
+
+        storageCard.addView(
+            label(
+                "This shows overall phone storage, not just Kalize files.",
                 10f,
                 muted
             )
@@ -172,7 +225,9 @@ class MediaLibraryActivity : Activity() {
                 "Watch, rename, favourite and share recordings",
                 "▶"
             ) {
-                startActivity(Intent(this, SavedVideosActivity::class.java))
+                startActivity(
+                    Intent(this, SavedVideosActivity::class.java)
+                )
             }
         )
 
@@ -184,7 +239,9 @@ class MediaLibraryActivity : Activity() {
                 "Browse, organise and share screenshots",
                 "▧"
             ) {
-                startActivity(Intent(this, ScreenshotGalleryActivity::class.java))
+                startActivity(
+                    Intent(this, ScreenshotGalleryActivity::class.java)
+                )
             }
         )
 
@@ -196,7 +253,9 @@ class MediaLibraryActivity : Activity() {
                 "Trim, rotate, crop and export clips",
                 "✂"
             ) {
-                startActivity(Intent(this, VideoEditorActivity::class.java))
+                startActivity(
+                    Intent(this, VideoEditorActivity::class.java)
+                )
             }
         )
 
@@ -210,7 +269,10 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(16), dp(13), dp(16), dp(13))
         }
 
-        tips.addView(label("Keep your recordings organised", 14f, white, true))
+        tips.addView(
+            label("Keep your recordings organised", 14f, white, true)
+        )
+
         tips.addView(
             label(
                 "• Use favourites to mark important captures.\n" +
@@ -241,6 +303,7 @@ class MediaLibraryActivity : Activity() {
         )
 
         scroll.addView(content)
+
         root.addView(
             scroll,
             LinearLayout.LayoutParams(-1, -1)
@@ -256,18 +319,32 @@ class MediaLibraryActivity : Activity() {
         )
     }
 
-    private fun storageSummary(): String {
-        return try {
-            val path = Environment.getDataDirectory()
-            val stat = StatFs(path.path)
-            val total = stat.totalBytes
-            val free = stat.availableBytes
-            val used = total - free
+    private data class StorageInfo(
+        val total: Long,
+        val free: Long,
+        val used: Long,
+        val percent: Int
+    )
 
-            "${formatSize(used)} used  •  ${formatSize(free)} available\n" +
-                "${formatSize(total)} total"
+    private fun getStorageInfo(): StorageInfo {
+        return try {
+            val stat = StatFs(Environment.getDataDirectory().path)
+
+            val total = stat.totalBytes
+            val free = stat.availableBytes.coerceAtMost(total)
+            val used = (total - free).coerceAtLeast(0L)
+
+            val percent = if (total > 0L) {
+                ((used.toDouble() / total.toDouble()) * 100)
+                    .toInt()
+                    .coerceIn(0, 100)
+            } else {
+                0
+            }
+
+            StorageInfo(total, free, used, percent)
         } catch (_: Exception) {
-            "Storage information is unavailable on this device."
+            StorageInfo(0L, 0L, 0L, 0)
         }
     }
 
@@ -283,6 +360,11 @@ class MediaLibraryActivity : Activity() {
             index++
         }
 
-        return String.format(Locale.US, "%.1f %s", size, units[index])
+        return String.format(
+            Locale.US,
+            "%.1f %s",
+            size,
+            units[index]
+        )
     }
 }

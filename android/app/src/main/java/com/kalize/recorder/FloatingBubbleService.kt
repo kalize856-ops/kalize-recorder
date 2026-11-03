@@ -54,6 +54,7 @@ class FloatingBubbleService : Service() {
     private val green = Color.rgb(40, 160, 105)
     private val blue = Color.rgb(55, 120, 220)
     private val orange = Color.rgb(220, 130, 45)
+    private val amber = Color.rgb(235, 165, 55)
 
     private val timerRunnable = object : Runnable {
         override fun run() {
@@ -566,13 +567,7 @@ class FloatingBubbleService : Service() {
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(Color.rgb(95, 58, 175))
-                setStroke(dp(2), palePurple)
-            }
-
+            elevation = dp(9).toFloat()
             contentDescription = "Expand Kalize controls"
         }
 
@@ -648,6 +643,44 @@ class FloatingBubbleService : Service() {
 
         updateControls()
         updateTimer()
+    }
+
+    private fun updateBubbleAppearance() {
+        val bubble = miniBubble ?: return
+
+        val stateColor = when {
+            recording && !paused -> red
+            recording && paused -> amber
+            else -> Color.rgb(95, 58, 175)
+        }
+
+        val borderColor = when {
+            recording && !paused -> Color.rgb(255, 155, 165)
+            recording && paused -> Color.rgb(255, 220, 145)
+            else -> palePurple
+        }
+
+        bubble.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(stateColor)
+            setStroke(dp(2), borderColor)
+        }
+
+        bubble.contentDescription = when {
+            recording && !paused ->
+                "Recording. Tap to expand Kalize controls"
+            recording && paused ->
+                "Recording paused. Tap to expand Kalize controls"
+            else ->
+                "Kalize Recorder ready. Tap to expand controls"
+        }
+
+        if (bubble.parent != null) {
+            try {
+                wm.updateViewLayout(bubble, params)
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun attachDrag(
@@ -752,6 +785,8 @@ class FloatingBubbleService : Service() {
         val currentPanel = panel ?: return
         val bubble = miniBubble ?: return
 
+        updateBubbleAppearance()
+
         try {
             wm.removeView(currentPanel)
             wm.addView(bubble, params)
@@ -833,9 +868,7 @@ class FloatingBubbleService : Service() {
             button?.alpha = 1f
 
             status?.text = "● PAUSED"
-            status?.setTextColor(
-                Color.rgb(255, 190, 80)
-            )
+            status?.setTextColor(amber)
 
         } else {
             button?.text = "Ⅱ"
@@ -857,6 +890,8 @@ class FloatingBubbleService : Service() {
             23,
             purple
         )
+
+        updateBubbleAppearance()
 
         if (Build.VERSION.SDK_INT >= 31) {
             try {

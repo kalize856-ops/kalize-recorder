@@ -397,8 +397,36 @@ class FloatingBubbleService : Service() {
             }
         }
 
+    // FLAG_SECURE is applied only to the floating overlay.
+    // It is enabled during recording and removed when recording stops.
+    private fun updateSecureOverlay() {
+        if (!::params.isInitialized || !::root.isInitialized) return
+
+        val secureFlag = WindowManager.LayoutParams.FLAG_SECURE
+
+        val updatedFlags = if (recording) {
+            params.flags or secureFlag
+        } else {
+            params.flags and secureFlag.inv()
+        }
+
+        if (updatedFlags == params.flags) return
+
+        params.flags = updatedFlags
+
+        if (root.parent != null) {
+            try {
+                wm.updateViewLayout(root, params)
+            } catch (_: Exception) {
+            }
+        }
+    }
+
     private fun updateMainBubble() {
         if (!::mainBubble.isInitialized) return
+
+        // Keep the overlay's secure state synchronized with recording.
+        updateSecureOverlay()
 
         val color = when {
             recording && !paused -> red

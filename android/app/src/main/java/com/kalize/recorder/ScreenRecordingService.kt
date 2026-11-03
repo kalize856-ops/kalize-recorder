@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Notification
@@ -21,6 +20,7 @@ import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.DisplayMetrics
@@ -45,6 +45,7 @@ class ScreenRecordingService : Service() {
 
         const val EXTRA_IS_RECORDING = "is_recording"
         const val EXTRA_IS_PAUSED = "is_paused"
+        const val EXTRA_ELAPSED_MILLIS = "recording_elapsed_millis"
 
         const val EXTRA_RESULT_CODE = "projection_result_code"
         const val EXTRA_RESULT_DATA = "projection_result_data"
@@ -62,6 +63,8 @@ class ScreenRecordingService : Service() {
         private const val PREFS_NAME = "kalize_recording_state"
         private const val PREF_RECORDING = "is_recording"
         private const val PREF_PAUSED = "is_paused"
+        private const val PREF_ELAPSED = "recording_elapsed_ms"
+        private const val PREF_ELAPSED_REALTIME = "recording_elapsed_realtime_ms"
     }
 
     private var projection: MediaProjection? = null
@@ -112,16 +115,22 @@ class ScreenRecordingService : Service() {
     }
 
     private fun publishRecordingState() {
+        val elapsed = elapsedRecordingMillis()
+        val elapsedRealtime = SystemClock.elapsedRealtime()
+
         getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(PREF_RECORDING, recordingStarted)
             .putBoolean(PREF_PAUSED, recordingPaused)
+            .putLong(PREF_ELAPSED, elapsed)
+            .putLong(PREF_ELAPSED_REALTIME, elapsedRealtime)
             .apply()
 
         val stateIntent = Intent(ACTION_STATE_CHANGED).apply {
             setPackage(packageName)
             putExtra(EXTRA_IS_RECORDING, recordingStarted)
             putExtra(EXTRA_IS_PAUSED, recordingPaused)
+            putExtra(EXTRA_ELAPSED_MILLIS, elapsed)
         }
 
         sendBroadcast(stateIntent)
@@ -744,7 +753,6 @@ class ScreenRecordingService : Service() {
         }
 
         if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
-            // Use total active recording time, excluding every pause.
             val effectiveStartTime =
                 System.currentTimeMillis() - elapsedRecordingMillis()
 

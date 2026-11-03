@@ -22,13 +22,22 @@ class BubbleSettingsActivity : Activity() {
 
     private var bubbleSize = 60
     private var bubbleOpacity = 100
+    private var bubbleColor = Color.rgb(255, 115, 25)
 
     private lateinit var sizeValue: TextView
     private lateinit var opacityValue: TextView
     private lateinit var preview: TextView
+    private lateinit var selectedColorText: TextView
 
     private val purple = Color.rgb(125, 75, 220)
-    private val orange = Color.rgb(255, 115, 25)
+
+    private val colors = listOf(
+        "Orange" to Color.rgb(255, 115, 25),
+        "Purple" to Color.rgb(125, 75, 220),
+        "Blue" to Color.rgb(45, 125, 235),
+        "Green" to Color.rgb(35, 165, 105),
+        "Red" to Color.rgb(235, 55, 65)
+    )
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
@@ -38,6 +47,10 @@ class BubbleSettingsActivity : Activity() {
 
         bubbleSize = prefs.getInt("bubble_size", 60).coerceIn(48, 80)
         bubbleOpacity = prefs.getInt("bubble_opacity", 100).coerceIn(30, 100)
+        bubbleColor = prefs.getInt(
+            "bubble_color",
+            Color.rgb(255, 115, 25)
+        )
 
         val page = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -51,7 +64,6 @@ class BubbleSettingsActivity : Activity() {
             setTextColor(purple)
             setTypeface(null, Typeface.BOLD)
         }
-
         page.addView(title)
 
         val heading = TextView(this).apply {
@@ -61,15 +73,13 @@ class BubbleSettingsActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
             setPadding(0, dp(12), 0, dp(6))
         }
-
         page.addView(heading)
 
         val subtitle = TextView(this).apply {
-            text = "Adjust how your floating recording control looks."
+            text = "Personalize your floating recording control."
             textSize = 14f
             setTextColor(Color.LTGRAY)
         }
-
         page.addView(subtitle)
 
         preview = TextView(this).apply {
@@ -90,29 +100,84 @@ class BubbleSettingsActivity : Activity() {
             preview,
             LinearLayout.LayoutParams(dp(bubbleSize), dp(bubbleSize))
         )
-
         page.addView(previewHolder)
+
+        val colorHeading = TextView(this).apply {
+            text = "Bubble colour"
+            textSize = 17f
+            setTextColor(Color.WHITE)
+            setTypeface(null, Typeface.BOLD)
+            setPadding(0, dp(10), 0, dp(8))
+        }
+        page.addView(colorHeading)
+
+        selectedColorText = TextView(this).apply {
+            text = "Selected: ${colorName(bubbleColor)}"
+            textSize = 13f
+            setTextColor(Color.LTGRAY)
+        }
+        page.addView(selectedColorText)
+
+        val colorRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            setPadding(0, dp(12), 0, dp(12))
+        }
+
+        colors.forEach { (name, color) ->
+            val colorButton = TextView(this).apply {
+                text = if (bubbleColor == color) "✓" else ""
+                textSize = 19f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(color)
+                    setStroke(
+                        dp(if (bubbleColor == color) 4 else 1),
+                        Color.WHITE
+                    )
+                }
+                setOnClickListener {
+                    bubbleColor = color
+                    selectedColorText.text = "Selected: $name"
+                    updatePreview()
+                    refreshColorButtons(colorRow)
+                }
+            }
+
+            colorButton.tag = color
+
+            colorRow.addView(
+                colorButton,
+                LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                    setMargins(dp(5), 0, dp(5), 0)
+                }
+            )
+        }
+
+        page.addView(colorRow)
 
         sizeValue = addSlider(
             page,
             "Bubble size",
-            "48–80 dp",
             bubbleSize,
             48,
-            32
+            32,
+            " dp"
         ) { value ->
             bubbleSize = value
-            sizeValue.text = "${value} dp"
+            sizeValue.text = "$value dp"
             updatePreview()
         }
 
         opacityValue = addSlider(
             page,
             "Bubble transparency",
-            "30–100%",
             bubbleOpacity,
             30,
-            70
+            70,
+            "%"
         ) { value ->
             bubbleOpacity = value
             opacityValue.text = "$value%"
@@ -123,10 +188,12 @@ class BubbleSettingsActivity : Activity() {
             text = "SAVE AND APPLY"
             setTextColor(Color.WHITE)
             setBackgroundColor(purple)
+
             setOnClickListener {
                 prefs.edit()
                     .putInt("bubble_size", bubbleSize)
                     .putInt("bubble_opacity", bubbleOpacity)
+                    .putInt("bubble_color", bubbleColor)
                     .apply()
 
                 try {
@@ -167,7 +234,7 @@ class BubbleSettingsActivity : Activity() {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 dp(52)
             ).apply {
-                topMargin = dp(24)
+                topMargin = dp(20)
             }
         )
 
@@ -192,10 +259,10 @@ class BubbleSettingsActivity : Activity() {
     private fun addSlider(
         parent: LinearLayout,
         heading: String,
-        description: String,
         initial: Int,
         minimum: Int,
         range: Int,
+        suffix: String,
         onValueChanged: (Int) -> Unit
     ): TextView {
 
@@ -206,20 +273,19 @@ class BubbleSettingsActivity : Activity() {
             setTypeface(null, Typeface.BOLD)
             setPadding(0, dp(12), 0, dp(4))
         }
-
         parent.addView(title)
 
         val value = TextView(this).apply {
-            text = "$initial"
+            text = "$initial$suffix"
             textSize = 13f
             setTextColor(Color.LTGRAY)
         }
-
         parent.addView(value)
 
         val slider = SeekBar(this).apply {
             max = range
             progress = initial - minimum
+
             setOnSeekBarChangeListener(
                 object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(
@@ -227,8 +293,7 @@ class BubbleSettingsActivity : Activity() {
                         progress: Int,
                         fromUser: Boolean
                     ) {
-                        val selected = minimum + progress
-                        onValueChanged(selected)
+                        onValueChanged(minimum + progress)
                     }
 
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -238,19 +303,40 @@ class BubbleSettingsActivity : Activity() {
         }
 
         parent.addView(slider)
-
         return value
+    }
+
+    private fun refreshColorButtons(row: LinearLayout) {
+        for (index in 0 until row.childCount) {
+            val button = row.getChildAt(index) as? TextView ?: continue
+            val color = button.tag as? Int ?: continue
+
+            button.text = if (color == bubbleColor) "✓" else ""
+            button.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color)
+                setStroke(
+                    dp(if (color == bubbleColor) 4 else 1),
+                    Color.WHITE
+                )
+            }
+        }
+    }
+
+    private fun colorName(color: Int): String {
+        return colors.firstOrNull { it.second == color }?.first ?: "Orange"
     }
 
     private fun bubbleBackground(): GradientDrawable {
         return GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setColor(orange)
+            setColor(bubbleColor)
             setStroke(dp(2), Color.argb(100, 255, 255, 255))
         }
     }
 
     private fun updatePreview() {
+        preview.background = bubbleBackground()
         preview.alpha = bubbleOpacity / 100f
         preview.layoutParams = preview.layoutParams.apply {
             width = dp(bubbleSize)

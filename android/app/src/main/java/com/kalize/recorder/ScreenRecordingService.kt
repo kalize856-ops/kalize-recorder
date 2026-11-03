@@ -755,8 +755,9 @@ class ScreenRecordingService : Service() {
         }
 
         if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
+            // setWhen() expects wall-clock time; elapsed duration remains monotonic.
             val effectiveStartTime =
-                SystemClock.elapsedRealtime() - elapsedRecordingMillis()
+                System.currentTimeMillis() - elapsedRecordingMillis()
 
             builder.setWhen(effectiveStartTime)
                 .setUsesChronometer(true)

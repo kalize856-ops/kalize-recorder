@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Internet and system permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -17,52 +17,27 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
-        <!-- Main launcher screen -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-
         </activity>
 
-        <!-- App activities -->
-        <activity
-            android:name=".MediaLibraryActivity"
-            android:exported="false" />
+        <activity android:name=".MediaLibraryActivity" android:exported="false" />
+        <activity android:name=".PerformanceToolsActivity" android:exported="false" />
+        <activity android:name=".VideoEditorActivity" android:exported="false" />
+        <activity android:name=".VideoPreviewActivity" android:exported="false" />
+        <activity android:name=".SavedVideosActivity" android:exported="false" />
+        <activity android:name=".ScreenshotGalleryActivity" android:exported="false" />
+        <activity android:name=".QuickScreenshotActivity" android:exported="false" />
 
-        <activity
-            android:name=".PerformanceToolsActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".VideoEditorActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".VideoPreviewActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".SavedVideosActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ScreenshotGalleryActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".QuickScreenshotActivity"
-            android:exported="false" />
-
-        <!-- Background services -->
         <service
             android:name=".ScreenRecordingService"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="mediaProjection|microphone" />
 
         <service
             android:name=".FloatingBubbleService"

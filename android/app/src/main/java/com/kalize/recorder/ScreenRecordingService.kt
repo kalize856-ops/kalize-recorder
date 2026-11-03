@@ -1,4 +1,3 @@
-
 package com.kalize.recorder
 
 import android.app.Notification
@@ -167,20 +166,6 @@ class ScreenRecordingService : Service() {
             }
         }
 
-        createNotificationChannel()
-        val notification = buildNotification("Preparing screen recording…")
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ServiceCompat.startForeground(
-                this,
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-            )
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
-        }
-
         val resultCode = intent?.getIntExtra(EXTRA_RESULT_CODE, 0) ?: 0
 
         val resultData: Intent? = if (Build.VERSION.SDK_INT >= 33) {
@@ -199,11 +184,11 @@ class ScreenRecordingService : Service() {
             recordingStarted = false
             recordingPaused = false
             publishRecordingState()
-            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
         }
 
+        // Check microphone permission before starting a microphone foreground service.
         if (
             audioEnabled &&
             checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) !=
@@ -218,9 +203,36 @@ class ScreenRecordingService : Service() {
             recordingStarted = false
             recordingPaused = false
             publishRecordingState()
-            stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
+        }
+
+        createNotificationChannel()
+        val notification = buildNotification("Preparing screen recording…")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            var foregroundType =
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+
+            // The microphone foreground-service type is available from Android 11.
+            // Screen-only recordings do not request this type.
+            if (
+                audioEnabled &&
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            ) {
+                foregroundType =
+                    foregroundType or
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+
+            ServiceCompat.startForeground(
+                this,
+                NOTIFICATION_ID,
+                notification,
+                foregroundType
+            )
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
         }
 
         try {
@@ -755,7 +767,6 @@ class ScreenRecordingService : Service() {
         }
 
         if (recordingStarted && !recordingPaused && recordingStartTime > 0L) {
-            // setWhen() expects wall-clock time; elapsed duration remains monotonic.
             val effectiveStartTime =
                 System.currentTimeMillis() - elapsedRecordingMillis()
 

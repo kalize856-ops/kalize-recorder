@@ -75,33 +75,20 @@ class FloatingBubbleService : Service() {
     }
 
     private val stateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(
-            context: Context?,
-            intent: Intent?
-        ) {
-            if (intent?.action !=
-                ScreenRecordingService.ACTION_STATE_CHANGED
-            ) return
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != ScreenRecordingService.ACTION_STATE_CHANGED) return
 
             val newRecording = intent.getBooleanExtra(
-                ScreenRecordingService.EXTRA_IS_RECORDING,
-                false
+                ScreenRecordingService.EXTRA_IS_RECORDING, false
             )
-
             val newPaused = intent.getBooleanExtra(
-                ScreenRecordingService.EXTRA_IS_PAUSED,
-                false
+                ScreenRecordingService.EXTRA_IS_PAUSED, false
             )
-
             val now = SystemClock.elapsedRealtime()
 
-            if (intent.hasExtra(
-                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS
-                )
-            ) {
+            if (intent.hasExtra(ScreenRecordingService.EXTRA_ELAPSED_MILLIS)) {
                 elapsedBeforePause = intent.getLongExtra(
-                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS,
-                    0L
+                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS, 0L
                 ).coerceAtLeast(0L)
 
                 recordingStartedAt =
@@ -112,19 +99,14 @@ class FloatingBubbleService : Service() {
 
                 if (!wasRecording && newRecording) {
                     elapsedBeforePause = 0L
-                    recordingStartedAt =
-                        if (newPaused) 0L else now
-                } else if (
-                    wasRecording && !wasPaused && newPaused
-                ) {
+                    recordingStartedAt = if (newPaused) 0L else now
+                } else if (wasRecording && !wasPaused && newPaused) {
                     if (recordingStartedAt > 0L) {
                         elapsedBeforePause +=
                             (now - recordingStartedAt).coerceAtLeast(0L)
                     }
                     recordingStartedAt = 0L
-                } else if (
-                    wasRecording && wasPaused && !newPaused
-                ) {
+                } else if (wasRecording && wasPaused && !newPaused) {
                     recordingStartedAt = now
                 } else if (wasRecording && !newRecording) {
                     elapsedBeforePause = 0L
@@ -150,16 +132,10 @@ class FloatingBubbleService : Service() {
     override fun onCreate() {
         super.onCreate()
 
-        val filter = IntentFilter(
-            ScreenRecordingService.ACTION_STATE_CHANGED
-        )
+        val filter = IntentFilter(ScreenRecordingService.ACTION_STATE_CHANGED)
 
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(
-                stateReceiver,
-                filter,
-                RECEIVER_NOT_EXPORTED
-            )
+            registerReceiver(stateReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
             registerReceiver(stateReceiver, filter)
@@ -168,21 +144,18 @@ class FloatingBubbleService : Service() {
         receiverRegistered = true
 
         val prefs = getSharedPreferences(
-            "kalize_recording_state",
-            Context.MODE_PRIVATE
+            "kalize_recording_state", Context.MODE_PRIVATE
         )
 
         recording = prefs.getBoolean("is_recording", false)
         paused = prefs.getBoolean("is_paused", false)
 
         val savedElapsed = prefs.getLong(
-            "recording_elapsed_ms",
-            0L
+            "recording_elapsed_ms", 0L
         ).coerceAtLeast(0L)
 
         val savedRealtime = prefs.getLong(
-            "recording_elapsed_realtime_ms",
-            0L
+            "recording_elapsed_realtime_ms", 0L
         )
 
         if (!recording) {
@@ -195,11 +168,8 @@ class FloatingBubbleService : Service() {
         } else {
             elapsedBeforePause = savedElapsed
             recordingStartedAt =
-                if (savedRealtime > 0L) {
-                    savedRealtime
-                } else {
-                    SystemClock.elapsedRealtime()
-                }
+                if (savedRealtime > 0L) savedRealtime
+                else SystemClock.elapsedRealtime()
         }
 
         handler.post(timerRunnable)
@@ -210,7 +180,6 @@ class FloatingBubbleService : Service() {
         flags: Int,
         startId: Int
     ): Int {
-
         if (!Settings.canDrawOverlays(this)) {
             stopSelf()
             return START_NOT_STICKY
@@ -233,21 +202,14 @@ class FloatingBubbleService : Service() {
     ) = GradientDrawable().apply {
         setColor(color)
         cornerRadius = dp(radius).toFloat()
-
-        if (stroke != null) {
-            setStroke(dp(1), stroke)
-        }
+        if (stroke != null) setStroke(dp(1), stroke)
     }
 
-    private fun circle(color: Int) =
-        GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(color)
-            setStroke(
-                dp(1),
-                Color.argb(75, 255, 255, 255)
-            )
-        }
+    private fun circle(color: Int) = GradientDrawable().apply {
+        shape = GradientDrawable.OVAL
+        setColor(color)
+        setStroke(dp(1), Color.argb(75, 255, 255, 255))
+    }
 
     private fun makeButton(
         symbol: String,
@@ -255,7 +217,7 @@ class FloatingBubbleService : Service() {
         description: String
     ) = Button(this).apply {
         text = symbol
-        textSize = 19f
+        textSize = 18f
         isAllCaps = false
         setTextColor(Color.WHITE)
         setTypeface(null, Typeface.BOLD)
@@ -264,16 +226,13 @@ class FloatingBubbleService : Service() {
         stateListAnimator = null
         minWidth = 0
         minimumWidth = 0
-        minHeight = dp(42)
-        minimumHeight = dp(42)
+        minHeight = dp(38)
+        minimumHeight = dp(38)
         setPadding(0, 0, 0, 0)
     }
 
     private fun sendRecordingAction(action: String) {
-        val intent = Intent(
-            this,
-            ScreenRecordingService::class.java
-        ).apply {
+        val intent = Intent(this, ScreenRecordingService::class.java).apply {
             this.action = action
         }
 
@@ -281,8 +240,7 @@ class FloatingBubbleService : Service() {
             startService(intent)
         } catch (_: Exception) {
             Toast.makeText(
-                this,
-                "Recording command could not be sent.",
+                this, "Recording command could not be sent.",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -290,19 +248,13 @@ class FloatingBubbleService : Service() {
 
     private fun openScreenshotCapture() {
         try {
-            val intent = Intent(
-                this,
-                QuickScreenshotActivity::class.java
-            ).apply {
+            val intent = Intent(this, QuickScreenshotActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
             startActivity(intent)
-
         } catch (_: Exception) {
             Toast.makeText(
-                this,
-                "Could not open screenshot permission prompt.",
+                this, "Could not open screenshot permission prompt.",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -310,19 +262,13 @@ class FloatingBubbleService : Service() {
 
     private fun openScreenshotGallery() {
         try {
-            val intent = Intent(
-                this,
-                ScreenshotGalleryActivity::class.java
-            ).apply {
+            val intent = Intent(this, ScreenshotGalleryActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-
             startActivity(intent)
-
         } catch (_: Exception) {
             Toast.makeText(
-                this,
-                "Could not open screenshot gallery.",
+                this, "Could not open screenshot gallery.",
                 Toast.LENGTH_SHORT
             ).show()
         }
@@ -330,9 +276,7 @@ class FloatingBubbleService : Service() {
 
     private fun openMainApp() {
         try {
-            packageManager.getLaunchIntentForPackage(
-                packageName
-            )?.let {
+            packageManager.getLaunchIntentForPackage(packageName)?.let {
                 it.addFlags(
                     Intent.FLAG_ACTIVITY_NEW_TASK or
                         Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -341,17 +285,14 @@ class FloatingBubbleService : Service() {
             }
         } catch (_: Exception) {
             Toast.makeText(
-                this,
-                "Could not open Kalize Recorder.",
+                this, "Could not open Kalize Recorder.",
                 Toast.LENGTH_SHORT
             ).show()
         }
     }
 
     private fun showControls() {
-        wm = getSystemService(
-            WINDOW_SERVICE
-        ) as WindowManager
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val overlayType =
             if (Build.VERSION.SDK_INT >= 26) {
@@ -360,6 +301,11 @@ class FloatingBubbleService : Service() {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             }
+
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val panelWidth = (screenWidth - dp(20)).coerceAtMost(dp(286))
+        val buttonWidth = ((panelWidth - dp(30)) / 6).coerceAtLeast(dp(32))
 
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -372,25 +318,18 @@ class FloatingBubbleService : Service() {
         ).apply {
             gravity = Gravity.TOP or Gravity.START
 
-            val screenWidth = resources.displayMetrics.widthPixels
-            val screenHeight = resources.displayMetrics.heightPixels
             val savedX = positionPrefs.getInt("bubble_x", dp(12))
             val savedY = positionPrefs.getInt("bubble_y", dp(220))
 
             x = savedX.coerceIn(
-                0,
-                (screenWidth - dp(60)).coerceAtLeast(0)
+                0, (screenWidth - dp(60)).coerceAtLeast(0)
             )
-
             y = savedY.coerceIn(
-                0,
-                (screenHeight - dp(60)).coerceAtLeast(0)
+                0, (screenHeight - dp(60)).coerceAtLeast(0)
             )
 
             if (Build.VERSION.SDK_INT >= 31) {
-                flags = flags or
-                    WindowManager.LayoutParams.FLAG_BLUR_BEHIND
-
+                flags = flags or WindowManager.LayoutParams.FLAG_BLUR_BEHIND
                 setBlurBehindRadius(dp(28))
             }
         }
@@ -398,19 +337,10 @@ class FloatingBubbleService : Service() {
         val mainPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(
-                dp(9),
-                dp(10),
-                dp(9),
-                dp(11)
-            )
-
+            setPadding(dp(6), dp(9), dp(6), dp(10))
             background = rounded(
-                Color.argb(238, 24, 22, 36),
-                23,
-                purple
+                Color.argb(238, 24, 22, 36), 23, purple
             )
-
             elevation = dp(12).toFloat()
         }
 
@@ -425,9 +355,7 @@ class FloatingBubbleService : Service() {
             setTextColor(Color.WHITE)
             setTypeface(null, Typeface.BOLD)
             gravity = Gravity.CENTER
-            background = circle(
-                Color.rgb(105, 65, 195)
-            )
+            background = circle(Color.rgb(105, 65, 195))
         }
 
         val titleColumn = LinearLayout(this).apply {
@@ -470,80 +398,36 @@ class FloatingBubbleService : Service() {
             contentDescription = "Drag floating controls"
         }
 
-        header.addView(
-            logo,
-            LinearLayout.LayoutParams(
-                dp(35),
-                dp(35)
-            )
-        )
-
+        header.addView(logo, LinearLayout.LayoutParams(dp(35), dp(35)))
         header.addView(
             titleColumn,
-            LinearLayout.LayoutParams(
-                0,
-                dp(55),
-                1f
-            )
+            LinearLayout.LayoutParams(0, dp(55), 1f)
         )
-
         header.addView(
             dragHandle,
-            LinearLayout.LayoutParams(
-                dp(35),
-                dp(45)
-            )
+            LinearLayout.LayoutParams(dp(35), dp(45))
         )
 
         val divider = View(this).apply {
-            setBackgroundColor(
-                Color.argb(55, 255, 255, 255)
-            )
+            setBackgroundColor(Color.argb(55, 255, 255, 255))
         }
 
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(0, dp(10), 0, 0)
+            setPadding(0, dp(9), 0, 0)
         }
 
-        val openButton = makeButton(
-            "⌂",
-            blue,
-            "Open Kalize Recorder"
-        )
-
-        val screenshotButton = makeButton(
-            "📷",
-            purple,
-            "Capture screenshot"
-        )
-
-        val galleryButton = makeButton(
-            "▧",
-            orange,
-            "Open screenshot gallery"
-        )
-
-        val localPauseButton = makeButton(
-            "Ⅱ",
-            green,
-            "Pause or resume recording"
+        val openButton = makeButton("⌂", blue, "Open Kalize Recorder")
+        val screenshotButton = makeButton("📷", purple, "Capture screenshot")
+        val galleryButton = makeButton("▧", orange, "Open screenshot gallery")
+        val localPauseButton = makeButton("Ⅱ", green, "Pause or resume recording")
+        val stopButton = makeButton("■", red, "Stop recording")
+        val minimizeButton = makeButton(
+            "−", Color.rgb(90, 70, 130), "Minimize controls"
         )
 
         pauseButton = localPauseButton
-
-        val stopButton = makeButton(
-            "■",
-            red,
-            "Stop recording"
-        )
-
-        val minimizeButton = makeButton(
-            "−",
-            Color.rgb(90, 70, 130),
-            "Minimize controls"
-        )
 
         listOf(
             openButton,
@@ -556,29 +440,23 @@ class FloatingBubbleService : Service() {
             controls.addView(
                 button,
                 LinearLayout.LayoutParams(
-                    dp(42),
-                    dp(42)
+                    buttonWidth,
+                    dp(38)
                 ).apply {
-                    marginStart = dp(2)
-                    marginEnd = dp(2)
+                    marginStart = dp(1)
+                    marginEnd = dp(1)
                 }
             )
         }
 
         mainPanel.addView(
             header,
-            LinearLayout.LayoutParams(
-                dp(286),
-                dp(55)
-            )
+            LinearLayout.LayoutParams(panelWidth, dp(55))
         )
 
         mainPanel.addView(
             divider,
-            LinearLayout.LayoutParams(
-                dp(286),
-                dp(1)
-            ).apply {
+            LinearLayout.LayoutParams(panelWidth, dp(1)).apply {
                 topMargin = dp(7)
             }
         )
@@ -599,33 +477,17 @@ class FloatingBubbleService : Service() {
         miniBubble = bubble
         activeView = mainPanel
 
-        openButton.setOnClickListener {
-            openMainApp()
-        }
-
-        screenshotButton.setOnClickListener {
-            openScreenshotCapture()
-        }
-
-        galleryButton.setOnClickListener {
-            openScreenshotGallery()
-        }
+        openButton.setOnClickListener { openMainApp() }
+        screenshotButton.setOnClickListener { openScreenshotCapture() }
+        galleryButton.setOnClickListener { openScreenshotGallery() }
 
         localPauseButton.setOnClickListener {
             val prefs = getSharedPreferences(
-                "kalize_recording_state",
-                Context.MODE_PRIVATE
+                "kalize_recording_state", Context.MODE_PRIVATE
             )
 
-            recording = prefs.getBoolean(
-                "is_recording",
-                false
-            )
-
-            paused = prefs.getBoolean(
-                "is_paused",
-                false
-            )
+            recording = prefs.getBoolean("is_recording", false)
+            paused = prefs.getBoolean("is_paused", false)
 
             if (!recording) {
                 updateControls()
@@ -633,30 +495,20 @@ class FloatingBubbleService : Service() {
             }
 
             sendRecordingAction(
-                if (paused) {
-                    ScreenRecordingService.ACTION_RESUME
-                } else {
-                    ScreenRecordingService.ACTION_PAUSE
-                }
+                if (paused) ScreenRecordingService.ACTION_RESUME
+                else ScreenRecordingService.ACTION_PAUSE
             )
         }
 
         stopButton.setOnClickListener {
-            sendRecordingAction(
-                ScreenRecordingService.ACTION_STOP
-            )
+            sendRecordingAction(ScreenRecordingService.ACTION_STOP)
             stopSelf()
         }
 
-        minimizeButton.setOnClickListener {
-            minimizeControls()
-        }
+        minimizeButton.setOnClickListener { minimizeControls() }
 
         attachDrag(dragHandle)
-
-        attachDrag(bubble) {
-            expandControls()
-        }
+        attachDrag(bubble) { expandControls() }
 
         try {
             wm.addView(mainPanel, params)
@@ -719,7 +571,6 @@ class FloatingBubbleService : Service() {
 
         view.setOnTouchListener { _, event ->
             when (event.action) {
-
                 MotionEvent.ACTION_DOWN -> {
                     startX = params.x
                     startY = params.y
@@ -730,42 +581,27 @@ class FloatingBubbleService : Service() {
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = (
-                        event.rawX - touchX
-                    ).toInt()
+                    val dx = (event.rawX - touchX).toInt()
+                    val dy = (event.rawY - touchY).toInt()
 
-                    val dy = (
-                        event.rawY - touchY
-                    ).toInt()
-
-                    if (
-                        abs(dx) > dp(5) ||
-                        abs(dy) > dp(5)
-                    ) {
+                    if (abs(dx) > dp(5) || abs(dy) > dp(5)) {
                         moved = true
                     }
 
-                    val width =
-                        resources.displayMetrics.widthPixels
-
-                    val height =
-                        resources.displayMetrics.heightPixels
+                    val width = resources.displayMetrics.widthPixels
+                    val height = resources.displayMetrics.heightPixels
 
                     params.x = (startX + dx).coerceIn(
-                        0,
-                        (width - view.width).coerceAtLeast(0)
+                        0, (width - view.width).coerceAtLeast(0)
                     )
-
                     params.y = (startY + dy).coerceIn(
-                        0,
-                        (height - view.height).coerceAtLeast(0)
+                        0, (height - view.height).coerceAtLeast(0)
                     )
 
                     try {
                         wm.updateViewLayout(view, params)
                     } catch (_: Exception) {
                     }
-
                     true
                 }
 
@@ -780,21 +616,16 @@ class FloatingBubbleService : Service() {
                 }
 
                 MotionEvent.ACTION_CANCEL -> true
-
                 else -> false
             }
         }
     }
 
     private fun snapToSide(view: View) {
-        val screenWidth =
-            resources.displayMetrics.widthPixels
+        val screenWidth = resources.displayMetrics.widthPixels
 
         params.x =
-            if (
-                params.x + view.width / 2 <
-                screenWidth / 2
-            ) {
+            if (params.x + view.width / 2 < screenWidth / 2) {
                 0
             } else {
                 (screenWidth - view.width).coerceAtLeast(0)
@@ -842,36 +673,21 @@ class FloatingBubbleService : Service() {
         val now = SystemClock.elapsedRealtime()
 
         val runningMillis =
-            if (
-                recording &&
-                !paused &&
-                recordingStartedAt > 0L
-            ) {
+            if (recording && !paused && recordingStartedAt > 0L) {
                 (now - recordingStartedAt).coerceAtLeast(0L)
             } else {
                 0L
             }
 
-        val totalMillis = elapsedBeforePause + runningMillis
-
-        val totalSeconds = totalMillis / 1000L
+        val totalSeconds = (elapsedBeforePause + runningMillis) / 1000L
         val hours = totalSeconds / 3600L
         val minutes = (totalSeconds % 3600L) / 60L
         val seconds = totalSeconds % 60L
 
         val formatted = if (hours > 0) {
-            String.format(
-                "%02d:%02d:%02d",
-                hours,
-                minutes,
-                seconds
-            )
+            String.format("%02d:%02d:%02d", hours, minutes, seconds)
         } else {
-            String.format(
-                "%02d:%02d",
-                minutes,
-                seconds
-            )
+            String.format("%02d:%02d", minutes, seconds)
         }
 
         timerText?.text = formatted
@@ -885,35 +701,25 @@ class FloatingBubbleService : Service() {
             button?.text = "Ⅱ"
             button?.isEnabled = false
             button?.alpha = 0.5f
-
             status?.text = "● READY"
             status?.setTextColor(palePurple)
-
         } else if (paused) {
             button?.text = "▶"
             button?.isEnabled = true
             button?.alpha = 1f
-
             status?.text = "● PAUSED"
             status?.setTextColor(amber)
-
         } else {
             button?.text = "Ⅱ"
             button?.isEnabled = true
             button?.alpha = 1f
-
             status?.text = "● RECORDING"
-            status?.setTextColor(
-                Color.rgb(255, 85, 100)
-            )
+            status?.setTextColor(Color.rgb(255, 85, 100))
         }
 
         panel?.background = rounded(
-            if (recording) {
-                Color.argb(235, 35, 22, 38)
-            } else {
-                Color.argb(238, 24, 22, 36)
-            },
+            if (recording) Color.argb(235, 35, 22, 38)
+            else Color.argb(238, 24, 22, 36),
             23,
             purple
         )
@@ -925,7 +731,6 @@ class FloatingBubbleService : Service() {
                 params.setBlurBehindRadius(
                     if (recording) dp(32) else dp(28)
                 )
-
                 activeView?.let {
                     wm.updateViewLayout(it, params)
                 }
@@ -942,24 +747,19 @@ class FloatingBubbleService : Service() {
                 unregisterReceiver(stateReceiver)
             } catch (_: Exception) {
             }
-
             receiverRegistered = false
         }
 
         try {
             panel?.let {
-                if (it.parent != null) {
-                    wm.removeView(it)
-                }
+                if (it.parent != null) wm.removeView(it)
             }
         } catch (_: Exception) {
         }
 
         try {
             miniBubble?.let {
-                if (it.parent != null) {
-                    wm.removeView(it)
-                }
+                if (it.parent != null) wm.removeView(it)
             }
         } catch (_: Exception) {
         }

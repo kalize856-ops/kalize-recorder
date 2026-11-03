@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Activity
@@ -6,6 +7,7 @@ import android.content.ContentUris
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.os.StatFs
@@ -39,10 +41,7 @@ class MediaLibraryActivity : Activity() {
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
-    private fun rounded(
-        color: Int,
-        radius: Int = 18
-    ): GradientDrawable {
+    private fun rounded(color: Int, radius: Int = 18): GradientDrawable {
         return GradientDrawable().apply {
             setColor(color)
             cornerRadius = dp(radius).toFloat()
@@ -88,10 +87,7 @@ class MediaLibraryActivity : Activity() {
             background = rounded(Color.rgb(48, 39, 79), 14)
         }
 
-        container.addView(
-            icon,
-            LinearLayout.LayoutParams(dp(52), dp(52))
-        )
+        container.addView(icon, LinearLayout.LayoutParams(dp(52), dp(52)))
 
         val textColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -105,7 +101,6 @@ class MediaLibraryActivity : Activity() {
             textColumn,
             LinearLayout.LayoutParams(0, -2, 1f)
         )
-
         container.addView(label("›", 27f, purple, true))
 
         return container
@@ -114,7 +109,8 @@ class MediaLibraryActivity : Activity() {
     private data class MediaStats(
         val count: Int,
         val totalBytes: Long,
-        val latestName: String
+        val latestName: String,
+        val latestUri: Uri?
     )
 
     private data class StorageInfo(
@@ -125,7 +121,7 @@ class MediaLibraryActivity : Activity() {
     )
 
     private fun readMediaStats(
-        collection: android.net.Uri,
+        collection: Uri,
         relativePath: String
     ): MediaStats {
         return try {
@@ -138,6 +134,7 @@ class MediaLibraryActivity : Activity() {
             var count = 0
             var totalBytes = 0L
             var latestName = ""
+            var latestUri: Uri? = null
 
             contentResolver.query(
                 collection,
@@ -147,9 +144,10 @@ class MediaLibraryActivity : Activity() {
                 "${MediaStore.MediaColumns.DATE_ADDED} DESC"
             )?.use { cursor ->
 
+                val idColumn =
+                    cursor.getColumnIndex(MediaStore.MediaColumns._ID)
                 val sizeColumn =
                     cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
-
                 val nameColumn =
                     cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
 
@@ -157,24 +155,26 @@ class MediaLibraryActivity : Activity() {
                     count++
 
                     if (sizeColumn >= 0 && !cursor.isNull(sizeColumn)) {
-                        totalBytes += cursor.getLong(sizeColumn)
-                            .coerceAtLeast(0L)
+                        totalBytes += cursor.getLong(sizeColumn).coerceAtLeast(0L)
                     }
 
-                    if (
-                        latestName.isEmpty() &&
-                        nameColumn >= 0 &&
-                        !cursor.isNull(nameColumn)
-                    ) {
-                        latestName = cursor.getString(nameColumn)
+                    if (latestName.isEmpty()) {
+                        if (nameColumn >= 0 && !cursor.isNull(nameColumn)) {
+                            latestName = cursor.getString(nameColumn)
+                        }
+
+                        if (idColumn >= 0 && !cursor.isNull(idColumn)) {
+                            val id = cursor.getLong(idColumn)
+                            latestUri = ContentUris.withAppendedId(collection, id)
+                        }
                     }
                 }
             }
 
-            MediaStats(count, totalBytes, latestName)
+            MediaStats(count, totalBytes, latestName, latestUri)
 
         } catch (_: Exception) {
-            MediaStats(0, 0L, "")
+            MediaStats(0, 0L, "", null)
         }
     }
 
@@ -195,7 +195,6 @@ class MediaLibraryActivity : Activity() {
     private fun getStorageInfo(): StorageInfo {
         return try {
             val stat = StatFs(Environment.getDataDirectory().path)
-
             val total = stat.totalBytes
             val free = stat.availableBytes.coerceAtMost(total)
             val used = (total - free).coerceAtLeast(0L)
@@ -204,12 +203,9 @@ class MediaLibraryActivity : Activity() {
                 ((used.toDouble() / total.toDouble()) * 100)
                     .toInt()
                     .coerceIn(0, 100)
-            } else {
-                0
-            }
+            } else 0
 
             StorageInfo(total, free, used, percent)
-
         } catch (_: Exception) {
             StorageInfo(0L, 0L, 0L, 0)
         }
@@ -227,22 +223,57 @@ class MediaLibraryActivity : Activity() {
             index++
         }
 
-        return String.format(
-            Locale.US,
-            "%.1f %s",
-            size,
-            units[index]
-        )
+        return String.format(Locale.US, "%.1f %s", size, units[index])
     }
 
-    private fun addSpace(
-        parent: LinearLayout,
-        size: Int
-    ) {
+    private fun addSpace(parent: LinearLayout, size: Int) {
         parent.addView(
             android.view.View(this),
             LinearLayout.LayoutParams(1, dp(size))
         )
+    }
+
+    private fun openLatestVideo(uri: Uri?) {
+        if (uri == null) {
+            toast("No Kalize videos were found.")
+            return
+        }
+
+        try {
+            startActivity(
+                Intent(this, VideoPreviewActivity::class.java).apply {
+                    putExtra(VideoPreviewActivity.EXTRA_VIDEO_URI, uri.toString())
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            )
+        } catch (_: Exception) {
+            toast("Could not open the latest video.")
+        }
+    }
+
+    private fun openLatestScreenshot(uri: Uri?) {
+        if (uri == null) {
+            toast("No Kalize screenshots were found.")
+            return
+        }
+
+        try {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "image/*")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            toast("No compatible image viewer was found.")
+        }
+    }
+
+    private fun toast(message: String) {
+        android.widget.Toast.makeText(
+            this,
+            message,
+            android.widget.Toast.LENGTH_LONG
+        ).show()
     }
 
     private fun buildScreen() {
@@ -250,11 +281,8 @@ class MediaLibraryActivity : Activity() {
         val screenshots = getScreenshotStats()
         val storage = getStorageInfo()
 
-        val totalMediaCount =
-            videos.count + screenshots.count
-
-        val totalMediaSize =
-            videos.totalBytes + screenshots.totalBytes
+        val totalMediaCount = videos.count + screenshots.count
+        val totalMediaSize = videos.totalBytes + screenshots.totalBytes
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -268,50 +296,24 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(19), dp(22), dp(19), dp(20))
         }
 
+        content.addView(label("KALIZE STUDIO  /  MEDIA", 11f, purple, true))
+        content.addView(label("Your Library", 29f, white, true))
         content.addView(
-            label("KALIZE STUDIO  /  MEDIA", 11f, purple, true)
-        )
-
-        content.addView(
-            label("Your Library", 29f, white, true)
-        )
-
-        content.addView(
-            label(
-                "Browse and manage everything you capture.",
-                13f,
-                muted
-            )
+            label("Browse and manage everything you capture.", 13f, muted)
         )
 
         addSpace(content, 20)
 
-        // Actual Kalize media overview.
         val mediaCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(Color.rgb(39, 31, 68), 22)
             setPadding(dp(18), dp(17), dp(18), dp(17))
         }
 
+        mediaCard.addView(label("YOUR KALIZE MEDIA", 11f, purple, true))
+        mediaCard.addView(label(totalMediaCount.toString(), 34f, white, true))
         mediaCard.addView(
-            label("YOUR KALIZE MEDIA", 11f, purple, true)
-        )
-
-        mediaCard.addView(
-            label(
-                totalMediaCount.toString(),
-                34f,
-                white,
-                true
-            )
-        )
-
-        mediaCard.addView(
-            label(
-                "Total captures found in Kalize folders",
-                12f,
-                muted
-            )
+            label("Total captures found in Kalize folders", 12f, muted)
         )
 
         addSpace(mediaCard, 12)
@@ -326,17 +328,9 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(12), dp(11), dp(8), dp(11))
         }
 
-        videoColumn.addView(
-            label("VIDEOS", 10f, purple, true)
-        )
-
-        videoColumn.addView(
-            label(videos.count.toString(), 23f, white, true)
-        )
-
-        videoColumn.addView(
-            label(formatSize(videos.totalBytes), 11f, muted)
-        )
+        videoColumn.addView(label("VIDEOS", 10f, purple, true))
+        videoColumn.addView(label(videos.count.toString(), 23f, white, true))
+        videoColumn.addView(label(formatSize(videos.totalBytes), 11f, muted))
 
         val screenshotColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -344,14 +338,10 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(12), dp(11), dp(8), dp(11))
         }
 
-        screenshotColumn.addView(
-            label("SCREENSHOTS", 10f, purple, true)
-        )
-
+        screenshotColumn.addView(label("SCREENSHOTS", 10f, purple, true))
         screenshotColumn.addView(
             label(screenshots.count.toString(), 23f, white, true)
         )
-
         screenshotColumn.addView(
             label(formatSize(screenshots.totalBytes), 11f, muted)
         )
@@ -362,7 +352,6 @@ class MediaLibraryActivity : Activity() {
                 marginEnd = dp(6)
             }
         )
-
         statsRow.addView(
             screenshotColumn,
             LinearLayout.LayoutParams(0, -2, 1f).apply {
@@ -371,7 +360,6 @@ class MediaLibraryActivity : Activity() {
         )
 
         mediaCard.addView(statsRow)
-
         addSpace(mediaCard, 12)
 
         mediaCard.addView(
@@ -385,46 +373,55 @@ class MediaLibraryActivity : Activity() {
 
         if (videos.latestName.isNotEmpty()) {
             mediaCard.addView(
-                label(
-                    "Latest video: ${videos.latestName}",
-                    10f,
-                    muted
-                )
+                label("Latest video: ${videos.latestName}", 10f, muted)
             )
         }
 
         if (screenshots.latestName.isNotEmpty()) {
             mediaCard.addView(
-                label(
-                    "Latest screenshot: ${screenshots.latestName}",
-                    10f,
-                    muted
-                )
+                label("Latest screenshot: ${screenshots.latestName}", 10f, muted)
             )
         }
 
-        content.addView(
-            mediaCard,
-            LinearLayout.LayoutParams(-1, -2)
-        )
+        content.addView(mediaCard, LinearLayout.LayoutParams(-1, -2))
+
+        addSpace(content, 10)
+
+        if (videos.latestUri != null) {
+            content.addView(
+                actionButton(
+                    "Play latest video",
+                    videos.latestName.ifBlank { "Open your newest recording" },
+                    "▶"
+                ) {
+                    openLatestVideo(videos.latestUri)
+                }
+            )
+            addSpace(content, 9)
+        }
+
+        if (screenshots.latestUri != null) {
+            content.addView(
+                actionButton(
+                    "View latest screenshot",
+                    screenshots.latestName.ifBlank { "Open your newest screenshot" },
+                    "▧"
+                ) {
+                    openLatestScreenshot(screenshots.latestUri)
+                }
+            )
+        }
 
         addSpace(content, 18)
 
-        // Overall phone storage.
         val storageCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(card, 20)
             setPadding(dp(18), dp(16), dp(18), dp(16))
         }
 
-        storageCard.addView(
-            label("DEVICE STORAGE", 11f, purple, true)
-        )
-
-        storageCard.addView(
-            label("Your phone storage", 18f, white, true)
-        )
-
+        storageCard.addView(label("DEVICE STORAGE", 11f, purple, true))
+        storageCard.addView(label("Your phone storage", 18f, white, true))
         storageCard.addView(
             label(
                 "${formatSize(storage.used)} used  •  ${storage.percent}% full",
@@ -449,58 +446,30 @@ class MediaLibraryActivity : Activity() {
                 )
         }
 
-        val progressParams = LinearLayout.LayoutParams(
-            -1,
-            dp(9)
-        ).apply {
-            topMargin = dp(12)
-            bottomMargin = dp(10)
-        }
-
         storageCard.addView(
             storageProgress,
-            progressParams
+            LinearLayout.LayoutParams(-1, dp(9)).apply {
+                topMargin = dp(12)
+                bottomMargin = dp(10)
+            }
         )
 
         storageCard.addView(
-            label(
-                "${formatSize(storage.free)} available",
-                12f,
-                muted
-            )
+            label("${formatSize(storage.free)} available", 12f, muted)
         )
-
         storageCard.addView(
-            label(
-                "${formatSize(storage.total)} total device storage",
-                11f,
-                muted
-            )
+            label("${formatSize(storage.total)} total device storage", 11f, muted)
         )
-
         storageCard.addView(
-            label(
-                "This meter shows overall phone storage.",
-                10f,
-                muted
-            )
+            label("This meter shows overall phone storage.", 10f, muted)
         )
 
-        content.addView(
-            storageCard,
-            LinearLayout.LayoutParams(-1, -2)
-        )
+        content.addView(storageCard, LinearLayout.LayoutParams(-1, -2))
 
         addSpace(content, 22)
 
-        content.addView(
-            label("YOUR MEDIA", 11f, purple, true)
-        )
-
-        content.addView(
-            label("Browse your captures", 19f, white, true)
-        )
-
+        content.addView(label("YOUR MEDIA", 11f, purple, true))
+        content.addView(label("Browse your captures", 19f, white, true))
         content.addView(
             label(
                 "Open a collection to search, sort, favourite, share or manage files.",
@@ -517,9 +486,7 @@ class MediaLibraryActivity : Activity() {
                 "Watch, rename, favourite and share recordings",
                 "▶"
             ) {
-                startActivity(
-                    Intent(this, SavedVideosActivity::class.java)
-                )
+                startActivity(Intent(this, SavedVideosActivity::class.java))
             }
         )
 
@@ -531,9 +498,7 @@ class MediaLibraryActivity : Activity() {
                 "Browse, organise and share screenshots",
                 "▧"
             ) {
-                startActivity(
-                    Intent(this, ScreenshotGalleryActivity::class.java)
-                )
+                startActivity(Intent(this, ScreenshotGalleryActivity::class.java))
             }
         )
 
@@ -545,17 +510,13 @@ class MediaLibraryActivity : Activity() {
                 "Trim, rotate, crop and export clips",
                 "✂"
             ) {
-                startActivity(
-                    Intent(this, VideoEditorActivity::class.java)
-                )
+                startActivity(Intent(this, VideoEditorActivity::class.java))
             }
         )
 
         addSpace(content, 22)
 
-        content.addView(
-            label("LIBRARY TIPS", 11f, purple, true)
-        )
+        content.addView(label("LIBRARY TIPS", 11f, purple, true))
 
         val tips = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -563,15 +524,7 @@ class MediaLibraryActivity : Activity() {
             setPadding(dp(16), dp(13), dp(16), dp(13))
         }
 
-        tips.addView(
-            label(
-                "Keep your recordings organised",
-                14f,
-                white,
-                true
-            )
-        )
-
+        tips.addView(label("Keep your recordings organised", 14f, white, true))
         tips.addView(
             label(
                 "• Use favourites to mark important captures.\n" +
@@ -584,7 +537,6 @@ class MediaLibraryActivity : Activity() {
         )
 
         content.addView(tips)
-
         addSpace(content, 20)
 
         val back = Button(this).apply {
@@ -596,18 +548,10 @@ class MediaLibraryActivity : Activity() {
             setOnClickListener { finish() }
         }
 
-        content.addView(
-            back,
-            LinearLayout.LayoutParams(-1, dp(48))
-        )
+        content.addView(back, LinearLayout.LayoutParams(-1, dp(48)))
 
         scroll.addView(content)
-
-        root.addView(
-            scroll,
-            LinearLayout.LayoutParams(-1, -1)
-        )
-
+        root.addView(scroll, LinearLayout.LayoutParams(-1, -1))
         setContentView(root)
     }
 }

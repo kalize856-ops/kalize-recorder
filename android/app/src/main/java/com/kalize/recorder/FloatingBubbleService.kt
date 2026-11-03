@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Service
@@ -70,9 +71,6 @@ class FloatingBubbleService : Service() {
                 ScreenRecordingService.ACTION_STATE_CHANGED
             ) return
 
-            val wasRecording = recording
-            val wasPaused = paused
-
             val newRecording = intent.getBooleanExtra(
                 ScreenRecordingService.EXTRA_IS_RECORDING,
                 false
@@ -85,28 +83,50 @@ class FloatingBubbleService : Service() {
 
             val now = SystemClock.elapsedRealtime()
 
-            if (!wasRecording && newRecording) {
-                recordingStartedAt = now
-                elapsedBeforePause = 0L
-
-            } else if (
-                wasRecording && !wasPaused && newPaused
+            if (intent.hasExtra(
+                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS
+                )
             ) {
-                elapsedBeforePause += now - recordingStartedAt
-                recordingStartedAt = 0L
+                elapsedBeforePause = intent.getLongExtra(
+                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS,
+                    0L
+                ).coerceAtLeast(0L)
 
-            } else if (
-                wasRecording && wasPaused && !newPaused
-            ) {
-                recordingStartedAt = now
+                recordingStartedAt =
+                    if (newRecording && !newPaused) now else 0L
+            } else {
+                val wasRecording = recording
+                val wasPaused = paused
 
-            } else if (wasRecording && !newRecording) {
-                recordingStartedAt = 0L
-                elapsedBeforePause = 0L
+                if (!wasRecording && newRecording) {
+                    elapsedBeforePause = 0L
+                    recordingStartedAt =
+                        if (newPaused) 0L else now
+                } else if (
+                    wasRecording && !wasPaused && newPaused
+                ) {
+                    if (recordingStartedAt > 0L) {
+                        elapsedBeforePause +=
+                            (now - recordingStartedAt).coerceAtLeast(0L)
+                    }
+                    recordingStartedAt = 0L
+                } else if (
+                    wasRecording && wasPaused && !newPaused
+                ) {
+                    recordingStartedAt = now
+                } else if (wasRecording && !newRecording) {
+                    elapsedBeforePause = 0L
+                    recordingStartedAt = 0L
+                }
             }
 
             recording = newRecording
-            paused = newPaused
+            paused = newRecording && newPaused
+
+            if (!recording) {
+                elapsedBeforePause = 0L
+                recordingStartedAt = 0L
+            }
 
             updateControls()
             updateTimer()
@@ -143,10 +163,31 @@ class FloatingBubbleService : Service() {
         recording = prefs.getBoolean("is_recording", false)
         paused = prefs.getBoolean("is_paused", false)
 
+        val savedElapsed = prefs.getLong(
+            "recording_elapsed_ms",
+            0L
+        ).coerceAtLeast(0L)
+
+        val savedRealtime = prefs.getLong(
+            "recording_elapsed_realtime_ms",
+            0L
+        )
+
         if (!recording) {
             paused = false
-        } else if (!paused) {
-            recordingStartedAt = SystemClock.elapsedRealtime()
+            elapsedBeforePause = 0L
+            recordingStartedAt = 0L
+        } else if (paused) {
+            elapsedBeforePause = savedElapsed
+            recordingStartedAt = 0L
+        } else {
+            elapsedBeforePause = savedElapsed
+            recordingStartedAt =
+                if (savedRealtime > 0L) {
+                    savedRealtime
+                } else {
+                    SystemClock.elapsedRealtime()
+                }
         }
 
         handler.post(timerRunnable)
@@ -729,23 +770,27 @@ class FloatingBubbleService : Service() {
             wm.addView(currentPanel, params)
             activeView = currentPanel
             updateControls()
+            updateTimer()
         } catch (_: Exception) {
             stopSelf()
         }
     }
 
     private fun updateTimer() {
-        val totalMillis = elapsedBeforePause +
+        val now = SystemClock.elapsedRealtime()
+
+        val runningMillis =
             if (
                 recording &&
                 !paused &&
                 recordingStartedAt > 0L
             ) {
-                SystemClock.elapsedRealtime() -
-                    recordingStartedAt
+                (now - recordingStartedAt).coerceAtLeast(0L)
             } else {
                 0L
             }
+
+        val totalMillis = elapsedBeforePause + runningMillis
 
         val totalSeconds = totalMillis / 1000L
         val hours = totalSeconds / 3600L

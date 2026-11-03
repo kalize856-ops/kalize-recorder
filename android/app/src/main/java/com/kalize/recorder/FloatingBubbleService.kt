@@ -28,7 +28,6 @@ class FloatingBubbleService : Service() {
 
     private lateinit var wm: WindowManager
     private lateinit var params: WindowManager.LayoutParams
-
     private lateinit var root: FrameLayout
     private lateinit var mainBubble: TextView
 
@@ -49,16 +48,25 @@ class FloatingBubbleService : Service() {
         getSharedPreferences("kalize_bubble_position", MODE_PRIVATE)
     }
 
+    private val statePrefs by lazy {
+        getSharedPreferences("kalize_recording_state", MODE_PRIVATE)
+    }
+
     private val purple = Color.rgb(125, 75, 220)
     private val orange = Color.rgb(255, 115, 25)
     private val red = Color.rgb(235, 55, 65)
     private val blue = Color.rgb(45, 125, 235)
     private val green = Color.rgb(35, 165, 105)
-    private val dark = Color.rgb(30, 25, 40)
     private val white = Color.WHITE
 
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
+
+    private fun bubbleSize(): Int =
+        prefs.getInt("bubble_size", 60).coerceIn(48, 80)
+
+    private fun bubbleOpacity(): Float =
+        prefs.getInt("bubble_opacity", 100).coerceIn(30, 100) / 100f
 
     private fun circle(color: Int) =
         GradientDrawable().apply {
@@ -75,7 +83,7 @@ class FloatingBubbleService : Service() {
     ): TextView {
         return TextView(this).apply {
             text = symbol
-            textSize = 21f
+            textSize = if (size > 50) 25f else 21f
             gravity = Gravity.CENTER
             setTextColor(white)
             setTypeface(null, Typeface.BOLD)
@@ -83,6 +91,7 @@ class FloatingBubbleService : Service() {
             elevation = dp(9).toFloat()
             contentDescription = description
             isClickable = true
+            alpha = bubbleOpacity()
         }
     }
 
@@ -95,7 +104,6 @@ class FloatingBubbleService : Service() {
         action: () -> Unit
     ) {
         val button = makeBubble(symbol, color, description)
-
         button.visibility = View.GONE
 
         root.addView(
@@ -136,26 +144,23 @@ class FloatingBubbleService : Service() {
 
         receiverRegistered = true
 
-        val state = getSharedPreferences(
-            "kalize_recording_state",
-            MODE_PRIVATE
-        )
+        recording = statePrefs.getBoolean("is_recording", false)
+        paused = statePrefs.getBoolean("is_paused", false)
 
-        recording = state.getBoolean("is_recording", false)
-        paused = state.getBoolean("is_paused", false)
-
-        elapsedBeforePause = state.getLong(
+        elapsedBeforePause = statePrefs.getLong(
             "recording_elapsed_ms", 0L
         ).coerceAtLeast(0L)
 
-        val savedRealtime = state.getLong(
+        val savedRealtime = statePrefs.getLong(
             "recording_elapsed_realtime_ms", 0L
         )
 
         if (recording && !paused) {
-            recordingStartedAt =
-                if (savedRealtime > 0L) savedRealtime
-                else SystemClock.elapsedRealtime()
+            recordingStartedAt = if (savedRealtime > 0L) {
+                savedRealtime
+            } else {
+                SystemClock.elapsedRealtime()
+            }
         }
 
         handler.post(timerRunnable)
@@ -180,7 +185,6 @@ class FloatingBubbleService : Service() {
     }
 
     private fun createBubbleMenu() {
-
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         val type = if (Build.VERSION.SDK_INT >= 26) {
@@ -208,93 +212,38 @@ class FloatingBubbleService : Service() {
             clipToPadding = false
         }
 
-        // MAIN BUBBLE
+        val size = bubbleSize()
 
         mainBubble = makeBubble(
             "K",
             orange,
             "Tap to expand Kalize Recorder controls",
-            60
+            size
         ).apply {
             textSize = 25f
         }
 
         root.addView(
             mainBubble,
-            FrameLayout.LayoutParams(
-                dp(60),
-                dp(60)
-            ).apply {
-                leftMargin = dp(68)
-                topMargin = dp(68)
+            FrameLayout.LayoutParams(dp(size), dp(size)).apply {
+                leftMargin = dp((196 - size) / 2)
+                topMargin = dp((196 - size) / 2)
             }
         )
 
-        // RECORDING BUTTON
-
-        addAction(
-            "▶",
-            orange,
-            "Open recording controls",
-            76,
-            0
-        ) {
+        addAction("▶", orange, "Open Kalize Recorder", 76, 0) {
             openMainApp()
         }
 
-        // BRUSH BUTTON
-
-        addAction(
-            "✎",
-            purple,
-            "Drawing tools",
-            16,
-            27
-        ) {
-            Toast.makeText(
-                this,
-                "Drawing tools are coming next.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-
-        // SCREENSHOT BUTTON
-
-        addAction(
-            "📷",
-            red,
-            "Take screenshot",
-            136,
-            27
-        ) {
+        addAction("📷", red, "Take screenshot", 136, 27) {
             openScreenshot()
         }
 
-        // LIVE BUTTON
-
-        addAction(
-            "LIVE",
-            red,
-            "Live streaming",
-            16,
-            125
-        ) {
-            Toast.makeText(
-                this,
-                "Live streaming is not connected yet.",
-                Toast.LENGTH_SHORT
-            ).show()
+        addAction("▧", blue, "Open screenshot gallery", 8, 78) {
+            openGallery()
         }
 
-        // PAUSE / RESUME BUTTON
-
-        addAction(
-            "Ⅱ",
-            green,
-            "Pause or resume recording",
-            136,
-            125
-        ) {
+        addAction("Ⅱ", green, "Pause or resume recording", 136, 125) {
             if (!recording) {
                 Toast.makeText(
                     this,
@@ -303,45 +252,34 @@ class FloatingBubbleService : Service() {
                 ).show()
             } else {
                 sendRecordingAction(
-                    if (paused)
+                    if (paused) {
                         ScreenRecordingService.ACTION_RESUME
-                    else
+                    } else {
                         ScreenRecordingService.ACTION_PAUSE
+                    }
                 )
             }
         }
 
-        // STOP BUTTON
-
-        addAction(
-            "■",
-            red,
-            "Stop recording",
-            76,
-            152
-        ) {
-            sendRecordingAction(
-                ScreenRecordingService.ACTION_STOP
-            )
-        }
-
-        // GALLERY BUTTON
-
-        addAction(
-            "▧",
-            blue,
-            "Open screenshot gallery",
-            8,
-            78
-        ) {
-            openGallery()
+        addAction("■", red, "Stop recording", 76, 152) {
+            if (recording) {
+                sendRecordingAction(
+                    ScreenRecordingService.ACTION_STOP
+                )
+            } else {
+                Toast.makeText(
+                    this,
+                    "No active recording.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
 
         mainBubble.setOnTouchListener(mainTouchListener)
 
         try {
             wm.addView(root, params)
-        } catch (error: Exception) {
+        } catch (_: Exception) {
             stopSelf()
             return
         }
@@ -351,7 +289,6 @@ class FloatingBubbleService : Service() {
 
     private fun expandMenu() {
         if (expanded) return
-
         expanded = true
 
         actionBubbles.forEach { button ->
@@ -363,7 +300,7 @@ class FloatingBubbleService : Service() {
             button.animate()
                 .scaleX(1f)
                 .scaleY(1f)
-                .alpha(1f)
+                .alpha(bubbleOpacity())
                 .setDuration(180)
                 .start()
         }
@@ -376,7 +313,6 @@ class FloatingBubbleService : Service() {
 
     private fun collapseMenu() {
         if (!expanded) return
-
         expanded = false
 
         actionBubbles.forEach { button ->
@@ -400,31 +336,17 @@ class FloatingBubbleService : Service() {
     private val mainTouchListener =
         View.OnTouchListener { _, event ->
 
-            var startX = 0
-            var startY = 0
-            var touchX = 0f
-            var touchY = 0f
-            var moved = false
-
             when (event.action) {
-
                 MotionEvent.ACTION_DOWN -> {
-                    startX = params.x
-                    startY = params.y
-                    touchX = event.rawX
-                    touchY = event.rawY
-                    moved = false
-
                     mainBubble.setTag(
                         intArrayOf(
-                            startX,
-                            startY,
-                            touchX.toInt(),
-                            touchY.toInt(),
+                            params.x,
+                            params.y,
+                            event.rawX.toInt(),
+                            event.rawY.toInt(),
                             0
                         )
                     )
-
                     true
                 }
 
@@ -432,10 +354,11 @@ class FloatingBubbleService : Service() {
                     val saved = mainBubble.tag as? IntArray
                         ?: return@OnTouchListener true
 
-                    val dx = (event.rawX - saved[2]).toInt()
-                    val dy = (event.rawY - saved[3]).toInt()
+                    val dx = event.rawX.toInt() - saved[2]
+                    val dy = event.rawY.toInt() - saved[3]
 
-                    if (kotlin.math.abs(dx) > dp(5) ||
+                    if (
+                        kotlin.math.abs(dx) > dp(5) ||
                         kotlin.math.abs(dy) > dp(5)
                     ) {
                         saved[4] = 1
@@ -484,6 +407,7 @@ class FloatingBubbleService : Service() {
         }
 
         mainBubble.background = circle(color)
+        mainBubble.alpha = bubbleOpacity()
 
         if (recording) {
             mainBubble.text = currentTimer
@@ -523,7 +447,6 @@ class FloatingBubbleService : Service() {
             )
 
             if (intent != null) startActivity(intent)
-
         } catch (_: Exception) {
             Toast.makeText(
                 this,
@@ -609,7 +532,8 @@ class FloatingBubbleService : Service() {
                 false
             )
 
-            if (intent.hasExtra(
+            if (
+                intent.hasExtra(
                     ScreenRecordingService.EXTRA_ELAPSED_MILLIS
                 )
             ) {
@@ -619,9 +543,11 @@ class FloatingBubbleService : Service() {
                 ).coerceAtLeast(0L)
 
                 recordingStartedAt =
-                    if (recording && !paused)
+                    if (recording && !paused) {
                         SystemClock.elapsedRealtime()
-                    else 0L
+                    } else {
+                        0L
+                    }
 
             } else if (!recording) {
                 elapsedBeforePause = 0L
@@ -662,7 +588,9 @@ class FloatingBubbleService : Service() {
             recording && !paused && recordingStartedAt > 0L
         ) {
             SystemClock.elapsedRealtime() - recordingStartedAt
-        } else 0L
+        } else {
+            0L
+        }
 
         val seconds =
             (elapsedBeforePause + running).coerceAtLeast(0L) / 1000L
@@ -672,9 +600,18 @@ class FloatingBubbleService : Service() {
         val remaining = seconds % 60L
 
         currentTimer = if (hours > 0) {
-            String.format("%02d:%02d:%02d", hours, minutes, remaining)
+            String.format(
+                "%02d:%02d:%02d",
+                hours,
+                minutes,
+                remaining
+            )
         } else {
-            String.format("%02d:%02d", minutes, remaining)
+            String.format(
+                "%02d:%02d",
+                minutes,
+                remaining
+            )
         }
 
         updateMainBubble()
@@ -701,7 +638,6 @@ class FloatingBubbleService : Service() {
         }
 
         actionBubbles.clear()
-
         super.onDestroy()
     }
 }

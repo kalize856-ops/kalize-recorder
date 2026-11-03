@@ -1,692 +1,286 @@
 
 package com.kalize.recorder
 
-import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
+import android.app.Activity
 import android.graphics.Color
-import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.os.Build
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
-import android.os.SystemClock
-import android.provider.Settings
+import android.os.Bundle
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.WindowManager
-import android.widget.FrameLayout
+import android.widget.Button
+import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 
-class FloatingBubbleService : Service() {
-
-    private lateinit var wm: WindowManager
-    private lateinit var params: WindowManager.LayoutParams
-    private lateinit var root: FrameLayout
-    private lateinit var mainBubble: TextView
-
-    private val actionBubbles = mutableListOf<TextView>()
-
-    private var expanded = false
-    private var recording = false
-    private var paused = false
-    private var receiverRegistered = false
-
-    private var recordingStartedAt = 0L
-    private var elapsedBeforePause = 0L
-    private var currentTimer = "00:00"
-
-    private val handler = Handler(Looper.getMainLooper())
+class BubbleSettingsActivity : Activity() {
 
     private val prefs by lazy {
         getSharedPreferences("kalize_bubble_position", MODE_PRIVATE)
     }
 
-    private val statePrefs by lazy {
-        getSharedPreferences("kalize_recording_state", MODE_PRIVATE)
+    private val colors = listOf(
+        "Orange" to Color.rgb(255, 115, 25),
+        "Purple" to Color.rgb(125, 75, 220),
+        "Blue" to Color.rgb(45, 125, 235),
+        "Green" to Color.rgb(35, 165, 105),
+        "Red" to Color.rgb(235, 55, 65)
+    )
+
+    private var selectedColor = Color.rgb(255, 115, 25)
+    private var selectedSize = 60
+    private var selectedOpacity = 100
+
+    private lateinit var preview: TextView
+    private lateinit var sizeValue: TextView
+    private lateinit var opacityValue: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        selectedColor = prefs.getInt("bubble_color", colors[0].second)
+        selectedSize = prefs.getInt("bubble_size", 60).coerceIn(48, 80)
+        selectedOpacity = prefs.getInt("bubble_opacity", 100).coerceIn(30, 100)
+
+        buildScreen()
     }
 
-    private val purple = Color.rgb(125, 75, 220)
-    private val orange = Color.rgb(255, 115, 25)
-    private val red = Color.rgb(235, 55, 65)
-    private val blue = Color.rgb(45, 125, 235)
-    private val green = Color.rgb(35, 165, 105)
-    private val white = Color.WHITE
-
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
-
-    private fun bubbleSize(): Int =
-        prefs.getInt("bubble_size", 60).coerceIn(48, 80)
-
-    private fun bubbleOpacity(): Float =
-        prefs.getInt("bubble_opacity", 100).coerceIn(30, 100) / 100f
-
-    private fun selectedBubbleColor(): Int =
-        prefs.getInt("bubble_color", orange)
-
-    private fun circle(color: Int) =
-        GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(color)
-            setStroke(dp(2), Color.argb(100, 255, 255, 255))
+    private fun buildScreen() {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(24), dp(22), dp(24))
+            setBackgroundColor(Color.rgb(15, 17, 25))
         }
 
-    private fun makeBubble(
-        symbol: String,
-        color: Int,
-        description: String,
-        size: Int = 44
-    ): TextView {
-        return TextView(this).apply {
-            text = symbol
-            textSize = if (size > 50) 25f else 21f
-            gravity = Gravity.CENTER
-            setTextColor(white)
-            setTypeface(null, Typeface.BOLD)
-            background = circle(color)
-            elevation = dp(9).toFloat()
-            contentDescription = description
-            isClickable = true
-            alpha = bubbleOpacity()
+        val scroll = android.widget.ScrollView(this)
+        scroll.addView(root)
+
+        val heading = TextView(this).apply {
+            text = "Bubble Settings"
+            textSize = 27f
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
         }
-    }
+        root.addView(heading)
 
-    private fun addAction(
-        symbol: String,
-        color: Int,
-        description: String,
-        x: Int,
-        y: Int,
-        action: () -> Unit
-    ) {
-        val button = makeBubble(symbol, color, description)
-        button.visibility = View.GONE
-
-        root.addView(
-            button,
-            FrameLayout.LayoutParams(dp(44), dp(44)).apply {
-                leftMargin = dp(x)
-                topMargin = dp(y)
-            }
-        )
-
-        button.setOnClickListener {
-            collapseMenu()
-            action()
+        val subtitle = TextView(this).apply {
+            text = "Customise your floating Kalize bubble"
+            textSize = 14f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(7), 0, dp(24))
         }
+        root.addView(subtitle)
 
-        actionBubbles.add(button)
-    }
+        addSection(root, "LIVE PREVIEW")
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onCreate() {
-        super.onCreate()
-
-        val filter = IntentFilter(
-            ScreenRecordingService.ACTION_STATE_CHANGED
-        )
-
-        if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(
-                stateReceiver,
-                filter,
-                RECEIVER_NOT_EXPORTED
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(stateReceiver, filter)
-        }
-
-        receiverRegistered = true
-
-        recording = statePrefs.getBoolean("is_recording", false)
-        paused = statePrefs.getBoolean("is_paused", false)
-
-        elapsedBeforePause = statePrefs.getLong(
-            "recording_elapsed_ms", 0L
-        ).coerceAtLeast(0L)
-
-        val savedRealtime = statePrefs.getLong(
-            "recording_elapsed_realtime_ms", 0L
-        )
-
-        if (recording && !paused) {
-            recordingStartedAt = if (savedRealtime > 0L) {
-                savedRealtime
-            } else {
-                SystemClock.elapsedRealtime()
-            }
-        }
-
-        handler.post(timerRunnable)
-    }
-
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
-
-        if (!Settings.canDrawOverlays(this)) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        if (!::root.isInitialized) {
-            createBubbleMenu()
-        }
-
-        return START_NOT_STICKY
-    }
-
-    private fun createBubbleMenu() {
-        wm = getSystemService(WINDOW_SERVICE) as WindowManager
-
-        val type = if (Build.VERSION.SDK_INT >= 26) {
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-        } else {
-            @Suppress("DEPRECATION")
-            WindowManager.LayoutParams.TYPE_PHONE
-        }
-
-        params = WindowManager.LayoutParams(
-            dp(196),
-            dp(196),
-            type,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = prefs.getInt("bubble_x", dp(12))
-            y = prefs.getInt("bubble_y", dp(220))
-        }
-
-        root = FrameLayout(this).apply {
-            clipChildren = false
-            clipToPadding = false
-        }
-
-        val size = bubbleSize()
-
-        mainBubble = makeBubble(
-            "K",
-            selectedBubbleColor(),
-            "Tap to expand Kalize Recorder controls",
-            size
-        ).apply {
+        preview = TextView(this).apply {
+            text = "K"
             textSize = 25f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            typeface = Typeface.DEFAULT_BOLD
+            elevation = dp(8).toFloat()
+        }
+
+        val previewHolder = LinearLayout(this).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(20), 0, dp(25))
+        }
+
+        previewHolder.addView(
+            preview,
+            LinearLayout.LayoutParams(dp(selectedSize), dp(selectedSize))
+        )
+        root.addView(previewHolder)
+
+        addSection(root, "BUBBLE COLOUR")
+
+        val colorContainer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        colors.forEach { item ->
+            val button = Button(this).apply {
+                text = item.first
+                textSize = 14f
+                setTextColor(Color.WHITE)
+                background = rounded(item.second, 14)
+                setOnClickListener {
+                    selectedColor = item.second
+                    updatePreview()
+                    Toast.makeText(
+                        this@BubbleSettingsActivity,
+                        "${item.first} selected",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+
+            colorContainer.addView(
+                button,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(48)
+                ).apply {
+                    bottomMargin = dp(8)
+                }
+            )
+        }
+
+        root.addView(colorContainer)
+
+        addSection(root, "BUBBLE SIZE")
+
+        sizeValue = addValue(root, "${selectedSize}dp")
+
+        val sizeSeek = SeekBar(this).apply {
+            max = 32
+            progress = selectedSize - 48
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        selectedSize = progress + 48
+                        sizeValue.text = "${selectedSize}dp"
+                        updatePreview()
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                }
+            )
+        }
+        root.addView(sizeSeek)
+
+        addSection(root, "TRANSPARENCY")
+
+        opacityValue = addValue(root, "$selectedOpacity%")
+
+        val opacitySeek = SeekBar(this).apply {
+            max = 70
+            progress = selectedOpacity - 30
+            setOnSeekBarChangeListener(
+                object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(
+                        seekBar: SeekBar?,
+                        progress: Int,
+                        fromUser: Boolean
+                    ) {
+                        selectedOpacity = progress + 30
+                        opacityValue.text = "$selectedOpacity%"
+                        updatePreview()
+                    }
+
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                }
+            )
+        }
+        root.addView(opacitySeek)
+
+        val saveButton = Button(this).apply {
+            text = "SAVE SETTINGS"
+            textSize = 16f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(125, 75, 220), 16)
+
+            setOnClickListener {
+                prefs.edit()
+                    .putInt("bubble_color", selectedColor)
+                    .putInt("bubble_size", selectedSize)
+                    .putInt("bubble_opacity", selectedOpacity)
+                    .apply()
+
+                Toast.makeText(
+                    this@BubbleSettingsActivity,
+                    "Bubble settings saved",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                finish()
+            }
         }
 
         root.addView(
-            mainBubble,
-            FrameLayout.LayoutParams(dp(size), dp(size)).apply {
-                leftMargin = dp((196 - size) / 2)
-                topMargin = dp((196 - size) / 2)
+            saveButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(56)
+            ).apply {
+                topMargin = dp(28)
             }
         )
 
-        addAction("▶", orange, "Open Kalize Recorder", 76, 0) {
-            openMainApp()
+        val note = TextView(this).apply {
+            text = "Note: Saved settings will be used when the floating bubble is next created."
+            textSize = 12f
+            setTextColor(Color.LTGRAY)
+            setPadding(0, dp(18), 0, 0)
+            gravity = Gravity.CENTER
         }
+        root.addView(note)
 
-        addAction("📷", red, "Take screenshot", 136, 27) {
-            openScreenshot()
-        }
-
-        addAction("⚙", purple, "Customize bubble", 8, 27) {
-            openBubbleSettings()
-        }
-
-        addAction("▧", blue, "Open screenshot gallery", 8, 78) {
-            openGallery()
-        }
-
-        addAction("Ⅱ", green, "Pause or resume recording", 136, 125) {
-            if (!recording) {
-                Toast.makeText(
-                    this,
-                    "Start recording first.",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } else {
-                sendRecordingAction(
-                    if (paused) {
-                        ScreenRecordingService.ACTION_RESUME
-                    } else {
-                        ScreenRecordingService.ACTION_PAUSE
-                    }
-                )
-            }
-        }
-
-        addAction("■", red, "Stop recording", 76, 152) {
-            if (recording) {
-                sendRecordingAction(
-                    ScreenRecordingService.ACTION_STOP
-                )
-            } else {
-                Toast.makeText(
-                    this,
-                    "No active recording.",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-
-        mainBubble.setOnTouchListener(mainTouchListener)
-
-        try {
-            wm.addView(root, params)
-        } catch (_: Exception) {
-            stopSelf()
-            return
-        }
-
-        updateMainBubble()
+        updatePreview()
+        setContentView(scroll)
     }
 
-    private fun expandMenu() {
-        if (expanded) return
-        expanded = true
-
-        actionBubbles.forEach { button ->
-            button.visibility = View.VISIBLE
-            button.scaleX = 0.2f
-            button.scaleY = 0.2f
-            button.alpha = 0f
-
-            button.animate()
-                .scaleX(1f)
-                .scaleY(1f)
-                .alpha(bubbleOpacity())
-                .setDuration(180)
-                .start()
+    private fun addSection(parent: LinearLayout, text: String) {
+        val label = TextView(this).apply {
+            this.text = text
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(180, 160, 255))
+            setPadding(0, dp(18), 0, dp(10))
         }
-
-        mainBubble.animate()
-            .rotation(45f)
-            .setDuration(180)
-            .start()
+        parent.addView(label)
     }
 
-    private fun collapseMenu() {
-        if (!expanded) return
-        expanded = false
-
-        actionBubbles.forEach { button ->
-            button.animate()
-                .scaleX(0.2f)
-                .scaleY(0.2f)
-                .alpha(0f)
-                .setDuration(130)
-                .withEndAction {
-                    button.visibility = View.GONE
-                }
-                .start()
+    private fun addValue(
+        parent: LinearLayout,
+        value: String
+    ): TextView {
+        val label = TextView(this).apply {
+            text = value
+            textSize = 15f
+            setTextColor(Color.WHITE)
         }
-
-        mainBubble.animate()
-            .rotation(0f)
-            .setDuration(180)
-            .start()
+        parent.addView(label)
+        return label
     }
 
-    private val mainTouchListener =
-        View.OnTouchListener { _, event ->
+    private fun updatePreview() {
+        if (!::preview.isInitialized) return
 
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    mainBubble.setTag(
-                        intArrayOf(
-                            params.x,
-                            params.y,
-                            event.rawX.toInt(),
-                            event.rawY.toInt(),
-                            0
-                        )
-                    )
-                    true
-                }
+        preview.background = rounded(
+            selectedColor,
+            selectedSize
+        )
 
-                MotionEvent.ACTION_MOVE -> {
-                    val saved = mainBubble.tag as? IntArray
-                        ?: return@OnTouchListener true
+        preview.alpha = selectedOpacity / 100f
 
-                    val dx = event.rawX.toInt() - saved[2]
-                    val dy = event.rawY.toInt() - saved[3]
+        val params = preview.layoutParams
+        params.width = dp(selectedSize)
+        params.height = dp(selectedSize)
+        preview.layoutParams = params
+    }
 
-                    if (
-                        kotlin.math.abs(dx) > dp(5) ||
-                        kotlin.math.abs(dy) > dp(5)
-                    ) {
-                        saved[4] = 1
-                    }
-
-                    if (saved[4] == 1) {
-                        params.x = (saved[0] + dx).coerceAtLeast(0)
-                        params.y = (saved[1] + dy).coerceAtLeast(0)
-
-                        try {
-                            wm.updateViewLayout(root, params)
-                        } catch (_: Exception) {
-                        }
-                    }
-
-                    true
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    val saved = mainBubble.tag as? IntArray
-
-                    if (saved != null && saved[4] == 1) {
-                        prefs.edit()
-                            .putInt("bubble_x", params.x)
-                            .putInt("bubble_y", params.y)
-                            .apply()
-                    } else {
-                        if (expanded) collapseMenu()
-                        else expandMenu()
-                    }
-
-                    true
-                }
-
-                else -> true
-            }
-        }
-
-    private fun updateSecureOverlay() {
-        if (!::params.isInitialized || !::root.isInitialized) return
-
-        val secureFlag = WindowManager.LayoutParams.FLAG_SECURE
-
-        val updatedFlags = if (recording) {
-            params.flags or secureFlag
-        } else {
-            params.flags and secureFlag.inv()
-        }
-
-        if (updatedFlags == params.flags) return
-
-        params.flags = updatedFlags
-
-        if (root.parent != null) {
-            try {
-                wm.updateViewLayout(root, params)
-            } catch (_: Exception) {
-            }
+    private fun rounded(
+        color: Int,
+        radius: Int
+    ): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
         }
     }
 
-    private fun updateMainBubble() {
-        if (!::mainBubble.isInitialized) return
-
-        updateSecureOverlay()
-
-        val color = when {
-            recording && !paused -> red
-            recording && paused -> Color.rgb(230, 165, 45)
-            else -> selectedBubbleColor()
-        }
-
-        mainBubble.background = circle(color)
-        mainBubble.alpha = bubbleOpacity()
-
-        if (recording) {
-            mainBubble.text = currentTimer
-            mainBubble.textSize = 10f
-        } else {
-            mainBubble.text = "K"
-            mainBubble.textSize = 25f
-        }
-
-        mainBubble.contentDescription = when {
-            recording && paused ->
-                "Recording paused. $currentTimer"
-
-            recording ->
-                "Recording. $currentTimer"
-
-            else ->
-                "Kalize Recorder. Tap to expand"
-        }
-
-        if (root.parent != null) {
-            try {
-                wm.updateViewLayout(root, params)
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    private fun openMainApp() {
-        try {
-            val intent = packageManager
-                .getLaunchIntentForPackage(packageName)
-
-            intent?.addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
-            )
-
-            if (intent != null) startActivity(intent)
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Could not open Kalize Recorder.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openBubbleSettings() {
-        try {
-            startActivity(
-                Intent(
-                    this,
-                    BubbleSettingsActivity::class.java
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Could not open bubble settings.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openScreenshot() {
-        try {
-            startActivity(
-                Intent(
-                    this,
-                    QuickScreenshotActivity::class.java
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Could not open screenshot capture.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun openGallery() {
-        try {
-            startActivity(
-                Intent(
-                    this,
-                    ScreenshotGalleryActivity::class.java
-                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Could not open gallery.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private fun sendRecordingAction(action: String) {
-        try {
-            startService(
-                Intent(
-                    this,
-                    ScreenRecordingService::class.java
-                ).apply {
-                    this.action = action
-                }
-            )
-        } catch (_: Exception) {
-            Toast.makeText(
-                this,
-                "Recording command failed.",
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    private val stateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(
-            context: Context?,
-            intent: Intent?
-        ) {
-            if (
-                intent?.action !=
-                ScreenRecordingService.ACTION_STATE_CHANGED
-            ) return
-
-            val wasRecording = recording
-            val wasPaused = paused
-
-            recording = intent.getBooleanExtra(
-                ScreenRecordingService.EXTRA_IS_RECORDING,
-                false
-            )
-
-            paused = intent.getBooleanExtra(
-                ScreenRecordingService.EXTRA_IS_PAUSED,
-                false
-            )
-
-            if (
-                intent.hasExtra(
-                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS
-                )
-            ) {
-                elapsedBeforePause = intent.getLongExtra(
-                    ScreenRecordingService.EXTRA_ELAPSED_MILLIS,
-                    0L
-                ).coerceAtLeast(0L)
-
-                recordingStartedAt =
-                    if (recording && !paused) {
-                        SystemClock.elapsedRealtime()
-                    } else {
-                        0L
-                    }
-
-            } else if (!recording) {
-                elapsedBeforePause = 0L
-                recordingStartedAt = 0L
-
-            } else if (!wasRecording) {
-                elapsedBeforePause = 0L
-                recordingStartedAt =
-                    if (!paused) SystemClock.elapsedRealtime()
-                    else 0L
-
-            } else if (!wasPaused && paused) {
-                if (recordingStartedAt > 0L) {
-                    elapsedBeforePause +=
-                        SystemClock.elapsedRealtime() -
-                        recordingStartedAt
-                }
-                recordingStartedAt = 0L
-
-            } else if (wasPaused && !paused) {
-                recordingStartedAt =
-                    SystemClock.elapsedRealtime()
-            }
-
-            updateMainBubble()
-        }
-    }
-
-    private val timerRunnable = object : Runnable {
-        override fun run() {
-            updateTimer()
-            handler.postDelayed(this, 1000L)
-        }
-    }
-
-    private fun updateTimer() {
-        val running = if (
-            recording && !paused && recordingStartedAt > 0L
-        ) {
-            SystemClock.elapsedRealtime() - recordingStartedAt
-        } else {
-            0L
-        }
-
-        val seconds =
-            (elapsedBeforePause + running).coerceAtLeast(0L) / 1000L
-
-        val hours = seconds / 3600L
-        val minutes = (seconds % 3600L) / 60L
-        val remaining = seconds % 60L
-
-        currentTimer = if (hours > 0) {
-            String.format(
-                "%02d:%02d:%02d",
-                hours,
-                minutes,
-                remaining
-            )
-        } else {
-            String.format(
-                "%02d:%02d",
-                minutes,
-                remaining
-            )
-        }
-
-        updateMainBubble()
-    }
-
-    override fun onDestroy() {
-        handler.removeCallbacks(timerRunnable)
-
-        if (receiverRegistered) {
-            try {
-                unregisterReceiver(stateReceiver)
-            } catch (_: Exception) {
-            }
-            receiverRegistered = false
-        }
-
-        if (::root.isInitialized) {
-            try {
-                if (root.parent != null) {
-                    wm.removeView(root)
-                }
-            } catch (_: Exception) {
-            }
-        }
-
-        actionBubbles.clear()
-        super.onDestroy()
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 }

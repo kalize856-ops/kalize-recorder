@@ -68,6 +68,9 @@ class FloatingBubbleService : Service() {
     private fun bubbleOpacity(): Float =
         prefs.getInt("bubble_opacity", 100).coerceIn(30, 100) / 100f
 
+    private fun selectedBubbleColor(): Int =
+        prefs.getInt("bubble_color", orange)
+
     private fun circle(color: Int) =
         GradientDrawable().apply {
             shape = GradientDrawable.OVAL
@@ -216,7 +219,7 @@ class FloatingBubbleService : Service() {
 
         mainBubble = makeBubble(
             "K",
-            orange,
+            selectedBubbleColor(),
             "Tap to expand Kalize Recorder controls",
             size
         ).apply {
@@ -289,6 +292,36 @@ class FloatingBubbleService : Service() {
         }
 
         updateMainBubble()
+    }
+
+    private fun snapBubbleToNearestEdge() {
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val bubbleWindowSize = dp(196)
+
+        val maxX = (screenWidth - bubbleWindowSize).coerceAtLeast(0)
+        val maxY = (screenHeight - bubbleWindowSize).coerceAtLeast(0)
+
+        val leftDistance = params.x
+        val rightDistance = maxX - params.x
+
+        params.x = if (leftDistance <= rightDistance) {
+            0
+        } else {
+            maxX
+        }
+
+        params.y = params.y.coerceIn(0, maxY)
+
+        try {
+            wm.updateViewLayout(root, params)
+
+            prefs.edit()
+                .putInt("bubble_x", params.x)
+                .putInt("bubble_y", params.y)
+                .apply()
+        } catch (_: Exception) {
+        }
     }
 
     private fun expandMenu() {
@@ -385,10 +418,7 @@ class FloatingBubbleService : Service() {
                     val saved = mainBubble.tag as? IntArray
 
                     if (saved != null && saved[4] == 1) {
-                        prefs.edit()
-                            .putInt("bubble_x", params.x)
-                            .putInt("bubble_y", params.y)
-                            .apply()
+                        snapBubbleToNearestEdge()
                     } else {
                         if (expanded) collapseMenu()
                         else expandMenu()
@@ -432,7 +462,7 @@ class FloatingBubbleService : Service() {
         val color = when {
             recording && !paused -> red
             recording && paused -> Color.rgb(230, 165, 45)
-            else -> orange
+            else -> selectedBubbleColor()
         }
 
         mainBubble.background = circle(color)

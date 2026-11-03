@@ -45,6 +45,7 @@ class FloatingBubbleService : Service() {
 
     private var recordingStartedAt = 0L
     private var elapsedBeforePause = 0L
+    private var currentFormattedTimer = "00:00"
 
     private var savedBubbleX = 0
     private var savedBubbleY = 0
@@ -546,7 +547,6 @@ class FloatingBubbleService : Service() {
 
         minimizeButton.setOnClickListener { minimizeControls() }
 
-        // Move the actual floating panel, not its child drag handle.
         attachDrag(dragHandle, mainPanel)
         attachDrag(bubble, bubble) { expandControls() }
 
@@ -565,6 +565,34 @@ class FloatingBubbleService : Service() {
 
         updateControls()
         updateTimer()
+    }
+
+    private fun updateMiniBubbleTimer() {
+        val bubble = miniBubble ?: return
+
+        if (!recording) {
+            bubble.text = "K"
+            bubble.textSize = 22f
+            bubble.contentDescription =
+                "Kalize Recorder ready. Tap to expand controls"
+            return
+        }
+
+        val parts = currentFormattedTimer.split(":")
+        val compactTime = if (parts.size == 3) {
+            "${parts[0]}:${parts[1]}"
+        } else {
+            currentFormattedTimer
+        }
+
+        bubble.text = compactTime
+        bubble.textSize = 10f
+
+        bubble.contentDescription = if (paused) {
+            "Recording paused. Elapsed time $currentFormattedTimer. Tap to expand Kalize controls"
+        } else {
+            "Recording. Elapsed time $currentFormattedTimer. Tap to expand Kalize controls"
+        }
     }
 
     private fun updateBubbleAppearance() {
@@ -588,14 +616,7 @@ class FloatingBubbleService : Service() {
             setStroke(dp(2), borderColor)
         }
 
-        bubble.contentDescription = when {
-            recording && !paused ->
-                "Recording. Tap to expand Kalize controls"
-            recording && paused ->
-                "Recording paused. Tap to expand Kalize controls"
-            else ->
-                "Kalize Recorder ready. Tap to expand controls"
-        }
+        updateMiniBubbleTimer()
 
         if (bubble.parent != null) {
             try {
@@ -688,7 +709,6 @@ class FloatingBubbleService : Service() {
         val currentPanel = panel ?: return
         val bubble = miniBubble ?: return
 
-        // Save the panel's final position before replacing it with the bubble.
         saveBubblePosition()
         updateBubbleAppearance()
 
@@ -747,7 +767,9 @@ class FloatingBubbleService : Service() {
             String.format("%02d:%02d", minutes, seconds)
         }
 
+        currentFormattedTimer = formatted
         timerText?.text = formatted
+        updateMiniBubbleTimer()
     }
 
     private fun updateControls() {

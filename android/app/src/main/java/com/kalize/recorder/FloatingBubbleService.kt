@@ -46,6 +46,17 @@ class FloatingBubbleService : Service() {
     private var recordingStartedAt = 0L
     private var elapsedBeforePause = 0L
 
+    private val positionPrefs by lazy {
+        getSharedPreferences("kalize_bubble_position", Context.MODE_PRIVATE)
+    }
+
+    private fun saveBubblePosition() {
+        positionPrefs.edit()
+            .putInt("bubble_x", params.x)
+            .putInt("bubble_y", params.y)
+            .apply()
+    }
+
     private val handler = Handler(Looper.getMainLooper())
 
     private val purple = Color.rgb(139, 92, 246)
@@ -360,8 +371,21 @@ class FloatingBubbleService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = dp(12)
-            y = dp(220)
+
+            val screenWidth = resources.displayMetrics.widthPixels
+            val screenHeight = resources.displayMetrics.heightPixels
+            val savedX = positionPrefs.getInt("bubble_x", dp(12))
+            val savedY = positionPrefs.getInt("bubble_y", dp(220))
+
+            x = savedX.coerceIn(
+                0,
+                (screenWidth - dp(60)).coerceAtLeast(0)
+            )
+
+            y = savedY.coerceIn(
+                0,
+                (screenHeight - dp(60)).coerceAtLeast(0)
+            )
 
             if (Build.VERSION.SDK_INT >= 31) {
                 flags = flags or
@@ -748,6 +772,7 @@ class FloatingBubbleService : Service() {
                 MotionEvent.ACTION_UP -> {
                     if (moved) {
                         snapToSide(view)
+                        saveBubblePosition()
                     } else {
                         onTap?.invoke()
                     }
@@ -779,6 +804,8 @@ class FloatingBubbleService : Service() {
             wm.updateViewLayout(view, params)
         } catch (_: Exception) {
         }
+
+        saveBubblePosition()
     }
 
     private fun minimizeControls() {

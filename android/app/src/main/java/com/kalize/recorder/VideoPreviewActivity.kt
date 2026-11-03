@@ -1,3 +1,4 @@
+
 package com.kalize.recorder
 
 import android.app.Activity
@@ -25,6 +26,10 @@ class VideoPreviewActivity : Activity() {
 
     companion object {
         const val EXTRA_VIDEO_URI = "kalize_video_uri"
+        private const val STATE_POSITION = "preview_position"
+        private const val STATE_WAS_PLAYING = "preview_was_playing"
+        private const val STATE_SPEED = "preview_speed"
+        private const val STATE_REPEAT = "preview_repeat"
     }
 
     private var fullScreen = false
@@ -33,6 +38,9 @@ class VideoPreviewActivity : Activity() {
     private var preparedPlayer: MediaPlayer? = null
     private var userSeeking = false
     private var videoDuration = 0
+    private var savedPosition = 0
+    private var shouldResume = true
+    private var isPrepared = false
 
     private lateinit var videoView: VideoView
     private lateinit var fullScreenButton: Button
@@ -54,13 +62,14 @@ class VideoPreviewActivity : Activity() {
 
     private val timelineUpdater = object : Runnable {
         override fun run() {
-            if (!::videoView.isInitialized) return
+            if (!::videoView.isInitialized || !isPrepared) return
 
             try {
-                if (!userSeeking && videoDuration > 0) {
+                if (!userSeeking) {
                     val position = videoView.currentPosition
                         .coerceIn(0, videoDuration)
 
+                    savedPosition = position
                     timeline.progress = positionToProgress(position)
                     updateTimeLabels(position)
                 }
@@ -73,6 +82,20 @@ class VideoPreviewActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        savedPosition = savedInstanceState?.getInt(STATE_POSITION, 0) ?: 0
+        shouldResume = savedInstanceState?.getBoolean(
+            STATE_WAS_PLAYING,
+            true
+        ) ?: true
+        playbackSpeed = savedInstanceState?.getFloat(
+            STATE_SPEED,
+            1.0f
+        ) ?: 1.0f
+        repeatEnabled = savedInstanceState?.getBoolean(
+            STATE_REPEAT,
+            false
+        ) ?: false
 
         val uriText = intent.getStringExtra(EXTRA_VIDEO_URI)
 
@@ -128,11 +151,7 @@ class VideoPreviewActivity : Activity() {
         controller.setAnchorView(videoView)
         videoView.setMediaController(controller)
 
-        playbackStatus = makeLabel(
-            "Loading video...",
-            12f,
-            muted
-        )
+        playbackStatus = makeLabel("Loading video...", 12f, muted)
         root.addView(playbackStatus, matchHeight(34))
         chromeViews.add(playbackStatus)
 
@@ -154,7 +173,6 @@ class VideoPreviewActivity : Activity() {
 
         timeline.setOnSeekBarChangeListener(
             object : SeekBar.OnSeekBarChangeListener {
-
                 override fun onStartTrackingTouch(seekBar: SeekBar) {
                     userSeeking = true
                 }
@@ -171,11 +189,9 @@ class VideoPreviewActivity : Activity() {
 
                 override fun onStopTrackingTouch(seekBar: SeekBar) {
                     if (videoDuration > 0) {
-                        videoView.seekTo(
-                            progressToPosition(seekBar.progress)
-                        )
+                        savedPosition = progressToPosition(seekBar.progress)
+                        videoView.seekTo(savedPosition)
                     }
-
                     userSeeking = false
                 }
             }
@@ -250,11 +266,7 @@ class VideoPreviewActivity : Activity() {
         root.addView(speedTitle, matchHeight(30))
         chromeViews.add(speedTitle)
 
-        speedLabel = makeLabel(
-            "Current speed: 1.0×",
-            14f,
-            white
-        )
+        speedLabel = makeLabel("Current speed: ${playbackSpeed}×", 14f, white)
         root.addView(speedLabel, matchHeight(32))
         chromeViews.add(speedLabel)
 
@@ -265,7 +277,7 @@ class VideoPreviewActivity : Activity() {
 
         listOf(0.5f, 1.0f, 1.5f, 2.0f).forEach { speed ->
             speedRow.addView(
-                makeButton("${speed}×", speed == 1.0f) {
+                makeButton("${speed}×", speed == playbackSpeed) {
                     setPlaybackSpeed(speed)
                 },
                 weightedButton()
@@ -282,7 +294,7 @@ class VideoPreviewActivity : Activity() {
         chromeViews.add(speedRow)
 
         repeatButton = makeButton(
-            "REPEAT: OFF",
+            if (repeatEnabled) "REPEAT: ON" else "REPEAT: OFF",
             false
         ) {
             toggleRepeat()
@@ -291,21 +303,13 @@ class VideoPreviewActivity : Activity() {
         root.addView(repeatButton, matchHeight(48))
         chromeViews.add(repeatButton)
 
-        fullScreenButton = makeButton(
-            "ENTER FULL SCREEN",
-            true
-        ) {
+        fullScreenButton = makeButton("ENTER FULL SCREEN", true) {
             toggleFullScreen()
         }
 
         root.addView(fullScreenButton, matchHeight(50))
 
-        // This button remains visible so full screen can always be exited.
-
-        val backButton = makeButton(
-            "BACK TO VIDEO EDITOR",
-            false
-        ) {
+        val backButton = makeButton("BACK TO VIDEO EDITOR", false) {
             finish()
         }
 
@@ -322,18 +326,29 @@ class VideoPreviewActivity : Activity() {
 
         videoView.setOnPreparedListener { player ->
             preparedPlayer = player
+            isPrepared = true
             videoDuration = videoView.duration.coerceAtLeast(0)
 
+            player.setOnVideoSizeChangedListener { _, _, _, _ ->
+                videoView.requestLayout()
+            }
+
             timeline.max = 1000
-            timeline.progress = 0
+            savedPosition = savedPosition.coerceIn(0, videoDuration)
 
-            playbackStatus.text = "Video ready • Timeline active"
-
-            updateTimeLabels(0)
+            videoView.seekTo(savedPosition)
+            timeline.progress = positionToProgress(savedPosition)
+            updateTimeLabels(savedPosition)
             applyPlaybackSpeed()
 
-            player.start()
-            playPauseButton.text = "PAUSE"
+            if (shouldResume) {
+                player.start()
+                playPauseButton.text = "PAUSE"
+                playbackStatus.text = "Video ready • Playing"
+            } else {
+                playPauseButton.text = "PLAY"
+                playbackStatus.text = "Video ready • Paused"
+            }
 
             handler.removeCallbacks(timelineUpdater)
             handler.post(timelineUpdater)
@@ -341,16 +356,18 @@ class VideoPreviewActivity : Activity() {
 
         videoView.setOnCompletionListener {
             if (repeatEnabled) {
+                savedPosition = 0
                 videoView.seekTo(0)
                 videoView.start()
+                shouldResume = true
                 playPauseButton.text = "PAUSE"
                 playbackStatus.text = "Repeating video"
                 timeline.progress = 0
                 updateTimeLabels(0)
             } else {
-                playbackStatus.text =
-                    "Preview finished • Replay available"
-
+                savedPosition = videoDuration
+                shouldResume = false
+                playbackStatus.text = "Preview finished • Replay available"
                 playPauseButton.text = "REPLAY"
                 timeline.progress = timeline.max
                 updateTimeLabels(videoDuration)
@@ -358,12 +375,28 @@ class VideoPreviewActivity : Activity() {
         }
 
         videoView.setOnErrorListener { _, _, _ ->
-            playbackStatus.text =
-                "Could not play this video format."
+            playbackStatus.text = "Could not play this video format."
             true
         }
 
         setContentView(root)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        if (::videoView.isInitialized && isPrepared) {
+            try {
+                savedPosition = videoView.currentPosition
+                shouldResume = videoView.isPlaying
+            } catch (_: Exception) {
+            }
+        }
+
+        outState.putInt(STATE_POSITION, savedPosition)
+        outState.putBoolean(STATE_WAS_PLAYING, shouldResume)
+        outState.putFloat(STATE_SPEED, playbackSpeed)
+        outState.putBoolean(STATE_REPEAT, repeatEnabled)
+
+        super.onSaveInstanceState(outState)
     }
 
     private fun makeLabel(
@@ -377,13 +410,7 @@ class VideoPreviewActivity : Activity() {
             textSize = size
             setTextColor(color)
             gravity = Gravity.CENTER
-
-            if (bold) {
-                setTypeface(
-                    null,
-                    android.graphics.Typeface.BOLD
-                )
-            }
+            if (bold) setTypeface(null, android.graphics.Typeface.BOLD)
         }
     }
 
@@ -397,11 +424,9 @@ class VideoPreviewActivity : Activity() {
             textSize = 11f
             isAllCaps = false
             setTextColor(white)
-
             backgroundTintList = ColorStateList.valueOf(
                 if (primary) accent else Color.rgb(49, 55, 76)
             )
-
             setOnClickListener { action() }
         }
     }
@@ -414,18 +439,13 @@ class VideoPreviewActivity : Activity() {
     }
 
     private fun weightedButton(): LinearLayout.LayoutParams {
-        return LinearLayout.LayoutParams(
-            0,
-            dp(48),
-            1f
-        ).apply {
+        return LinearLayout.LayoutParams(0, dp(48), 1f).apply {
             marginEnd = dp(4)
         }
     }
 
-    private fun dp(value: Int): Int {
-        return (value * resources.displayMetrics.density).toInt()
-    }
+    private fun dp(value: Int): Int =
+        (value * resources.displayMetrics.density).toInt()
 
     private fun formatTime(milliseconds: Int): String {
         val totalSeconds = milliseconds.coerceAtLeast(0) / 1000
@@ -443,53 +463,43 @@ class VideoPreviewActivity : Activity() {
                 seconds
             )
         } else {
-            String.format(
-                Locale.US,
-                "%02d:%02d",
-                minutes,
-                seconds
-            )
+            String.format(Locale.US, "%02d:%02d", minutes, seconds)
         }
     }
 
     private fun updateTimeLabels(position: Int) {
         currentTimeLabel.text = formatTime(position)
-
-        val remaining = (videoDuration - position).coerceAtLeast(0)
-        remainingTimeLabel.text = "-${formatTime(remaining)}"
+        remainingTimeLabel.text =
+            "-${formatTime((videoDuration - position).coerceAtLeast(0))}"
     }
 
     private fun progressToPosition(progress: Int): Int {
         if (videoDuration <= 0 || timeline.max <= 0) return 0
-
-        return (
-            progress.toFloat() / timeline.max * videoDuration
-        ).toInt().coerceIn(0, videoDuration)
+        return (progress.toFloat() / timeline.max * videoDuration)
+            .toInt().coerceIn(0, videoDuration)
     }
 
     private fun positionToProgress(position: Int): Int {
         if (videoDuration <= 0) return 0
-
-        return (
-            position.toFloat() / videoDuration * timeline.max
-        ).toInt().coerceIn(0, timeline.max)
+        return (position.toFloat() / videoDuration * timeline.max)
+            .toInt().coerceIn(0, timeline.max)
     }
 
     private fun togglePlayback() {
         try {
             if (videoView.isPlaying) {
                 videoView.pause()
+                savedPosition = videoView.currentPosition
+                shouldResume = false
                 playPauseButton.text = "PLAY"
                 playbackStatus.text = "Playback paused"
             } else {
-                if (
-                    videoDuration > 0 &&
-                    videoView.currentPosition >= videoDuration
-                ) {
+                if (videoDuration > 0 && videoView.currentPosition >= videoDuration) {
                     videoView.seekTo(0)
+                    savedPosition = 0
                 }
-
                 videoView.start()
+                shouldResume = true
                 playPauseButton.text = "PAUSE"
                 playbackStatus.text = "Playing video"
             }
@@ -500,12 +510,7 @@ class VideoPreviewActivity : Activity() {
 
     private fun toggleRepeat() {
         repeatEnabled = !repeatEnabled
-        repeatButton.text = if (repeatEnabled) {
-            "REPEAT: ON"
-        } else {
-            "REPEAT: OFF"
-        }
-
+        repeatButton.text = if (repeatEnabled) "REPEAT: ON" else "REPEAT: OFF"
         playbackStatus.text = if (repeatEnabled) {
             "Repeat enabled • Video loops at the end"
         } else {
@@ -518,14 +523,12 @@ class VideoPreviewActivity : Activity() {
         speedLabel.text = "Current speed: ${speed}×"
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
-            playbackStatus.text =
-                "Speed control requires Android 6.0 or newer."
+            playbackStatus.text = "Speed control requires Android 6.0 or newer."
             return
         }
 
         if (preparedPlayer == null) {
-            playbackStatus.text =
-                "Speed selected. It will apply when ready."
+            playbackStatus.text = "Speed selected. It will apply when ready."
             return
         }
 
@@ -537,37 +540,28 @@ class VideoPreviewActivity : Activity() {
 
         try {
             val player = preparedPlayer ?: return
-
-            player.playbackParams =
-                PlaybackParams().setSpeed(playbackSpeed)
-
-            playbackStatus.text =
-                "Playing at ${playbackSpeed}×"
-
+            player.playbackParams = PlaybackParams().setSpeed(playbackSpeed)
         } catch (_: Exception) {
-            playbackStatus.text =
-                "This device does not support that speed."
+            playbackStatus.text = "This device does not support that speed."
         }
     }
 
     private fun seekVideo(milliseconds: Int) {
         try {
-            if (videoDuration <= 0) {
+            if (!isPrepared || videoDuration <= 0) {
                 playbackStatus.text = "Wait for the video to load."
                 return
             }
 
-            val target = (
-                videoView.currentPosition + milliseconds
-            ).coerceIn(0, videoDuration)
+            val target = (videoView.currentPosition + milliseconds)
+                .coerceIn(0, videoDuration)
 
+            savedPosition = target
             videoView.seekTo(target)
             timeline.progress = positionToProgress(target)
             updateTimeLabels(target)
-
         } catch (_: Exception) {
-            playbackStatus.text =
-                "Could not change video position."
+            playbackStatus.text = "Could not change video position."
         }
     }
 
@@ -575,9 +569,7 @@ class VideoPreviewActivity : Activity() {
         fullScreen = !fullScreen
 
         if (fullScreen) {
-            chromeViews.forEach {
-                it.visibility = View.GONE
-            }
+            chromeViews.forEach { it.visibility = View.GONE }
 
             videoView.layoutParams =
                 (videoView.layoutParams as LinearLayout.LayoutParams).apply {
@@ -588,11 +580,8 @@ class VideoPreviewActivity : Activity() {
             videoView.requestLayout()
             fullScreenButton.text = "EXIT FULL SCREEN"
             applyImmersiveMode()
-
         } else {
-            chromeViews.forEach {
-                it.visibility = View.VISIBLE
-            }
+            chromeViews.forEach { it.visibility = View.VISIBLE }
 
             videoView.layoutParams =
                 (videoView.layoutParams as LinearLayout.LayoutParams).apply {
@@ -601,49 +590,58 @@ class VideoPreviewActivity : Activity() {
                 }
 
             videoView.requestLayout()
-
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_VISIBLE
+            window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_VISIBLE
         }
     }
 
     private fun applyImmersiveMode() {
         window.decorView.systemUiVisibility = (
-            View.SYSTEM_UI_FLAG_FULLSCREEN
-                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            View.SYSTEM_UI_FLAG_FULLSCREEN or
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
         )
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-
-        if (hasFocus && fullScreen) {
-            applyImmersiveMode()
-        }
+        if (hasFocus && fullScreen) applyImmersiveMode()
     }
 
     @Deprecated("Uses legacy back callback")
     override fun onBackPressed() {
-        if (fullScreen) {
-            toggleFullScreen()
-        } else {
-            super.onBackPressed()
-        }
+        if (fullScreen) toggleFullScreen() else super.onBackPressed()
     }
 
     override fun onPause() {
-        super.onPause()
+        if (::videoView.isInitialized && isPrepared) {
+            try {
+                savedPosition = videoView.currentPosition
+                shouldResume = videoView.isPlaying
+                if (videoView.isPlaying) videoView.pause()
+            } catch (_: Exception) {
+            }
+        }
 
-        if (::videoView.isInitialized && videoView.isPlaying) {
-            videoView.pause()
-            playPauseButton.text = "PLAY"
+        super.onPause()
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (::videoView.isInitialized && isPrepared && shouldResume) {
+            try {
+                videoView.seekTo(savedPosition)
+                videoView.start()
+                playPauseButton.text = "PAUSE"
+            } catch (_: Exception) {
+            }
         }
     }
 
     override fun onDestroy() {
         handler.removeCallbacks(timelineUpdater)
         preparedPlayer = null
+        isPrepared = false
 
         if (::videoView.isInitialized) {
             videoView.stopPlayback()

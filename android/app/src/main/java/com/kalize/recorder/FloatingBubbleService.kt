@@ -37,6 +37,7 @@ class FloatingBubbleService : Service() {
     private var recording = false
     private var paused = false
     private var receiverRegistered = false
+    private var menuMirrored = false
 
     private var recordingStartedAt = 0L
     private var elapsedBeforePause = 0L
@@ -107,12 +108,19 @@ class FloatingBubbleService : Service() {
         action: () -> Unit
     ) {
         val button = makeBubble(symbol, color, description)
+
         button.visibility = View.GONE
+
+        val finalX = if (menuMirrored) {
+            196 - 44 - x
+        } else {
+            x
+        }
 
         root.addView(
             button,
             FrameLayout.LayoutParams(dp(44), dp(44)).apply {
-                leftMargin = dp(x)
+                leftMargin = dp(finalX)
                 topMargin = dp(y)
             }
         )
@@ -197,18 +205,30 @@ class FloatingBubbleService : Service() {
             WindowManager.LayoutParams.TYPE_PHONE
         }
 
+        val screenWidth = resources.displayMetrics.widthPixels
+        val screenHeight = resources.displayMetrics.heightPixels
+        val windowSize = dp(196)
+
+        val maxX = (screenWidth - windowSize).coerceAtLeast(0)
+        val maxY = (screenHeight - windowSize).coerceAtLeast(0)
+
+        val savedX = prefs.getInt("bubble_x", dp(12))
+        val savedY = prefs.getInt("bubble_y", dp(220))
+
         params = WindowManager.LayoutParams(
-            dp(196),
-            dp(196),
+            windowSize,
+            windowSize,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = prefs.getInt("bubble_x", dp(12))
-            y = prefs.getInt("bubble_y", dp(220))
+            x = savedX.coerceIn(0, maxX)
+            y = savedY.coerceIn(0, maxY)
         }
+
+        menuMirrored = params.x > maxX / 2
 
         root = FrameLayout(this).apply {
             clipChildren = false
@@ -297,21 +317,18 @@ class FloatingBubbleService : Service() {
     private fun snapBubbleToNearestEdge() {
         val screenWidth = resources.displayMetrics.widthPixels
         val screenHeight = resources.displayMetrics.heightPixels
-        val bubbleWindowSize = dp(196)
+        val windowSize = dp(196)
 
-        val maxX = (screenWidth - bubbleWindowSize).coerceAtLeast(0)
-        val maxY = (screenHeight - bubbleWindowSize).coerceAtLeast(0)
+        val maxX = (screenWidth - windowSize).coerceAtLeast(0)
+        val maxY = (screenHeight - windowSize).coerceAtLeast(0)
 
         val leftDistance = params.x
         val rightDistance = maxX - params.x
 
-        params.x = if (leftDistance <= rightDistance) {
-            0
-        } else {
-            maxX
-        }
-
+        params.x = if (leftDistance <= rightDistance) 0 else maxX
         params.y = params.y.coerceIn(0, maxY)
+
+        menuMirrored = params.x > maxX / 2
 
         try {
             wm.updateViewLayout(root, params)

@@ -239,6 +239,10 @@ class FloatingBubbleService : Service() {
             openScreenshot()
         }
 
+        addAction("⚙", purple, "Customize bubble", 8, 27) {
+            openBubbleSettings()
+        }
+
         addAction("▧", blue, "Open screenshot gallery", 8, 78) {
             openGallery()
         }
@@ -397,8 +401,6 @@ class FloatingBubbleService : Service() {
             }
         }
 
-    // FLAG_SECURE is applied only to the floating overlay.
-    // It is enabled during recording and removed when recording stops.
     private fun updateSecureOverlay() {
         if (!::params.isInitialized || !::root.isInitialized) return
 
@@ -425,7 +427,6 @@ class FloatingBubbleService : Service() {
     private fun updateMainBubble() {
         if (!::mainBubble.isInitialized) return
 
-        // Keep the overlay's secure state synchronized with recording.
         updateSecureOverlay()
 
         val color = when {
@@ -479,6 +480,23 @@ class FloatingBubbleService : Service() {
             Toast.makeText(
                 this,
                 "Could not open Kalize Recorder.",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    private fun openBubbleSettings() {
+        try {
+            startActivity(
+                Intent(
+                    this,
+                    BubbleSettingsActivity::class.java
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (_: Exception) {
+            Toast.makeText(
+                this,
+                "Could not open bubble settings.",
                 Toast.LENGTH_SHORT
             ).show()
         }

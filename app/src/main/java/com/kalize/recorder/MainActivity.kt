@@ -32,6 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.AdSize
+import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.MobileAds
 import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
@@ -65,6 +70,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         RecordingRecovery.recoverPendingVideos(this)
         requestNotificationPermissionIfNeeded()
+        MobileAds.initialize(this) { }
         setContent {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark_theme", true)) }
             var page by remember { mutableStateOf("Recorder") }
@@ -147,6 +153,10 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
+                        }
+
+                        if (page == "Recorder" || page == "Library") {
+                            AdMobBanner(modifier = Modifier.fillMaxWidth())
                         }
 
                         if (page != "Settings") {
@@ -418,5 +428,32 @@ private object RecordingRecovery {
         return manager.getRunningServices(Int.MAX_VALUE).any {
             it.service.className == RecorderService::class.java.name
         }
+    }
+}
+
+
+/**
+ * Anchored adaptive AdMob banner. Uses Google's official test ad unit until
+ * Kalize's own AdMob ad unit is configured for production.
+ */
+@Composable
+private fun AdMobBanner(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val adView = remember(context, widthDp) {
+        AdView(context).apply {
+            adUnitId = "ca-app-pub-3940256099942544/9214589741"
+            setAdSize(AdSize.getLargeAnchoredAdaptiveBannerAdSize(context, widthDp))
+            loadAd(AdRequest.Builder().build())
+        }
+    }
+
+    AndroidView(
+        factory = { adView },
+        modifier = modifier.wrapContentHeight()
+    )
+
+    DisposableEffect(adView) {
+        onDispose { adView.destroy() }
     }
 }

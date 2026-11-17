@@ -1,10 +1,13 @@
 package com.kalize.recorder
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -29,14 +32,21 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("kalize_settings", Context.MODE_PRIVATE) }
+    private var screenshotPending = false
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val action = if (screenshotPending) RecorderService.SCREENSHOT else RecorderService.START
+            screenshotPending = false
             val serviceIntent = Intent(this, RecorderService::class.java)
-                .setAction(RecorderService.START)
+                .setAction(action)
                 .putExtra(RecorderService.CODE, result.resultCode)
                 .putExtra(RecorderService.DATA, result.data)
             ContextCompat.startForegroundService(this, serviceIntent)
+        } else {
+            screenshotPending = false
         }
     }
 
@@ -49,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestNotificationPermissionIfNeeded()
         setContent {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark_theme", true)) }
             var page by remember { mutableStateOf("Recorder") }
@@ -144,13 +155,20 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if (intent?.action == ACTION_RECORD) requestCapture()
+        handleExternalAction(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (intent.action == ACTION_RECORD) requestCapture()
+        handleExternalAction(intent)
+    }
+
+    private fun handleExternalAction(intent: Intent?) {
+        when (intent?.action) {
+            ACTION_RECORD -> requestCapture()
+            ACTION_SCREENSHOT -> requestScreenshot()
+        }
     }
 
     override fun onResume() {
@@ -158,10 +176,24 @@ class MainActivity : ComponentActivity() {
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
     }
 
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     private fun requestCapture() {
+        screenshotPending = false
         val delaySeconds = prefs.getInt("countdown", 3).coerceIn(0, 10)
         if (delaySeconds == 0) launchCapturePermission()
         else Handler(Looper.getMainLooper()).postDelayed({ launchCapturePermission() }, delaySeconds * 1000L)
+    }
+
+    private fun requestScreenshot() {
+        screenshotPending = true
+        launchCapturePermission()
     }
 
     private fun launchCapturePermission() {
@@ -182,6 +214,7 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val ACTION_RECORD = "com.kalize.recorder.ACTION_RECORD"
+        const val ACTION_SCREENSHOT = "com.kalize.recorder.ACTION_SCREENSHOT"
     }
 }
 

@@ -133,6 +133,12 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == ACTION_RECORD) requestCapture()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.action == ACTION_RECORD) requestCapture()
+    }
+
     override fun onResume() {
         super.onResume()
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
@@ -153,9 +159,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startBubbleService() {
-        ContextCompat.startForegroundService(this, Intent(this, FloatingBubbleService::class.java).also {
-            // The bubble service is a normal service; start it directly below instead.
-        })
+        startService(Intent(this, FloatingBubbleService::class.java))
     }
 
     companion object { const val ACTION_RECORD = "com.kalize.recorder.ACTION_RECORD" }

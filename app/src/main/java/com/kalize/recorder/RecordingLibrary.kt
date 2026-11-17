@@ -2,6 +2,8 @@ package com.kalize.recorder
 
 import android.content.Intent
 import android.os.Build
+import android.os.Environment
+import android.os.StatFs
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -123,6 +125,29 @@ fun RecordingLibrary(onBack: () -> Unit) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        val totalVideoBytes = recordings.sumOf { it.size }
+        val storageStats = remember {
+            val storageRoot = Environment.getExternalStorageDirectory()
+            val stats = StatFs(storageRoot.absolutePath)
+            stats.availableBytes to stats.totalBytes
+        }
+        val availableBytes = storageStats.first
+        val totalBytes = storageStats.second
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("STORAGE OVERVIEW", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                Text("Kalize videos: ${formatBytes(totalVideoBytes)}  •  Phone free: ${formatBytes(availableBytes)}")
+                LinearProgressIndicator(
+                    progress = { if (totalBytes > 0L) (availableBytes.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (availableBytes < 1_000_000_000L) {
+                    Text("Storage is running low. Free up space before making long recordings.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                } else {
+                    Text("Keep enough free space for longer recordings and video exports.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
         if (recordings.isEmpty() && screenshots.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {

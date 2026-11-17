@@ -51,6 +51,8 @@ class RecorderService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             STOP -> stopCapture()
+            PAUSE -> pauseRecording()
+            RESUME -> resumeRecording()
             SCREENSHOT -> {
                 if (recordingActive) {
                     Toast.makeText(this, "Stop recording before taking a screenshot", Toast.LENGTH_SHORT).show()
@@ -77,13 +79,7 @@ class RecorderService : Service() {
             this, 2, Intent(this, RecorderService::class.java).setAction(STOP),
             android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.presence_video_online)
-            .setContentTitle("Kalize Recorder")
-            .setContentText(if (screenshotOnly) "Preparing screenshot" else "Screen recording is active")
-            .setOngoing(true)
-            .addAction(0, "Stop", stopIntent)
-            .build()
+        val notification = buildRecordingNotification(paused = false, screenshotOnly = screenshotOnly)
 
         if (Build.VERSION.SDK_INT >= 30) {
             val wantsMicrophone = getSharedPreferences("kalize_settings", MODE_PRIVATE)
@@ -187,6 +183,59 @@ class RecorderService : Service() {
             recordingActive = true
         } catch (_: Exception) {
             stopCapture()
+        }
+    }
+
+    private fun buildRecordingNotification(paused: Boolean, screenshotOnly: Boolean = false): android.app.Notification {
+        val stopIntent = android.app.PendingIntent.getService(
+            this, 2, Intent(this, RecorderService::class.java).setAction(STOP),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val builder = NotificationCompat.Builder(this, CHANNEL)
+            .setSmallIcon(android.R.drawable.presence_video_online)
+            .setContentTitle("Kalize Recorder")
+            .setContentText(when {
+                screenshotOnly -> "Preparing screenshot"
+                paused -> "Recording paused"
+                else -> "Screen recording is active"
+            })
+            .setOngoing(true)
+        if (!screenshotOnly) {
+            val action = if (paused) RESUME else PAUSE
+            val label = if (paused) "Resume" else "Pause"
+            val controlIntent = android.app.PendingIntent.getService(
+                this, 3, Intent(this, RecorderService::class.java).setAction(action),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(0, label, controlIntent)
+        }
+        builder.addAction(0, "Stop", stopIntent)
+        return builder.build()
+    }
+
+    private fun pauseRecording() {
+        if (!recordingActive || recorder == null || stopping) return
+        try {
+            if (Build.VERSION.SDK_INT >= 24) {
+                recorder?.pause()
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = true))
+            }
+        } catch (_: Exception) {
+            Toast.makeText(this, "Pause is not supported by this device encoder.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun resumeRecording() {
+        if (!recordingActive || recorder == null || stopping) return
+        try {
+            if (Build.VERSION.SDK_INT >= 24) {
+                recorder?.resume()
+                val manager = getSystemService(NotificationManager::class.java)
+                manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
+            }
+        } catch (_: Exception) {
+            Toast.makeText(this, "Could not resume recording.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -355,6 +404,8 @@ class RecorderService : Service() {
     companion object {
         const val START = "kalize.start"
         const val STOP = "kalize.stop"
+        const val PAUSE = "kalize.pause"
+        const val RESUME = "kalize.resume"
         const val SCREENSHOT = "kalize.screenshot"
         const val CODE = "result_code"
         const val DATA = "projection_data"

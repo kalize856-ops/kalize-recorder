@@ -142,17 +142,30 @@ class RecorderService : Service() {
             }
             recorder = mediaRecorder
             mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+            val microphoneEnabled = preferences.getBoolean("microphone_enabled", false) &&
+                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (microphoneEnabled) mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
             mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+            if (microphoneEnabled) {
+                mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                mediaRecorder.setAudioEncodingBitRate(128_000)
+                mediaRecorder.setAudioSamplingRate(44_100)
+            }
             mediaRecorder.setVideoSize(width.coerceAtLeast(2), height.coerceAtLeast(2))
             mediaRecorder.setVideoFrameRate(frameRate)
-            val bitrate = when {
-                maxOf(width, height) >= 2160 -> 35_000_000
-                maxOf(width, height) >= 1440 -> 16_000_000
-                maxOf(width, height) >= 1080 -> 8_000_000
-                else -> 5_000_000
+            val presetBitrate = when (preferences.getInt("bitrate_preset", 1).coerceIn(0, 2)) {
+                0 -> 8_000_000
+                1 -> 16_000_000
+                else -> 28_000_000
             }
-            mediaRecorder.setVideoEncodingBitRate(bitrate)
+            val resolutionLimit = when {
+                maxOf(width, height) >= 2160 -> 35_000_000
+                maxOf(width, height) >= 1440 -> 24_000_000
+                maxOf(width, height) >= 1080 -> 16_000_000
+                else -> 10_000_000
+            }
+            mediaRecorder.setVideoEncodingBitRate(minOf(presetBitrate, resolutionLimit))
             val descriptor = outputDescriptor
             if (descriptor != null) mediaRecorder.setOutputFile(descriptor.fileDescriptor)
             else mediaRecorder.setOutputFile(outputFile!!.absolutePath)

@@ -57,8 +57,11 @@ class FloatingBubbleService : Service() {
             setOnTouchListener { _, event ->
                 when (event.action) {
                     MotionEvent.ACTION_DOWN -> {
-                        downX = event.rawX; downY = event.rawY
-                        startX = params.x; startY = params.y; moved = false
+                        downX = event.rawX
+                        downY = event.rawY
+                        startX = params.x
+                        startY = params.y
+                        moved = false
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
@@ -74,7 +77,8 @@ class FloatingBubbleService : Service() {
                     }
                     MotionEvent.ACTION_UP -> {
                         if (!moved) togglePanel()
-                        getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putInt("x", params.x).putInt("y", params.y).apply()
+                        getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit()
+                            .putInt("x", params.x).putInt("y", params.y).apply()
                         true
                     }
                     else -> true
@@ -82,30 +86,47 @@ class FloatingBubbleService : Service() {
             }
         }
         root.addView(bubble, LinearLayout.LayoutParams(dp(44), dp(44)))
-        try { windowManager.addView(root, params) } catch (_: Exception) { stopSelf() }
+        try {
+            windowManager.addView(root, params)
+        } catch (_: Exception) {
+            stopSelf()
+        }
     }
 
     private fun togglePanel() {
         expanded = !expanded
         root.removeAllViews()
-        if (!expanded) {
-            root.addView(bubble, LinearLayout.LayoutParams(dp(44), dp(44)))
-            params.width = dp(58); params.height = dp(58)
-        } else {
-            root.addView(bubble, LinearLayout.LayoutParams(dp(44), dp(44)))
-            addAction("Record", 0xFF7659EA.toInt()) {
-                startActivity(Intent(this, MainActivity::class.java).setAction(MainActivity.ACTION_RECORD).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+        root.addView(bubble, LinearLayout.LayoutParams(dp(44), dp(44)))
+        if (expanded) {
+            addAction("Start recording", 0xFF7659EA.toInt()) {
+                openMain(MainActivity.ACTION_RECORD)
+            }
+            addAction("Take screenshot", 0xFF29344A.toInt()) {
+                openMain(MainActivity.ACTION_SCREENSHOT)
             }
             addAction("Stop recording", 0xFF29344A.toInt()) {
                 startService(Intent(this, RecorderService::class.java).setAction(RecorderService.STOP))
             }
             addAction("Open Kalize", 0xFF29344A.toInt()) {
-                startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+                openMain(null)
             }
-            addAction("Hide controls", 0xFF29344A.toInt()) { stopSelf() }
-            params.width = dp(170); params.height = WindowManager.LayoutParams.WRAP_CONTENT
+            addAction("Collapse controls", 0xFF29344A.toInt()) {
+                togglePanel()
+            }
+            params.width = dp(184)
+            params.height = WindowManager.LayoutParams.WRAP_CONTENT
+        } else {
+            params.width = dp(58)
+            params.height = dp(58)
         }
         updateWindow()
+    }
+
+    private fun openMain(action: String?) {
+        val intent = Intent(this, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (action != null) intent.action = action
+        startActivity(intent)
     }
 
     private fun addAction(label: String, color: Int, action: () -> Unit) {
@@ -130,13 +151,19 @@ class FloatingBubbleService : Service() {
     }
 
     private fun updateWindow() {
-        try { windowManager.updateViewLayout(root, params) } catch (_: Exception) { }
+        try {
+            windowManager.updateViewLayout(root, params)
+        } catch (_: Exception) {
+        }
     }
 
     private fun dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
-        try { windowManager.removeView(root) } catch (_: Exception) { }
+        try {
+            windowManager.removeView(root)
+        } catch (_: Exception) {
+        }
         super.onDestroy()
     }
 

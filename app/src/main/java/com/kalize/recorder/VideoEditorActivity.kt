@@ -109,17 +109,19 @@ class VideoEditorActivity : ComponentActivity() {
                                     enabled = !exporting && mergeUris.size >= 2,
                                     onClick = {
                                         val clips = mergeUris.toList()
-                                        exporting = true
-                                        message = "Combining clips…"
-                                        scope.launch {
-                                            val result = withContext(Dispatchers.IO) {
-                                                runCatching { BasicVideoMerger.export(this@VideoEditorActivity, clips) }
+                                        showCompressionRewardAd {
+                                            exporting = true
+                                            message = "Reward earned. Combining clips…"
+                                            scope.launch {
+                                                val result = withContext(Dispatchers.IO) {
+                                                    runCatching { BasicVideoMerger.export(this@VideoEditorActivity, clips) }
+                                                }
+                                                exporting = false
+                                                message = result.fold(
+                                                    { "Merge complete. The combined video is in Movies/Kalize Recorder/Edits." },
+                                                    { "Merge failed: ${it.message ?: "unsupported or incompatible video formats"}" }
+                                                )
                                             }
-                                            exporting = false
-                                            message = result.fold(
-                                                { "Merge complete. The combined video is in Movies/Kalize Recorder/Edits." },
-                                                { "Merge failed: ${it.message ?: "unsupported or incompatible video formats"}" }
-                                            )
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth()
@@ -136,7 +138,7 @@ class VideoEditorActivity : ComponentActivity() {
                                     FilterChip(selected = compressionPreset == preset, onClick = { compressionPreset = preset }, label = { Text("${preset.title} · ${preset.detail}") })
                                 }
                                 Text(
-                                    "Watch one short rewarded ad to unlock this compression export. Recording, trimming and merging remain available without watching an ad.",
+                                    "Watch one short rewarded ad to unlock this compression export. Basic recording and trimming remain free. Merging and compression exports require a rewarded ad.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -227,7 +229,7 @@ class VideoEditorActivity : ComponentActivity() {
                 override fun onAdLoaded(ad: RewardedAd) {
                     rewardedAd = ad
                     rewardAdLoading = false
-                    message = "Reward ad ready. Watch it to unlock video compression."
+                    message = "Reward ad ready. Watch it to unlock this export."
                 }
 
                 override fun onAdFailedToLoad(error: LoadAdError) {
@@ -252,7 +254,7 @@ class VideoEditorActivity : ComponentActivity() {
         ad.fullScreenContentCallback = object : FullScreenContentCallback() {
             override fun onAdDismissedFullScreenContent() {
                 if (!earnedReward) {
-                    message = "The ad was closed before the reward was earned. Watch the ad to unlock compression."
+                    message = "The ad was closed before the reward was earned. Watch the ad to unlock this export."
                 }
                 loadCompressionRewardAd()
             }

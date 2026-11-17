@@ -104,6 +104,9 @@ class FloatingBubbleService : Service() {
             addAction("Take screenshot", 0xFF29344A.toInt()) {
                 openMain(MainActivity.ACTION_SCREENSHOT)
             }
+            addAction("Pro Studio settings", 0xFF29344A.toInt()) {
+                startActivity(Intent(this, ProStudioActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
             addAction("Stop recording", 0xFF29344A.toInt()) {
                 startService(Intent(this, RecorderService::class.java).setAction(RecorderService.STOP))
             }

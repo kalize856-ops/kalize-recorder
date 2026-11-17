@@ -73,6 +73,8 @@ class VideoEditorActivity : ComponentActivity() {
             MaterialTheme {
                 var range by remember { mutableStateOf(0f..1f) }
                 var keepAudio by remember { mutableStateOf(true) }
+                var rotation by remember { mutableIntStateOf(0) }
+                var speed by remember { mutableFloatStateOf(1f) }
                 val scope = rememberCoroutineScope()
                 Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -129,6 +131,19 @@ class VideoEditorActivity : ComponentActivity() {
                             Checkbox(checked = keepAudio, onCheckedChange = { keepAudio = it })
                             Text("Keep original audio (turn off to mute)")
                         }
+                        Text("Rotate output", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(0, 90, 180, 270).forEach { angle ->
+                                FilterChip(selected = rotation == angle, onClick = { rotation = angle }, label = { Text(if (angle == 0) "0°" else "$angle°") })
+                            }
+                        }
+                        Text("Playback speed", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(0.5f, 1f, 1.5f, 2f).forEach { factor ->
+                                FilterChip(selected = speed == factor, onClick = { speed = factor }, label = { Text("${factor}x") })
+                            }
+                        }
+                        Text("Speed changes affect both picture and sound; faster or slower audio may change pitch.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Button(
                             enabled = !exporting && (range.endInclusive - range.start) > 0.02f,
                             onClick = {
@@ -139,11 +154,11 @@ class VideoEditorActivity : ComponentActivity() {
                                 message = "Exporting trimmed video…"
                                 scope.launch {
                                     val result = withContext(Dispatchers.IO) {
-                                        runCatching { BasicVideoTrimmer.export(this@VideoEditorActivity, uri, start, end, keepAudio) }
+                                        runCatching { BasicVideoTrimmer.export(this@VideoEditorActivity, uri, start, end, keepAudio, rotation, speed) }
                                     }
                                     exporting = false
                                     message = result.fold(
-                                        { "Trim export complete. The edited copy is in Movies/Kalize Recorder/Edits." },
+                                        { "Edit export complete. The rotated/speed-adjusted copy is in Movies/Kalize Recorder/Edits." },
                                         { "Trim export failed: ${it.message ?: "unsupported video format"}" }
                                     )
                                 }
@@ -184,7 +199,9 @@ private fun publishEdit(context: Context, uri: Uri) {
 }
 
 private object BasicVideoTrimmer {
-    fun export(context: Context, source: Uri, startMs: Long, endMs: Long, keepAudio: Boolean): Uri {
+    fun export(context: Context, source: Uri, startMs: Long, endMs: Long, keepAudio: Boolean, rotationDegrees: Int, speed: Float): Uri {
+        require(rotationDegrees in listOf(0, 90, 180, 270)) { "Choose a supported rotation." }
+        require(speed in listOf(0.5f, 1f, 1.5f, 2f)) { "Choose a supported playback speed." }
         require(endMs > startMs) { "Choose a valid trim range." }
         val outputUri = createEditOutput(context, "Kalize_Trim")
         var muxer: MediaMuxer? = null
@@ -208,6 +225,7 @@ private object BasicVideoTrimmer {
                     }
                     require(videoTrackFound) { "The selected file has no supported video track." }
                     val active = muxer ?: throw IllegalStateException("No export tracks found.")
+                    if (rotationDegrees != 0) active.setOrientationHint(rotationDegrees)
                     active.start()
                     muxerStarted = true
                     trackMap.keys.forEach { extractor.selectTrack(it) }
@@ -226,7 +244,9 @@ private object BasicVideoTrimmer {
                             buffer.clear()
                             val size = extractor.readSampleData(buffer, 0)
                             if (size < 0) break
-                            info.set(0, size, (sampleTime - baseUs).coerceAtLeast(0L), extractor.sampleFlags)
+                            val relativeTimeUs = (sampleTime - baseUs).coerceAtLeast(0L)
+                            val adjustedTimeUs = (relativeTimeUs / speed).toLong()
+                            info.set(0, size, adjustedTimeUs, extractor.sampleFlags)
                             active.writeSampleData(trackMap.getValue(inputTrack), buffer, info)
                         }
                         if (!extractor.advance()) break

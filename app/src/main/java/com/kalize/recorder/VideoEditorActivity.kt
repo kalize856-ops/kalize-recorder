@@ -183,10 +183,14 @@ private object BasicVideoTrimmer {
                 } finally {
                     extractor.release()
                 }
+                // The file descriptor must remain open until MediaMuxer has stopped.
+                if (muxerStarted) {
+                    muxer?.stop()
+                    muxerStarted = false
+                }
+                muxer?.release()
+                muxer = null
             }
-            if (muxerStarted) muxer?.stop()
-            muxer?.release()
-            muxer = null
             context.contentResolver.update(outputUri, ContentValues().apply {
                 put(MediaStore.Video.Media.IS_PENDING, 0)
             }, null, null)

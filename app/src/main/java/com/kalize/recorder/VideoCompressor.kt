@@ -7,13 +7,14 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
 import androidx.media3.transformer.Effects
 import androidx.media3.transformer.ExportException
 import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Presentation
+import androidx.media3.effect.Presentation
 import androidx.media3.transformer.Transformer
 import androidx.media3.transformer.VideoEncoderSettings
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +36,7 @@ enum class CompressionPreset(
     HIGH("High quality", "1080p · 5 Mbps", 1080, 5_000_000)
 }
 
+@OptIn(UnstableApi::class)
 object VideoCompressor {
     suspend fun compress(context: Context, source: Uri, preset: CompressionPreset): Uri {
         val sourceHeight = readVideoHeight(context, source)

@@ -443,7 +443,7 @@ private fun AdMobBanner(modifier: Modifier = Modifier) {
     val adView = remember(context, widthDp) {
         AdView(context).apply {
             adUnitId = "ca-app-pub-3940256099942544/9214589741"
-            setAdSize(AdSize.getLargeAnchoredAdaptiveBannerAdSize(context, widthDp))
+            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, widthDp))
             loadAd(AdRequest.Builder().build())
         }
     }

@@ -288,106 +288,121 @@ private fun RecorderHome(
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val accent = MaterialTheme.colorScheme.primary
 
-    Column(
-        Modifier.fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("SCREEN CAPTURE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text("Ready to record?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            }
-            Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
-                Text("READY", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = card)
-        ) {
-            Column(
-                Modifier.fillMaxWidth()
-                    .background(
-                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                            listOf(accent.copy(alpha = 0.18f), card, card)
-                        )
-                    )
-                    .padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                Text("KALIZE SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "Capture every moment.",
-                    color = foreground,
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.ExtraBold
-                )
-                Text(
-                    "Record gameplay, tutorials, app demos and anything happening on your screen.",
-                    color = muted,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(
-                    onClick = onRecord,
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Icon(Icons.Default.Videocam, contentDescription = null)
-                    Spacer(Modifier.width(9.dp))
-                    Text("Start recording", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                }
-                Text("MP4 recordings  •  No watermark  •  Device-dependent quality", color = muted, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-
-        Text("QUICK ACCESS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionCard(
-                "Floating controls",
-                "Record and capture from anywhere",
-                "◉",
-                Modifier.weight(1f),
-                onBubble,
-                accent,
-                foreground,
-                card
-            )
-            QuickActionCard(
-                "My recordings",
-                "Browse and share saved clips",
-                "▤",
-                Modifier.weight(1f),
-                onLibrary,
-                accent,
-                foreground,
-                card
-            )
-        }
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = card)
+    Box(Modifier.fillMaxSize()) {
+        Column(
+            Modifier.fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 92.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(
-                Modifier.fillMaxWidth().padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Default.Settings, contentDescription = null, tint = accent)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("Recording preferences", color = foreground, fontWeight = FontWeight.SemiBold)
-                    Text("Resolution, frame rate and countdown are in Settings.", color = muted, style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("SCREEN CAPTURE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text("Ready to record?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                }
+                Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
+                    Text("READY", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                 }
             }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = card)
+            ) {
+                Column(
+                    Modifier.fillMaxWidth()
+                        .background(
+                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                                listOf(accent.copy(alpha = 0.18f), card, card)
+                            )
+                        )
+                        .padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    Text("KALIZE SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Capture every moment.",
+                        color = foreground,
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        "Record gameplay, tutorials, app demos and anything happening on your screen.",
+                        color = muted,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    Text(
+                        "MP4 recordings  •  No watermark  •  Device-dependent quality",
+                        color = muted,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            Text("QUICK ACCESS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                QuickActionCard(
+                    "Floating controls",
+                    "Record and capture from anywhere",
+                    "◉",
+                    Modifier.weight(1f),
+                    onBubble,
+                    accent,
+                    foreground,
+                    card
+                )
+                QuickActionCard(
+                    "My recordings",
+                    "Browse and share saved clips",
+                    "▤",
+                    Modifier.weight(1f),
+                    onLibrary,
+                    accent,
+                    foreground,
+                    card
+                )
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = card)
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Icon(Icons.Default.Settings, contentDescription = null, tint = accent)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("Recording preferences", color = foreground, fontWeight = FontWeight.SemiBold)
+                        Text("Resolution, frame rate and countdown are in Settings.", color = muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+
+        FloatingActionButton(
+            onClick = onRecord,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp).size(58.dp),
+            containerColor = Color(0xFFE94B45),
+            contentColor = Color.White,
+            elevation = FloatingActionButtonDefaults.elevation(
+                defaultElevation = 10.dp,
+                pressedElevation = 14.dp
+            ),
+            shape = RoundedCornerShape(50)
+        ) {
+            Icon(
+                Icons.Default.Videocam,
+                contentDescription = "Start recording",
+                modifier = Modifier.size(27.dp)
+            )
         }
     }
 }

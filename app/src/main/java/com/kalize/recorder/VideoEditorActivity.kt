@@ -11,6 +11,13 @@ import android.os.Environment
 import android.provider.MediaStore
 import android.media.MediaMetadataRetriever
 import android.os.Bundle
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.AdError
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +40,8 @@ class VideoEditorActivity : ComponentActivity() {
     private var durationMs by mutableLongStateOf(0L)
     private var exporting by mutableStateOf(false)
     private var message by mutableStateOf("Choose a video to trim or select multiple clips to merge.")
+    private var rewardedAd: RewardedAd? = null
+    private var rewardAdLoading = false
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -69,6 +78,7 @@ class VideoEditorActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MobileAds.initialize(this) { loadCompressionRewardAd() }
         setContent {
             MaterialTheme {
                 var range by remember { mutableStateOf(0f..1f) }
@@ -125,17 +135,26 @@ class VideoEditorActivity : ComponentActivity() {
                                 CompressionPreset.entries.forEach { preset ->
                                     FilterChip(selected = compressionPreset == preset, onClick = { compressionPreset = preset }, label = { Text("${preset.title} · ${preset.detail}") })
                                 }
-                                Button(enabled = !exporting, onClick = {
+                                Text(
+                                    "Watch one short rewarded ad to unlock this compression export. Recording, trimming and merging remain available without watching an ad.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Button(enabled = !exporting && !rewardAdLoading, onClick = {
                                     val source = selectedUri ?: return@Button
                                     val preset = compressionPreset
-                                    exporting = true
-                                    message = "Compressing video. This may take a while…"
-                                    scope.launch {
-                                        val result = runCatching { VideoCompressor.compress(this@VideoEditorActivity, source, preset) }
-                                        exporting = false
-                                        message = result.fold({ "Compression complete. The smaller copy is saved in Movies/Kalize Recorder/Compressed." }, { "Compression failed: ${it.message ?: "this video format may not be supported on this device"}" })
+                                    showCompressionRewardAd {
+                                        exporting = true
+                                        message = "Reward earned. Compressing your video…"
+                                        scope.launch {
+                                            val result = runCatching { VideoCompressor.compress(this@VideoEditorActivity, source, preset) }
+                                            exporting = false
+                                            message = result.fold({ "Compression complete. The smaller copy is saved in Movies/Kalize Recorder/Compressed." }, { "Compression failed: ${it.message ?: "this video format may not be supported on this device"}" })
+                                        }
                                     }
-                                }, modifier = Modifier.fillMaxWidth()) { Text("Compress video") }
+                                }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(if (rewardAdLoading) "Loading reward ad…" else "Watch ad to compress video")
+                                }
                             }
                         }
                         HorizontalDivider()
@@ -193,6 +212,59 @@ class VideoEditorActivity : ComponentActivity() {
                     OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Close editor") }
                 }
             }
+        }
+    }
+
+
+    private fun loadCompressionRewardAd() {
+        if (rewardAdLoading || rewardedAd != null) return
+        rewardAdLoading = true
+        RewardedAd.load(
+            this,
+            "ca-app-pub-3940256099942544/5224354917",
+            AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) {
+                    rewardedAd = ad
+                    rewardAdLoading = false
+                    message = "Reward ad ready. Watch it to unlock video compression."
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    rewardedAd = null
+                    rewardAdLoading = false
+                    message = "Reward ad is unavailable right now. Please try again when a connection is available."
+                }
+            }
+        )
+    }
+
+    private fun showCompressionRewardAd(onRewardEarned: () -> Unit) {
+        val ad = rewardedAd
+        if (ad == null) {
+            message = "The reward ad is still loading or unavailable. Please try again shortly."
+            loadCompressionRewardAd()
+            return
+        }
+
+        rewardedAd = null
+        var earnedReward = false
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                if (!earnedReward) {
+                    message = "The ad was closed before the reward was earned. Watch the ad to unlock compression."
+                }
+                loadCompressionRewardAd()
+            }
+
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                message = "The reward ad could not be shown. Please try again."
+                loadCompressionRewardAd()
+            }
+        }
+        ad.show(this) {
+            earnedReward = true
+            onRewardEarned()
         }
     }
 

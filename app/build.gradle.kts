@@ -19,5 +19,8 @@ dependencies {
  implementation("androidx.compose.material3:material3")
  implementation("androidx.compose.material:material-icons-extended")
  implementation("androidx.core:core-ktx:1.15.0")
+ implementation("androidx.media3:media3-common:1.11.1")
+ implementation("androidx.media3:media3-effect:1.11.1")
+ implementation("androidx.media3:media3-transformer:1.11.1")
  debugImplementation("androidx.compose.ui:ui-tooling")
 }

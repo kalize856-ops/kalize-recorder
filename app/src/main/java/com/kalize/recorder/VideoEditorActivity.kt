@@ -75,6 +75,7 @@ class VideoEditorActivity : ComponentActivity() {
                 var keepAudio by remember { mutableStateOf(true) }
                 var rotation by remember { mutableIntStateOf(0) }
                 var speed by remember { mutableFloatStateOf(1f) }
+                var compressionPreset by remember { mutableStateOf(CompressionPreset.BALANCED) }
                 val scope = rememberCoroutineScope()
                 Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
@@ -117,6 +118,26 @@ class VideoEditorActivity : ComponentActivity() {
                         }
                     }
                     if (selectedUri != null && durationMs > 0) {
+                        Card {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                                Text("VIDEO COMPRESS", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+                                Text("Reduce file size by re-encoding at a lower resolution and bitrate. Your original stays unchanged.")
+                                CompressionPreset.entries.forEach { preset ->
+                                    FilterChip(selected = compressionPreset == preset, onClick = { compressionPreset = preset }, label = { Text("${preset.title} · ${preset.detail}") })
+                                }
+                                Button(enabled = !exporting, onClick = {
+                                    val source = selectedUri ?: return@Button
+                                    val preset = compressionPreset
+                                    exporting = true
+                                    message = "Compressing video. This may take a while…"
+                                    scope.launch {
+                                        val result = runCatching { VideoCompressor.compress(this@VideoEditorActivity, source, preset) }
+                                        exporting = false
+                                        message = result.fold({ "Compression complete. The smaller copy is saved in Movies/Kalize Recorder/Compressed." }, { "Compression failed: ${it.message ?: "this video format may not be supported on this device"}" })
+                                    }
+                                }, modifier = Modifier.fillMaxWidth()) { Text("Compress video") }
+                            }
+                        }
                         HorizontalDivider()
                         Text("Trim one video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Text("Video length: ${formatTime(durationMs)}")

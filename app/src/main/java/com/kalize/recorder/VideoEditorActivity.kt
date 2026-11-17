@@ -2,7 +2,7 @@ package com.kalize.recorder
 
 import android.content.ContentValues
 import android.content.Context
-import android.media.MediaExtractor
+import android.media.MediaCodec\nimport android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
@@ -20,7 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withContext\nimport kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
 class VideoEditorActivity : ComponentActivity() {
@@ -157,7 +157,7 @@ private object BasicVideoTrimmer {
                     extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
                     val baseUs = extractor.sampleTime.coerceAtLeast(0L)
                     val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
-                    val info = MediaMuxer.BufferInfo()
+                    val info = MediaCodec.BufferInfo()
                     while (true) {
                         val inputTrack = extractor.sampleTrackIndex
                         if (inputTrack < 0) break

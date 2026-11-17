@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
@@ -197,7 +196,7 @@ fun RecordingLibrary(onBack: () -> Unit) {
                                     context.startActivity(Intent.createChooser(send, "Share screenshot"))
                                 }) { Icon(Icons.Default.Share, contentDescription = "Share screenshot") }
                                 IconButton(onClick = { deleteTarget = item.uri to item.name }) {
-                                    Icon(androidx.compose.material.icons.filled.Delete, contentDescription = "Delete screenshot")
+                                    Text("Delete", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -247,7 +246,7 @@ fun RecordingLibrary(onBack: () -> Unit) {
                                     context.startActivity(Intent.createChooser(send, "Share recording"))
                                 }) { Icon(Icons.Default.Share, contentDescription = "Share") }
                                 IconButton(onClick = { deleteTarget = item.uri to item.name }) {
-                                    Icon(androidx.compose.material.icons.filled.Delete, contentDescription = "Delete recording")
+                                    Text("Delete", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }

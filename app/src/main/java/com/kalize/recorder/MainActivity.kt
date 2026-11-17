@@ -77,8 +77,8 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         when (page) {
-                            "Library" -> RecordingLibrary(onBack = { page = "Recorder" })
-                            "Settings" -> SettingsPage(
+                            "Library" -> Box(Modifier.weight(1f)) { RecordingLibrary(onBack = { page = "Recorder" }) }
+                             "Settings" -> Box(Modifier.weight(1f)) { SettingsPage(
                                 dark = dark,
                                 onDarkChange = {
                                     dark = it
@@ -217,7 +217,7 @@ private fun SettingsPage(
     countdown: Int,
     onCountdown: (Int) -> Unit
 ) {
-    Column(Modifier.fillMaxWidth().weight(1f).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Card {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

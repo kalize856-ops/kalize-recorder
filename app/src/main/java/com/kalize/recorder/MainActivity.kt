@@ -298,10 +298,10 @@ private fun SettingsPage(
     onBubbleChange: (Boolean) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, Settings.System.SHOW_TOUCHES, 0) == 1) }
+    var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, "show_touches", 0) == 1) }
     val touchSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.System.canWrite(context)) {
-            Settings.System.putInt(context.contentResolver, Settings.System.SHOW_TOUCHES, 1)
+            Settings.System.putInt(context.contentResolver, "show_touches", 1)
             showTouches = true
         }
     }
@@ -332,7 +332,7 @@ private fun SettingsPage(
                     }
                     Switch(checked = showTouches, onCheckedChange = { enabled ->
                         if (!enabled || Settings.System.canWrite(context)) {
-                            Settings.System.putInt(context.contentResolver, Settings.System.SHOW_TOUCHES, if (enabled) 1 else 0)
+                            Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
                             showTouches = enabled
                         } else {
                             touchSettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))

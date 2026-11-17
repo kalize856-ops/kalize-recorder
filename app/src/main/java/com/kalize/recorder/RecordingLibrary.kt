@@ -72,7 +72,10 @@ fun RecordingLibrary(onBack: () -> Unit) {
                 Text("YOUR LIBRARY", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Text("Recordings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             }
-            Row {\n                TextButton(onClick = { context.startActivity(Intent(context, VideoEditorActivity::class.java)) }) { Text("Edit video") }\n                TextButton(onClick = { refresh++ }) { Text("Refresh") }\n            }
+            Row {
+                TextButton(onClick = { context.startActivity(Intent(context, VideoEditorActivity::class.java)) }) { Text("Edit video") }
+                TextButton(onClick = { refresh++ }) { Text("Refresh") }
+            }
         }
         Text("${recordings.size} videos saved", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (recordings.isEmpty()) {

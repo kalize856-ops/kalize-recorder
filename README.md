@@ -11,6 +11,8 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - Draggable floating controls with record, stop, screenshot, app launch, and Pro Studio shortcut
 - Resolution targets from 720p to 2160p and frame-rate targets up to 240 FPS, subject to device support
 - Countdown before capture and optional microphone recording
+- Optional Android touch indicators with an explicit system-settings authorization step
+- Settings controls to enable or disable the floating bubble
 - Pro Studio capture profiles and bitrate presets
 - Screenshot capture saved to the Kalize Recorder Pictures folder
 - Recording and screenshot library with playback, sharing, and refresh
@@ -18,4 +20,4 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - GitHub Actions debug APK workflow
 
 ## Known limitations
-This is not yet a full multi-track editor. Effects/filters, crop and rotate transcoding, clip merging, transitions, internal playback-audio capture, face-camera overlay, hardware capability probing, and production signing still need implementation. High resolution and frame-rate selections are targets, not guarantees; the Android device encoder and display determine actual support. Android requires explicit consent for each screen-capture session.
+This is not yet a full multi-track editor. Effects/filters, crop and rotate transcoding, clip merging, transitions, internal playback-audio capture, face-camera overlay, hardware capability probing, and production signing remain future work. Touch indicators use Android’s system-wide SHOW_TOUCHES setting and require the user to authorize modification in Android Settings. The app never changes that setting without the user enabling it. High resolution and frame-rate selections are targets, not guarantees; the Android device encoder and display determine actual support. Android requires explicit consent for each screen-capture session.

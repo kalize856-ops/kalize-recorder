@@ -17,6 +17,7 @@ import android.provider.Settings
 import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -70,6 +71,7 @@ class MainActivity : ComponentActivity() {
             var resolution by remember { mutableIntStateOf(prefs.getInt("resolution", 1080)) }
             var fps by remember { mutableIntStateOf(prefs.getInt("fps", 30)) }
             var countdown by remember { mutableIntStateOf(prefs.getInt("countdown", 3)) }
+            var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
             val card = if (dark) Color(0xFF171F32) else Color.White
             val background = if (dark) Color(0xFF0B1020) else Color(0xFFF3F5FA)
             val foreground = if (dark) Color.White else Color(0xFF172033)
@@ -117,6 +119,12 @@ class MainActivity : ComponentActivity() {
                                         onFps = {
                                             fps = it
                                             prefs.edit().putInt("fps", it).apply()
+                                        },
+                                        bubbleEnabled = bubbleEnabled,
+                                        onBubbleChange = { enabled ->
+                                            bubbleEnabled = enabled
+                                            prefs.edit().putBoolean("bubble_enabled", enabled).apply()
+                                            if (enabled) enableBubble() else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
                                         },
                                         countdown = countdown,
                                         onCountdown = {
@@ -285,8 +293,18 @@ private fun SettingsPage(
     fps: Int,
     onFps: (Int) -> Unit,
     countdown: Int,
-    onCountdown: (Int) -> Unit
+    onCountdown: (Int) -> Unit,
+    bubbleEnabled: Boolean,
+    onBubbleChange: (Boolean) -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, Settings.System.SHOW_TOUCHES, 0) == 1) }
+    val touchSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (Settings.System.canWrite(context)) {
+            Settings.System.putInt(context.contentResolver, Settings.System.SHOW_TOUCHES, 1)
+            showTouches = true
+        }
+    }
     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Card {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -298,6 +316,29 @@ private fun SettingsPage(
                     Switch(checked = dark, onCheckedChange = onDarkChange)
                 }
                 HorizontalDivider()
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Floating controls", fontWeight = FontWeight.SemiBold)
+                        Text("Show the draggable Kalize bubble over other apps.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = bubbleEnabled, onCheckedChange = onBubbleChange)
+                }
+                HorizontalDivider()
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Touch indicators", fontWeight = FontWeight.SemiBold)
+                        Text("Show Android touch dots system-wide. This changes an Android system setting.", style = MaterialTheme.typography.bodySmall)
+                    }
+                    Switch(checked = showTouches, onCheckedChange = { enabled ->
+                        if (!enabled || Settings.System.canWrite(context)) {
+                            Settings.System.putInt(context.contentResolver, Settings.System.SHOW_TOUCHES, if (enabled) 1 else 0)
+                            showTouches = enabled
+                        } else {
+                            touchSettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+                        }
+                    })
+                }
                 Text("Recording resolution", fontWeight = FontWeight.SemiBold)
                 SettingChoice(resolution, listOf(720, 1080, 1440, 2160), { "${it}p" }, onResolution)
                 Text("Frame-rate target", fontWeight = FontWeight.SemiBold)

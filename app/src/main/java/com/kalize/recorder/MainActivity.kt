@@ -129,7 +129,9 @@ class MainActivity : ComponentActivity() {
                                         card = card,
                                         onRecord = { requestCapture() },
                                         onBubble = { enableBubble() },
-                                        onLibrary = { page = "Library" }
+                                        onLibrary = { page = "Library" },
+                                        onProStudio = { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
+                                        onEditor = { startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java)) }
                                     )
                                 }
                             }
@@ -224,7 +226,9 @@ private fun RecorderHome(
     card: Color,
     onRecord: () -> Unit,
     onBubble: () -> Unit,
-    onLibrary: () -> Unit
+    onLibrary: () -> Unit,
+    onProStudio: () -> Unit,
+    onEditor: () -> Unit
 ) {
     Column(
         Modifier.fillMaxSize().padding(20.dp),
@@ -252,6 +256,12 @@ private fun RecorderHome(
             Icon(Icons.Default.Folder, contentDescription = null)
             Spacer(Modifier.width(8.dp))
             Text("Open recording library")
+        }
+        OutlinedButton(onClick = onEditor, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text("Open video editor")
+        }
+        OutlinedButton(onClick = onProStudio, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            Text("Pro Studio · capture profiles and audio")
         }
         Text(
             "No watermark is added. Recording performance and maximum quality depend on the device.",

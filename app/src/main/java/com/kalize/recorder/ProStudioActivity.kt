@@ -3,6 +3,13 @@ package com.kalize.recorder
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import com.google.android.gms.ads.AdError
+import com.google.android.gms.ads.AdRequest
+import com.google.android.gms.ads.FullScreenContentCallback
+import com.google.android.gms.ads.LoadAdError
+import com.google.android.gms.ads.MobileAds
+import com.google.android.gms.ads.rewarded.RewardedAd
+import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -15,17 +22,40 @@ import androidx.core.content.ContextCompat
 
 class ProStudioActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("kalize_settings", MODE_PRIVATE) }
+    private var rewardedAd: RewardedAd? = null
+    private var adLoading = false
+    private var adMessage by mutableStateOf("Loading a reward ad for Pro capture options…")
+
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         prefs.edit().putBoolean("microphone_enabled", granted).apply()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MobileAds.initialize(this) { loadRewardedAd() }
         setContent {
             MaterialTheme {
                 var microphone by remember { mutableStateOf(prefs.getBoolean("microphone_enabled", false)) }
                 var bitrate by remember { mutableIntStateOf(prefs.getInt("bitrate_preset", 1)) }
                 var profile by remember { mutableStateOf(prefs.getString("capture_profile", "Gameplay") ?: "Gameplay") }
+                var proUnlocked by remember { mutableStateOf(false) }
+
+                fun selectProOptions() {
+                    if (proUnlocked) {
+                        profile = "High quality"
+                        bitrate = 2
+                        prefs.edit().putString("capture_profile", profile).putInt("bitrate_preset", bitrate).apply()
+                    } else {
+                        showRewardedAd {
+                            proUnlocked = true
+                            profile = "High quality"
+                            bitrate = 2
+                            prefs.edit().putString("capture_profile", profile).putInt("bitrate_preset", bitrate).apply()
+                            adMessage = "Pro capture options unlocked for this visit."
+                        }
+                    }
+                }
+
                 Column(
                     Modifier.fillMaxSize().padding(22.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -33,28 +63,58 @@ class ProStudioActivity : ComponentActivity() {
                     Text("KALIZE PRO STUDIO", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
                     Text("Capture controls", style = MaterialTheme.typography.headlineMedium)
                     Text("Choose a capture profile")
-                    listOf("Gameplay", "Tutorial", "High quality").forEach { option ->
+                    listOf("Gameplay", "Tutorial").forEach { option ->
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             RadioButton(selected = profile == option, onClick = {
                                 profile = option
                                 prefs.edit().putString("capture_profile", option).apply()
-                                bitrate = when (option) { "Gameplay" -> 1; "Tutorial" -> 0; else -> 2 }
+                                bitrate = if (option == "Gameplay") 1 else 0
                                 prefs.edit().putInt("bitrate_preset", bitrate).apply()
                             })
                             Text(option)
                         }
                     }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        RadioButton(selected = profile == "High quality", onClick = { selectProOptions() })
+                        Column(Modifier.weight(1f)) {
+                            Text("High quality · Pro")
+                            Text("Rewarded-ad unlock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                     HorizontalDivider()
                     Text("Video bitrate")
-                    listOf("Balanced · 8 Mbps", "High · 16 Mbps", "Maximum · 28 Mbps").forEachIndexed { index, label ->
+                    listOf("Balanced · 8 Mbps", "High · 16 Mbps").forEachIndexed { index, label ->
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             RadioButton(selected = bitrate == index, onClick = {
                                 bitrate = index
                                 prefs.edit().putInt("bitrate_preset", index).apply()
+                                if (index == 0) profile = "Tutorial"
+                                if (index == 1) profile = "Gameplay"
+                                prefs.edit().putString("capture_profile", profile).apply()
                             })
                             Text(label)
                         }
                     }
+                    Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        RadioButton(selected = bitrate == 2, onClick = { selectProOptions() })
+                        Column(Modifier.weight(1f)) {
+                            Text("Maximum · 28 Mbps · Pro")
+                            Text("Rewarded-ad unlock", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    if (!proUnlocked) {
+                        OutlinedButton(
+                            onClick = { showRewardedAd {
+                                proUnlocked = true
+                                adMessage = "Pro capture options unlocked for this visit."
+                            } },
+                            enabled = !adLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (adLoading) "Loading reward ad…" else "Watch ad to unlock Pro capture options")
+                        }
+                    }
+                    Text(adMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     HorizontalDivider()
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -77,6 +137,55 @@ class ProStudioActivity : ComponentActivity() {
                     Button(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Save and close") }
                 }
             }
+        }
+    }
+
+    private fun loadRewardedAd() {
+        if (adLoading || rewardedAd != null) return
+        adLoading = true
+        RewardedAd.load(
+            this,
+            "ca-app-pub-3940256099942544/5224354917",
+            AdRequest.Builder().build(),
+            object : RewardedAdLoadCallback() {
+                override fun onAdLoaded(ad: RewardedAd) {
+                    rewardedAd = ad
+                    adLoading = false
+                    adMessage = "Watch an ad to unlock High quality and Maximum bitrate."
+                }
+
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    rewardedAd = null
+                    adLoading = false
+                    adMessage = "Reward ad unavailable. Try again when a connection is available."
+                }
+            }
+        )
+    }
+
+    private fun showRewardedAd(onRewardEarned: () -> Unit) {
+        val ad = rewardedAd
+        if (ad == null) {
+            adMessage = "The reward ad is loading or unavailable. Please try again shortly."
+            loadRewardedAd()
+            return
+        }
+        rewardedAd = null
+        var earned = false
+        ad.fullScreenContentCallback = object : FullScreenContentCallback() {
+            override fun onAdDismissedFullScreenContent() {
+                if (!earned) adMessage = "The ad was closed before the reward was earned."
+                loadRewardedAd()
+            }
+
+            override fun onAdFailedToShowFullScreenContent(error: AdError) {
+                adMessage = "The reward ad could not be shown. Please try again."
+                loadRewardedAd()
+            }
+        }
+        ad.show(this) {
+            earned = true
+            onRewardEarned()
         }
     }
 }

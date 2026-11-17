@@ -24,6 +24,7 @@ import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import java.io.File
 import java.io.FileOutputStream
@@ -51,8 +52,13 @@ class RecorderService : Service() {
         when (intent?.action) {
             STOP -> stopCapture()
             SCREENSHOT -> {
-                if (projection != null) captureScreenshot()
-                else startCapture(intent, screenshotOnly = true)
+                if (recordingActive) {
+                    Toast.makeText(this, "Stop recording before taking a screenshot", Toast.LENGTH_SHORT).show()
+                } else if (projection != null) {
+                    captureScreenshot()
+                } else {
+                    startCapture(intent, screenshotOnly = true)
+                }
             }
             START -> startCapture(intent, screenshotOnly = false)
         }

@@ -13,6 +13,9 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
+            android:name=".VideoEditorActivity"
+            android:exported="false" />
+        <activity
             android:name=".ProStudioActivity"
             android:exported="false" />
         <activity

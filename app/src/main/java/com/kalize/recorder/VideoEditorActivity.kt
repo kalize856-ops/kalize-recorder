@@ -33,16 +33,22 @@ class VideoEditorActivity : ComponentActivity() {
 
     private val picker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
-            contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (_: SecurityException) {
+                // Some document providers grant a temporary URI permission only.
+            }
             selectedUri = uri
             durationMs = try {
-                MediaMetadataRetriever().run {
-                    setDataSource(this@VideoEditorActivity, uri)
-                    extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                        .also { release() }
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(this@VideoEditorActivity, uri)
+                    retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                } finally {
+                    retriever.release()
                 }
             } catch (_: Exception) { 0L }
-            message = if (durationMs > 0) "Video ready to trim." else "Could not read this video's duration."
+            message = if (durationMs > 0) "Video ready to trim. Export creates a separate copy." else "Could not read this video's duration."
         }
     }
 
@@ -56,7 +62,7 @@ class VideoEditorActivity : ComponentActivity() {
                 Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("VIDEO EDITOR", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("Trim a recording", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Select a video, choose the section to keep, then export a new copy. The original file is not changed.")
+                    Text("Select a video, choose the section to keep, and export a new copy. You can remove the source audio; the original file is never changed.")
                     Button(onClick = { picker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (selectedUri == null) "Choose video" else "Choose another video")
                     }
@@ -76,7 +82,7 @@ class VideoEditorActivity : ComponentActivity() {
                         }
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                             Checkbox(checked = keepAudio, onCheckedChange = { keepAudio = it })
-                            Text("Keep original audio")
+                            Text("Keep original audio (turn off to mute)")
                         }
                         Button(
                             enabled = !exporting && (range.endInclusive - range.start) > 0.02f,

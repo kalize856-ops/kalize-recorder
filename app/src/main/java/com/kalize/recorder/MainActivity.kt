@@ -19,9 +19,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
@@ -78,31 +82,60 @@ class MainActivity : ComponentActivity() {
             var fps by remember { mutableIntStateOf(prefs.getInt("fps", 30)) }
             var countdown by remember { mutableIntStateOf(prefs.getInt("countdown", 3)) }
             var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
+
             val card = if (dark) Color(0xFF171F32) else Color.White
             val background = if (dark) Color(0xFF0B1020) else Color(0xFFF3F5FA)
             val foreground = if (dark) Color.White else Color(0xFF172033)
+            val accent = if (dark) Color(0xFF9B88FF) else Color(0xFF6750D8)
 
             MaterialTheme(
-                colorScheme = if (dark) darkColorScheme(primary = Color(0xFF9B88FF), surface = card)
-                else lightColorScheme(primary = Color(0xFF6750D8), surface = card)
+                colorScheme = if (dark) darkColorScheme(primary = accent, surface = card)
+                else lightColorScheme(primary = accent, surface = card)
             ) {
                 Surface(Modifier.fillMaxSize(), color = background) {
                     Column(Modifier.fillMaxSize()) {
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 15.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text("KALIZE RECORDER", color = Color(0xFF9B88FF), fontWeight = FontWeight.Black)
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("KALIZE RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
                                 Text(page, color = foreground, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                             }
-                            IconButton(onClick = { page = if (page == "Settings") "Recorder" else "Settings" }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Settings", tint = foreground)
+                            Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.13f)) {
+                                Icon(
+                                    Icons.Default.Videocam,
+                                    contentDescription = "Kalize Recorder",
+                                    tint = accent,
+                                    modifier = Modifier.padding(11.dp)
+                                )
                             }
                         }
 
                         when (page) {
+                            "Recorder" -> {
+                                Box(Modifier.weight(1f)) {
+                                    RecorderHome(
+                                        foreground = foreground,
+                                        card = card,
+                                        onRecord = { requestCapture() },
+                                        onBubble = { enableBubble() },
+                                        onLibrary = { page = "Library" }
+                                    )
+                                }
+                            }
+                            "Edit" -> {
+                                Box(Modifier.weight(1f)) {
+                                    EditHome(
+                                        foreground = foreground,
+                                        card = card,
+                                        onOpenEditor = {
+                                            startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java))
+                                        }
+                                    )
+                                }
+                            }
                             "Library" -> {
                                 Box(Modifier.weight(1f)) {
                                     RecordingLibrary(onBack = { page = "Recorder" })
@@ -130,26 +163,17 @@ class MainActivity : ComponentActivity() {
                                         onBubbleChange = { enabled ->
                                             bubbleEnabled = enabled
                                             prefs.edit().putBoolean("bubble_enabled", enabled).apply()
-                                            if (enabled) enableBubble() else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
+                                            if (enabled) enableBubble()
+                                            else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
                                         },
                                         countdown = countdown,
                                         onCountdown = {
                                             countdown = it
                                             prefs.edit().putInt("countdown", it).apply()
+                                        },
+                                        onProStudio = {
+                                            startActivity(Intent(this@MainActivity, ProStudioActivity::class.java))
                                         }
-                                    )
-                                }
-                            }
-                            else -> {
-                                Box(Modifier.weight(1f)) {
-                                    RecorderHome(
-                                        foreground = foreground,
-                                        card = card,
-                                        onRecord = { requestCapture() },
-                                        onBubble = { enableBubble() },
-                                        onLibrary = { page = "Library" },
-                                        onProStudio = { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
-                                        onEditor = { startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java)) }
                                     )
                                 }
                             }
@@ -159,21 +183,31 @@ class MainActivity : ComponentActivity() {
                             AdMobBanner(modifier = Modifier.fillMaxWidth())
                         }
 
-                        if (page != "Settings") {
-                            NavigationBar(containerColor = card) {
-                                NavigationBarItem(
-                                    selected = page == "Recorder",
-                                    onClick = { page = "Recorder" },
-                                    icon = { Icon(Icons.Default.Videocam, contentDescription = null) },
-                                    label = { Text("Recorder") }
-                                )
-                                NavigationBarItem(
-                                    selected = page == "Library",
-                                    onClick = { page = "Library" },
-                                    icon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                                    label = { Text("Library") }
-                                )
-                            }
+                        NavigationBar(containerColor = card) {
+                            NavigationBarItem(
+                                selected = page == "Recorder",
+                                onClick = { page = "Recorder" },
+                                icon = { Icon(Icons.Default.Videocam, contentDescription = null) },
+                                label = { Text("Recorder") }
+                            )
+                            NavigationBarItem(
+                                selected = page == "Edit",
+                                onClick = { page = "Edit" },
+                                icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                label = { Text("Edit") }
+                            )
+                            NavigationBarItem(
+                                selected = page == "Library",
+                                onClick = { page = "Library" },
+                                icon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                                label = { Text("Library") }
+                            )
+                            NavigationBarItem(
+                                selected = page == "Settings",
+                                onClick = { page = "Settings" },
+                                icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                label = { Text("Settings") }
+                            )
                         }
                     }
                 }
@@ -249,91 +283,205 @@ private fun RecorderHome(
     card: Color,
     onRecord: () -> Unit,
     onBubble: () -> Unit,
-    onLibrary: () -> Unit,
-    onProStudio: () -> Unit,
-    onEditor: () -> Unit
+    onLibrary: () -> Unit
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val accent = MaterialTheme.colorScheme.primary
+
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp),
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("YOUR CREATOR WORKSPACE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                Text("Ready to capture?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("SCREEN CAPTURE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("Ready to record?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             }
-            Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.13f)) {
-                Text("PRO TOOLS", modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
+                Text("READY", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
             }
         }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = card)
         ) {
             Column(
-                Modifier.fillMaxWidth().background(
-                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                        listOf(accent.copy(alpha = 0.22f), card, card)
+                Modifier.fillMaxWidth()
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            listOf(accent.copy(alpha = 0.18f), card, card)
+                        )
                     )
-                ).padding(22.dp),
-                verticalArrangement = Arrangement.spacedBy(15.dp)
+                    .padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
-                        Text("●  READY", modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                    }
-                }
-                Text("Capture it.\nKeep it.", color = foreground, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, lineHeight = MaterialTheme.typography.headlineLarge.lineHeight)
+                Text("KALIZE SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                 Text(
-                    "Record gameplay, tutorials and everything happening on your screen.",
+                    "Capture every moment.",
+                    color = foreground,
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Text(
+                    "Record gameplay, tutorials, app demos and anything happening on your screen.",
                     color = muted,
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Button(
                     onClick = onRecord,
-                    modifier = Modifier.fillMaxWidth().height(58.dp),
-                    shape = RoundedCornerShape(18.dp)
+                    modifier = Modifier.fillMaxWidth().height(56.dp),
+                    shape = RoundedCornerShape(16.dp)
                 ) {
                     Icon(Icons.Default.Videocam, contentDescription = null)
-                    Spacer(Modifier.width(10.dp))
+                    Spacer(Modifier.width(9.dp))
                     Text("Start recording", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
-                Text("No watermark • MP4 export • Device-dependent quality", color = muted, style = MaterialTheme.typography.labelSmall)
+                Text("MP4 recordings  •  No watermark  •  Device-dependent quality", color = muted, style = MaterialTheme.typography.labelSmall)
             }
         }
+
         Text("QUICK ACCESS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            QuickActionCard("Floating controls", "Record from anywhere", "◉", Modifier.weight(1f), onBubble, accent, foreground, card)
-            QuickActionCard("My recordings", "Browse saved clips", "▤", Modifier.weight(1f), onLibrary, accent, foreground, card)
+            QuickActionCard(
+                "Floating controls",
+                "Record and capture from anywhere",
+                "◉",
+                Modifier.weight(1f),
+                onBubble,
+                accent,
+                foreground,
+                card
+            )
+            QuickActionCard(
+                "My recordings",
+                "Browse and share saved clips",
+                "▤",
+                Modifier.weight(1f),
+                onLibrary,
+                accent,
+                foreground,
+                card
+            )
         }
+
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(22.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = card)
         ) {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("POST-PRODUCTION", color = muted, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        Text("Make every clip better", color = foreground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    }
-                    Text("STUDIO", color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onEditor, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
-                        Text("Video editor")
-                    }
-                    OutlinedButton(onClick = onProStudio, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
-                        Text("Pro Studio")
-                    }
+            Row(
+                Modifier.fillMaxWidth().padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, tint = accent)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Recording preferences", color = foreground, fontWeight = FontWeight.SemiBold)
+                    Text("Resolution, frame rate and countdown are in Settings.", color = muted, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
-        Text("Recording quality depends on your device's display and encoder capabilities.", color = muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun EditHome(
+    foreground: Color,
+    card: Color,
+    onOpenEditor: () -> Unit
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = MaterialTheme.colorScheme.primary
+
+    Column(
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("POST-PRODUCTION", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Edit your videos", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("All video editing and export tools live here.", color = muted, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = card)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.14f)) {
+                    Icon(Icons.Default.Edit, contentDescription = null, tint = accent, modifier = Modifier.padding(12.dp))
+                }
+                Text("Video editor", color = foreground, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(
+                    "Trim clips, merge recordings, compress videos, mute or keep audio, rotate exports and adjust playback speed.",
+                    color = muted,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
+                    Icon(Icons.Default.Edit, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Open video editor")
+                }
+            }
+        }
+
+        Text("EDITING TOOLS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        EditToolRow("Trim and cut", "Choose the start and end of a clip", onOpenEditor, foreground, muted, card, accent)
+        EditToolRow("Merge videos", "Join compatible clips into one video", onOpenEditor, foreground, muted, card, accent)
+        EditToolRow("Video compression", "Create a smaller copy of a recording", onOpenEditor, foreground, muted, card, accent)
+        EditToolRow("Audio and playback", "Keep or mute source audio and change speed", onOpenEditor, foreground, muted, card, accent)
+        Text(
+            "Compression and merging exports currently use a rewarded-ad unlock. Original files are kept unchanged.",
+            color = muted,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@Composable
+private fun EditToolRow(
+    title: String,
+    description: String,
+    onClick: () -> Unit,
+    foreground: Color,
+    muted: Color,
+    card: Color,
+    accent: Color
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = card)
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(15.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(shape = RoundedCornerShape(12.dp), color = accent.copy(alpha = 0.13f)) {
+                Icon(Icons.Default.Edit, contentDescription = null, tint = accent, modifier = Modifier.padding(10.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(title, color = foreground, fontWeight = FontWeight.SemiBold)
+                Text(description, color = muted, style = MaterialTheme.typography.bodySmall)
+            }
+            Icon(Icons.Default.Edit, contentDescription = "Open tool", tint = muted)
+        }
     }
 }
 
@@ -375,7 +523,8 @@ private fun SettingsPage(
     countdown: Int,
     onCountdown: (Int) -> Unit,
     bubbleEnabled: Boolean,
-    onBubbleChange: (Boolean) -> Unit
+    onBubbleChange: (Boolean) -> Unit,
+    onProStudio: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, "show_touches", 0) == 1) }
@@ -386,7 +535,7 @@ private fun SettingsPage(
         }
     }
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("PERSONALISE YOUR STUDIO", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         Card(shape = RoundedCornerShape(24.dp)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -415,6 +564,15 @@ private fun SettingsPage(
                 SettingChoice(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
                 Text("Start delay", color = muted, style = MaterialTheme.typography.labelMedium)
                 SettingChoice(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
+            }
+        }
+        Card(shape = RoundedCornerShape(24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Advanced capture", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Capture profiles and bitrate presets are managed separately from everyday settings.", color = muted, style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = onProStudio, modifier = Modifier.fillMaxWidth()) {
+                    Text("Open Pro Studio")
+                }
             }
         }
         Text("Your device determines the actual resolution and frame rate available. Changes are saved automatically.", color = muted, style = MaterialTheme.typography.bodySmall)

@@ -2,6 +2,8 @@ package com.kalize.recorder
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -59,6 +62,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        RecordingRecovery.recoverPendingVideos(this)
         requestNotificationPermissionIfNeeded()
         setContent {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark_theme", true)) }
@@ -175,6 +179,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        RecordingRecovery.recoverPendingVideos(this)
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
     }
 
@@ -323,6 +328,54 @@ private fun SettingChoice(value: Int, options: List<Int>, label: (Int) -> String
                     expanded = false
                 })
             }
+        }
+    }
+}
+
+
+/**
+ * Makes completed MediaStore recordings visible again if Android killed the app
+ * before the IS_PENDING flag could be cleared. Never touches a live recording.
+ */
+private object RecordingRecovery {
+    fun recoverPendingVideos(context: Context) {
+        if (Build.VERSION.SDK_INT < 29 || recorderServiceIsRunning(context)) return
+        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.SIZE)
+        val selection = "${MediaStore.Video.Media.IS_PENDING} = 1 AND ${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+        val args = arrayOf("%Movies/Kalize Recorder%")
+        val resolver = context.contentResolver
+        val pending = mutableListOf<Pair<Uri, Long>>()
+        try {
+            resolver.query(collection, projection, selection, args, null)?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idColumn)
+                    val size = cursor.getLong(sizeColumn)
+                    pending += android.content.ContentUris.withAppendedId(collection, id) to size
+                }
+            }
+            pending.forEach { (uri, size) ->
+                if (size >= 64 * 1024L) {
+                    val values = ContentValues().apply {
+                        put(MediaStore.Video.Media.IS_PENDING, 0)
+                    }
+                    resolver.update(uri, values, null, null)
+                } else {
+                    resolver.delete(uri, null, null)
+                }
+            }
+        } catch (_: Exception) {
+            // Recovery is best-effort and must never prevent the recorder UI opening.
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun recorderServiceIsRunning(context: Context): Boolean {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        return manager.getRunningServices(Int.MAX_VALUE).any {
+            it.service.className == RecorderService::class.java.name
         }
     }
 }

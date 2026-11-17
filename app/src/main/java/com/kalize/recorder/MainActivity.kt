@@ -253,44 +253,114 @@ private fun RecorderHome(
     onProStudio: () -> Unit,
     onEditor: () -> Unit
 ) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    val accent = MaterialTheme.colorScheme.primary
     Column(
-        Modifier.fillMaxSize().padding(20.dp),
+        Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = card)) {
-            Column(Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("SCREEN STUDIO", color = Color(0xFF9B88FF), fontWeight = FontWeight.Bold)
-                Text("Capture every moment.", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("YOUR CREATOR WORKSPACE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("Ready to capture?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            }
+            Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.13f)) {
+                Text("PRO TOOLS", modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = card)
+        ) {
+            Column(
+                Modifier.fillMaxWidth().background(
+                    brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                        listOf(accent.copy(alpha = 0.22f), card, card)
+                    )
+                ).padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(15.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
+                        Text("●  READY", modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Text("Capture it.\nKeep it.", color = foreground, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, lineHeight = MaterialTheme.typography.headlineLarge.lineHeight)
                 Text(
-                    "Record gameplay, tutorials and app demonstrations. Android will ask for screen-capture permission before recording.",
-                    color = foreground
+                    "Record gameplay, tutorials and everything happening on your screen.",
+                    color = muted,
+                    style = MaterialTheme.typography.bodyMedium
                 )
-                Button(onClick = onRecord, modifier = Modifier.fillMaxWidth().height(54.dp)) {
+                Button(
+                    onClick = onRecord,
+                    modifier = Modifier.fillMaxWidth().height(58.dp),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
                     Icon(Icons.Default.Videocam, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Start screen recording")
+                    Spacer(Modifier.width(10.dp))
+                    Text("Start recording", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+                Text("No watermark • MP4 export • Device-dependent quality", color = muted, style = MaterialTheme.typography.labelSmall)
+            }
+        }
+        Text("QUICK ACCESS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            QuickActionCard("Floating controls", "Record from anywhere", "◉", Modifier.weight(1f), onBubble, accent, foreground, card)
+            QuickActionCard("My recordings", "Browse saved clips", "▤", Modifier.weight(1f), onLibrary, accent, foreground, card)
+        }
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = card)
+        ) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("POST-PRODUCTION", color = muted, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text("Make every clip better", color = foreground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Text("STUDIO", color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedButton(onClick = onEditor, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
+                        Text("Video editor")
+                    }
+                    OutlinedButton(onClick = onProStudio, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(14.dp)) {
+                        Text("Pro Studio")
+                    }
                 }
             }
         }
-        OutlinedButton(onClick = onBubble, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Enable floating controls")
+        Text("Recording quality depends on your device's display and encoder capabilities.", color = muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun QuickActionCard(
+    title: String,
+    subtitle: String,
+    symbol: String,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    accent: Color,
+    foreground: Color,
+    card: Color
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = card)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Surface(shape = RoundedCornerShape(13.dp), color = accent.copy(alpha = 0.14f)) {
+                Text(symbol, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = accent, style = MaterialTheme.typography.titleLarge)
+            }
+            Text(title, color = foreground, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
-        OutlinedButton(onClick = onLibrary, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Icon(Icons.Default.Folder, contentDescription = null)
-            Spacer(Modifier.width(8.dp))
-            Text("Open recording library")
-        }
-        OutlinedButton(onClick = onEditor, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Open video editor")
-        }
-        OutlinedButton(onClick = onProStudio, modifier = Modifier.fillMaxWidth().height(52.dp)) {
-            Text("Pro Studio · capture profiles and audio")
-        }
-        Text(
-            "No watermark is added. Recording performance and maximum quality depend on the device.",
-            color = foreground,
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }
 
@@ -315,53 +385,50 @@ private fun SettingsPage(
             showTouches = true
         }
     }
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Card {
-            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Dark appearance", fontWeight = FontWeight.SemiBold)
-                        Text("Choose the studio theme", style = MaterialTheme.typography.bodySmall)
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("PERSONALISE YOUR STUDIO", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Card(shape = RoundedCornerShape(24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                SettingSwitchRow("Dark appearance", "A focused, low-glare studio theme", dark, onDarkChange)
+                HorizontalDivider(color = muted.copy(alpha = 0.18f))
+                Text("Capture controls", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                SettingSwitchRow("Floating controls", "Keep the recorder bubble available over other apps", bubbleEnabled, onBubbleChange)
+                HorizontalDivider(color = muted.copy(alpha = 0.18f))
+                SettingSwitchRow("Touch indicators", "Show Android touch dots while recording", showTouches) { enabled ->
+                    if (!enabled || Settings.System.canWrite(context)) {
+                        Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
+                        showTouches = enabled
+                    } else {
+                        touchSettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
                     }
-                    Switch(checked = dark, onCheckedChange = onDarkChange)
                 }
-                HorizontalDivider()
-                HorizontalDivider()
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Floating controls", fontWeight = FontWeight.SemiBold)
-                        Text("Show the draggable Kalize bubble over other apps.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = bubbleEnabled, onCheckedChange = onBubbleChange)
-                }
-                HorizontalDivider()
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Touch indicators", fontWeight = FontWeight.SemiBold)
-                        Text("Show Android touch dots system-wide. This changes an Android system setting.", style = MaterialTheme.typography.bodySmall)
-                    }
-                    Switch(checked = showTouches, onCheckedChange = { enabled ->
-                        if (!enabled || Settings.System.canWrite(context)) {
-                            Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
-                            showTouches = enabled
-                        } else {
-                            touchSettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
-                        }
-                    })
-                }
-                Text("Recording resolution", fontWeight = FontWeight.SemiBold)
+            }
+        }
+        Card(shape = RoundedCornerShape(24.dp)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Recording quality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Resolution", color = muted, style = MaterialTheme.typography.labelMedium)
                 SettingChoice(resolution, listOf(720, 1080, 1440, 2160), { "${it}p" }, onResolution)
-                Text("Frame-rate target", fontWeight = FontWeight.SemiBold)
+                Text("Frame-rate target", color = muted, style = MaterialTheme.typography.labelMedium)
                 SettingChoice(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
-                Text("Countdown before permission prompt", fontWeight = FontWeight.SemiBold)
+                Text("Start delay", color = muted, style = MaterialTheme.typography.labelMedium)
                 SettingChoice(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
             }
         }
-        Text(
-            "Resolution and frame-rate choices are targets. Android hardware, display refresh rate and encoder support determine the actual result.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Text("Your device determines the actual resolution and frame rate available. Changes are saved automatically.", color = muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun SettingSwitchRow(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

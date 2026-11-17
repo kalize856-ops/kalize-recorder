@@ -2,7 +2,8 @@ package com.kalize.recorder
 
 import android.content.ContentValues
 import android.content.Context
-import android.media.MediaCodec\nimport android.media.MediaExtractor
+import android.media.MediaCodec
+import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
 import android.net.Uri
@@ -20,7 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext\nimport kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
 
 class VideoEditorActivity : ComponentActivity() {

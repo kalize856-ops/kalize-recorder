@@ -37,17 +37,18 @@ class RecorderService:Service() {
    projection=pm.getMediaProjection(code,data)
    val dm=DisplayMetrics()
    @Suppress("DEPRECATION") (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealMetrics(dm)
-   val w=(dm.widthPixels/2)*2; val h=(dm.heightPixels/2)*2
+   val scale=minOf(1f,1920f/maxOf(dm.widthPixels,dm.heightPixels).toFloat())
+   val w=((dm.widthPixels*scale).toInt()/2)*2; val h=((dm.heightPixels*scale).toInt()/2)*2
    val dir=getExternalFilesDir(android.os.Environment.DIRECTORY_MOVIES)?:filesDir
    output=File(dir,"Kalize_${System.currentTimeMillis()}.mp4")
    val mr=if(Build.VERSION.SDK_INT>=31) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
    recorder=mr
    mr.setVideoSource(MediaRecorder.VideoSource.SURFACE); mr.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-   mr.setVideoEncoder(MediaRecorder.VideoEncoder.H264); mr.setVideoSize(w.coerceAtMost(1920),h.coerceAtMost(1920))
+   mr.setVideoEncoder(MediaRecorder.VideoEncoder.H264); mr.setVideoSize(w,h)
    mr.setVideoFrameRate(30); mr.setVideoEncodingBitRate(8_000_000); mr.setOutputFile(output!!.absolutePath); mr.prepare()
+   projection?.registerCallback(object:MediaProjection.Callback(){ override fun onStop(){ stopCapture() } },null)
    display=projection!!.createVirtualDisplay("KalizeCapture",w,h,dm.densityDpi,DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,mr.surface,null,null)
    mr.start()
-   projection?.registerCallback(object:MediaProjection.Callback(){ override fun onStop(){ stopCapture() } },null)
   } catch(_:Exception) { stopCapture() }
  }
  private fun stopCapture() {

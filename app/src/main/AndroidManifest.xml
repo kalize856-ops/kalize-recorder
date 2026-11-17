@@ -8,7 +8,7 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/kalize_icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="Kalize Recorder"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">

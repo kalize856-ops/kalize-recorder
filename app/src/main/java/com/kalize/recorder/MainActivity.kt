@@ -29,6 +29,7 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("kalize_settings", Context.MODE_PRIVATE) }
+
     private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val serviceIntent = Intent(this, RecorderService::class.java)
@@ -38,6 +39,7 @@ class MainActivity : ComponentActivity() {
             ContextCompat.startForegroundService(this, serviceIntent)
         }
     }
+
     private val overlaySettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.canDrawOverlays(this)) {
             prefs.edit().putBoolean("bubble_enabled", true).apply()
@@ -76,38 +78,52 @@ class MainActivity : ComponentActivity() {
                                 Icon(Icons.Default.Settings, contentDescription = "Settings", tint = foreground)
                             }
                         }
+
                         when (page) {
-                            "Library" -> Box(Modifier.weight(1f)) { RecordingLibrary(onBack = { page = "Recorder" }) }
-                            "Settings" -> Box(Modifier.weight(1f)) { SettingsPage(
-                                dark = dark,
-                                onDarkChange = {
-                                    dark = it
-                                    prefs.edit().putBoolean("dark_theme", it).apply()
-                                },
-                                resolution = resolution,
-                                onResolution = {
-                                    resolution = it
-                                    prefs.edit().putInt("resolution", it).apply()
-                                },
-                                fps = fps,
-                                onFps = {
-                                    fps = it
-                                    prefs.edit().putInt("fps", it).apply()
-                                },
-                                countdown = countdown,
-                                onCountdown = {
-                                    countdown = it
-                                    prefs.edit().putInt("countdown", it).apply()
+                            "Library" -> {
+                                Box(Modifier.weight(1f)) {
+                                    RecordingLibrary(onBack = { page = "Recorder" })
                                 }
-                            )
-                            else -> RecorderHome(
-                                foreground = foreground,
-                                card = card,
-                                onRecord = { requestCapture() },
-                                onBubble = { enableBubble() },
-                                onLibrary = { page = "Library" }
-                            )
+                            }
+                            "Settings" -> {
+                                Box(Modifier.weight(1f)) {
+                                    SettingsPage(
+                                        dark = dark,
+                                        onDarkChange = {
+                                            dark = it
+                                            prefs.edit().putBoolean("dark_theme", it).apply()
+                                        },
+                                        resolution = resolution,
+                                        onResolution = {
+                                            resolution = it
+                                            prefs.edit().putInt("resolution", it).apply()
+                                        },
+                                        fps = fps,
+                                        onFps = {
+                                            fps = it
+                                            prefs.edit().putInt("fps", it).apply()
+                                        },
+                                        countdown = countdown,
+                                        onCountdown = {
+                                            countdown = it
+                                            prefs.edit().putInt("countdown", it).apply()
+                                        }
+                                    )
+                                }
+                            }
+                            else -> {
+                                Box(Modifier.weight(1f)) {
+                                    RecorderHome(
+                                        foreground = foreground,
+                                        card = card,
+                                        onRecord = { requestCapture() },
+                                        onBubble = { enableBubble() },
+                                        onLibrary = { page = "Library" }
+                                    )
+                                }
+                            }
                         }
+
                         if (page != "Settings") {
                             NavigationBar(containerColor = card) {
                                 NavigationBarItem(
@@ -164,7 +180,9 @@ class MainActivity : ComponentActivity() {
 
     private fun startBubbleService() = startService(Intent(this, FloatingBubbleService::class.java))
 
-    companion object { const val ACTION_RECORD = "com.kalize.recorder.ACTION_RECORD" }
+    companion object {
+        const val ACTION_RECORD = "com.kalize.recorder.ACTION_RECORD"
+    }
 }
 
 @Composable
@@ -202,7 +220,11 @@ private fun RecorderHome(
             Spacer(Modifier.width(8.dp))
             Text("Open recording library")
         }
-        Text("No watermark is added. Recording performance and maximum quality depend on the device.", color = foreground, style = MaterialTheme.typography.bodySmall)
+        Text(
+            "No watermark is added. Recording performance and maximum quality depend on the device.",
+            color = foreground,
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -248,7 +270,9 @@ private fun SettingsPage(
 private fun SettingChoice(value: Int, options: List<Int>, label: (Int) -> String, onSelect: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(label(value)) }
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+            Text(label(value))
+        }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
                 DropdownMenuItem(text = { Text(label(option)) }, onClick = {

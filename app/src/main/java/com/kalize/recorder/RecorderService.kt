@@ -7,41 +7,65 @@ import android.app.Service
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
+import android.media.ImageReader
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 
 class RecorderService : Service() {
     private var projection: MediaProjection? = null
     private var recorder: MediaRecorder? = null
     private var display: VirtualDisplay? = null
+    private var screenshotDisplay: VirtualDisplay? = null
+    private var imageReader: ImageReader? = null
+    private var imageThread: HandlerThread? = null
     private var outputFile: File? = null
     private var outputUri: Uri? = null
     private var outputDescriptor: ParcelFileDescriptor? = null
     private var stopping = false
+    private var recordingActive = false
+    private var screenshotOnlySession = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             STOP -> stopCapture()
-            START -> startCapture(intent)
+            SCREENSHOT -> {
+                if (projection != null) captureScreenshot()
+                else startCapture(intent, screenshotOnly = true)
+            }
+            START -> startCapture(intent, screenshotOnly = false)
         }
         return START_NOT_STICKY
     }
 
-    private fun startCapture(intent: Intent) {
-        if (projection != null) return
+    private fun startCapture(intent: Intent, screenshotOnly: Boolean) {
+        if (projection != null) {
+            if (screenshotOnly) captureScreenshot()
+            return
+        }
         stopping = false
+        screenshotOnlySession = screenshotOnly
         createNotificationChannel()
         val stopIntent = android.app.PendingIntent.getService(
             this, 2, Intent(this, RecorderService::class.java).setAction(STOP),
@@ -50,7 +74,7 @@ class RecorderService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setContentTitle("Kalize Recorder")
-            .setContentText("Screen recording is active")
+            .setContentText(if (screenshotOnly) "Preparing screenshot" else "Screen recording is active")
             .setOngoing(true)
             .addAction(0, "Stop", stopIntent)
             .build()
@@ -89,6 +113,11 @@ class RecorderService : Service() {
             @Suppress("DEPRECATION")
             windowManager.defaultDisplay.getRealMetrics(metrics)
 
+            if (screenshotOnly) {
+                captureScreenshot()
+                return
+            }
+
             val preferences = getSharedPreferences("kalize_settings", MODE_PRIVATE)
             val targetLongEdge = preferences.getInt("resolution", 1080).coerceIn(720, 2160)
             val sourceLongEdge = maxOf(metrics.widthPixels, metrics.heightPixels)
@@ -100,7 +129,7 @@ class RecorderService : Service() {
             @Suppress("DEPRECATION")
             val displayRefresh = windowManager.defaultDisplay.refreshRate.toInt().coerceAtLeast(30)
             val frameRate = minOf(requestedFps, displayRefresh, 240)
-            prepareOutput()
+            prepareVideoOutput()
             val mediaRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else {
                 @Suppress("DEPRECATION")
                 MediaRecorder()
@@ -129,12 +158,107 @@ class RecorderService : Service() {
                 mediaRecorder.surface, null, null
             )
             mediaRecorder.start()
+            recordingActive = true
         } catch (_: Exception) {
             stopCapture()
         }
     }
 
-    private fun prepareOutput() {
+    private fun captureScreenshot() {
+        val activeProjection = projection ?: return
+        if (imageReader != null) return
+        val metrics = android.util.DisplayMetrics()
+        @Suppress("DEPRECATION")
+        val windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        @Suppress("DEPRECATION")
+        windowManager.defaultDisplay.getRealMetrics(metrics)
+        val width = metrics.widthPixels.coerceAtLeast(1)
+        val height = metrics.heightPixels.coerceAtLeast(1)
+
+        try {
+            val thread = HandlerThread("KalizeScreenshot").apply { start() }
+            imageThread = thread
+            val handler = Handler(thread.looper)
+            val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
+            imageReader = reader
+            val delivered = AtomicBoolean(false)
+            reader.setOnImageAvailableListener({ source ->
+                if (!delivered.compareAndSet(false, true)) return@setOnImageAvailableListener
+                var image: android.media.Image? = null
+                try {
+                    image = source.acquireLatestImage()
+                    if (image != null) {
+                        val plane = image.planes[0]
+                        val buffer: ByteBuffer = plane.buffer
+                        val pixelStride = plane.pixelStride
+                        val rowStride = plane.rowStride
+                        val paddedWidth = rowStride / pixelStride
+                        val padded = Bitmap.createBitmap(paddedWidth, height, Bitmap.Config.ARGB_8888)
+                        padded.copyPixelsFromBuffer(buffer)
+                        val bitmap = Bitmap.createBitmap(padded, 0, 0, width, height)
+                        padded.recycle()
+                        saveScreenshot(bitmap)
+                        bitmap.recycle()
+                    }
+                } catch (_: Exception) {
+                    // The screen capture session remains available if a screenshot cannot be saved.
+                } finally {
+                    try { image?.close() } catch (_: Exception) { }
+                    releaseScreenshotCapture()
+                    if (!recordingActive) stopCapture()
+                }
+            }, handler)
+
+            screenshotDisplay = activeProjection.createVirtualDisplay(
+                "KalizeScreenshot", width, height, metrics.densityDpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface, null, handler
+            )
+        } catch (_: Exception) {
+            releaseScreenshotCapture()
+            if (!recordingActive) stopCapture()
+        }
+    }
+
+    private fun saveScreenshot(bitmap: Bitmap) {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val name = "Kalize_Screenshot_$stamp.png"
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, name)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/Kalize Recorder/Screenshots")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: throw IllegalStateException("Unable to create screenshot")
+            try {
+                contentResolver.openOutputStream(uri)?.use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                    ?: throw IllegalStateException("Unable to open screenshot output")
+                val complete = ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) }
+                contentResolver.update(uri, complete, null, null)
+            } catch (error: Exception) {
+                contentResolver.delete(uri, null, null)
+                throw error
+            }
+        } else {
+            val directory = File(getExternalFilesDir(Environment.DIRECTORY_PICTURES), "Kalize Recorder/Screenshots")
+            if (!directory.exists()) directory.mkdirs()
+            FileOutputStream(File(directory, name)).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        }
+    }
+
+    private fun releaseScreenshotCapture() {
+        try { screenshotDisplay?.release() } catch (_: Exception) { }
+        screenshotDisplay = null
+        try { imageReader?.setOnImageAvailableListener(null, null) } catch (_: Exception) { }
+        try { imageReader?.close() } catch (_: Exception) { }
+        imageReader = null
+        try { imageThread?.quitSafely() } catch (_: Exception) { }
+        imageThread = null
+    }
+
+    private fun prepareVideoOutput() {
         val fileName = "Kalize_${System.currentTimeMillis()}.mp4"
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
@@ -163,11 +287,12 @@ class RecorderService : Service() {
         recorder = null
         display = null
         projection = null
+        recordingActive = false
 
         var saved = false
         try {
             activeRecorder?.stop()
-            saved = true
+            saved = activeRecorder != null
         } catch (_: Exception) {
             outputFile?.delete()
             outputUri?.let { contentResolver.delete(it, null, null) }
@@ -176,6 +301,7 @@ class RecorderService : Service() {
         try { activeRecorder?.reset() } catch (_: Exception) { }
         try { activeRecorder?.release() } catch (_: Exception) { }
         try { activeProjection?.stop() } catch (_: Exception) { }
+        releaseScreenshotCapture()
 
         try { outputDescriptor?.close() } catch (_: Exception) { }
         outputDescriptor = null
@@ -203,6 +329,7 @@ class RecorderService : Service() {
     companion object {
         const val START = "kalize.start"
         const val STOP = "kalize.stop"
+        const val SCREENSHOT = "kalize.screenshot"
         const val CODE = "result_code"
         const val DATA = "projection_data"
         private const val CHANNEL = "kalize_capture"

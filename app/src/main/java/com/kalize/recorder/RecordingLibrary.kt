@@ -40,6 +40,7 @@ private data class ScreenshotItem(
 fun RecordingLibrary(onBack: () -> Unit) {
     val context = LocalContext.current
     var refresh by remember { mutableIntStateOf(0) }
+    var deleteTarget by remember { mutableStateOf<Pair<android.net.Uri, String>?>(null) }
     val recordings = remember(refresh) {
         val result = mutableListOf<RecordingItem>()
         val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
@@ -169,6 +170,9 @@ fun RecordingLibrary(onBack: () -> Unit) {
                                     }
                                     context.startActivity(Intent.createChooser(send, "Share screenshot"))
                                 }) { Icon(Icons.Default.Share, contentDescription = "Share screenshot") }
+                                IconButton(onClick = { deleteTarget = item.uri to item.name }) {
+                                    Icon(androidx.compose.material.icons.filled.Delete, contentDescription = "Delete screenshot")
+                                }
                             }
                         }
                     }
@@ -216,11 +220,31 @@ fun RecordingLibrary(onBack: () -> Unit) {
                                     }
                                     context.startActivity(Intent.createChooser(send, "Share recording"))
                                 }) { Icon(Icons.Default.Share, contentDescription = "Share") }
+                                IconButton(onClick = { deleteTarget = item.uri to item.name }) {
+                                    Icon(androidx.compose.material.icons.filled.Delete, contentDescription = "Delete recording")
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+        deleteTarget?.let { target ->
+            AlertDialog(
+                onDismissRequest = { deleteTarget = null },
+                title = { Text("Delete media?") },
+                text = { Text("Delete ${target.second}? This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        context.contentResolver.delete(target.first, null, null)
+                        deleteTarget = null
+                        refresh++
+                    }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { deleteTarget = null }) { Text("Cancel") }
+                }
+            )
         }
     }
 }

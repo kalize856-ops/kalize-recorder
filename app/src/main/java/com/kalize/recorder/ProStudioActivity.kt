@@ -32,6 +32,11 @@ class ProStudioActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Pro capture options are unlocked by a rewarded ad for this visit only.
+        // Reset any previously selected Pro preset so it cannot remain active without a fresh reward.
+        if (prefs.getString("capture_profile", "Gameplay") == "High quality" || prefs.getInt("bitrate_preset", 1) == 2) {
+            prefs.edit().putString("capture_profile", "Gameplay").putInt("bitrate_preset", 1).apply()
+        }
         MobileAds.initialize(this) { loadRewardedAd() }
         setContent {
             MaterialTheme {

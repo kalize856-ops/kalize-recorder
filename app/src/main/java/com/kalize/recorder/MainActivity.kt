@@ -78,7 +78,7 @@ class MainActivity : ComponentActivity() {
                         }
                         when (page) {
                             "Library" -> Box(Modifier.weight(1f)) { RecordingLibrary(onBack = { page = "Recorder" }) }
-                             "Settings" -> Box(Modifier.weight(1f)) { SettingsPage(
+                            "Settings" -> Box(Modifier.weight(1f)) { SettingsPage(
                                 dark = dark,
                                 onDarkChange = {
                                     dark = it
@@ -176,7 +176,7 @@ private fun RecorderHome(
     onLibrary: () -> Unit
 ) {
     Column(
-        Modifier.fillMaxWidth().weight(1f).padding(20.dp),
+        Modifier.fillMaxSize().padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Card(shape = RoundedCornerShape(28.dp), colors = CardDefaults.cardColors(containerColor = card)) {

@@ -159,6 +159,25 @@ class VideoEditorActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        OutlinedButton(
+                            enabled = !exporting,
+                            onClick = {
+                                val source = selectedUri ?: return@OutlinedButton
+                                exporting = true
+                                message = "Extracting the original audio…"
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        runCatching { AudioTrackExtractor.export(this@VideoEditorActivity, source) }
+                                    }
+                                    exporting = false
+                                    message = result.fold(
+                                        { "Audio extracted. The M4A file is saved in Music/Kalize Recorder/Extracted Audio." },
+                                        { "Audio extraction failed: " + (it.message ?: "this video may not contain a supported audio track") }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Extract audio from video") }
                         HorizontalDivider()
                         Text("Trim one video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Text("Video length: ${formatTime(durationMs)}")
@@ -476,6 +495,63 @@ private object BasicVideoMerger {
             (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000L
         } finally {
             retriever.release()
+        }
+    }
+}
+
+private object AudioTrackExtractor {
+    fun export(context: Context, source: Uri): Uri {
+        val values = ContentValues().apply {
+            put(MediaStore.Audio.Media.DISPLAY_NAME, "Kalize_Audio_" + System.currentTimeMillis() + ".m4a")
+            put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4")
+            put(MediaStore.Audio.Media.RELATIVE_PATH, Environment.DIRECTORY_MUSIC + "/Kalize Recorder/Extracted Audio")
+            put(MediaStore.Audio.Media.IS_PENDING, 1)
+        }
+        val outputUri = context.contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Could not create the extracted audio file.")
+        var muxer: MediaMuxer? = null
+        var started = false
+        try {
+            context.contentResolver.openFileDescriptor(outputUri, "w")!!.use { descriptor ->
+                val extractor = MediaExtractor()
+                try {
+                    extractor.setDataSource(context, source, null)
+                    val audioTrack = (0 until extractor.trackCount).firstOrNull { index ->
+                        extractor.getTrackFormat(index).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
+                    } ?: throw IllegalArgumentException("This video does not contain a supported audio track.")
+                    val format = extractor.getTrackFormat(audioTrack)
+                    val active = MediaMuxer(descriptor.fileDescriptor, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+                    muxer = active
+                    val outputTrack = active.addTrack(format)
+                    active.start()
+                    started = true
+                    extractor.selectTrack(audioTrack)
+                    val buffer = ByteBuffer.allocate(2 * 1024 * 1024)
+                    val info = MediaCodec.BufferInfo()
+                    while (true) {
+                        buffer.clear()
+                        val size = extractor.readSampleData(buffer, 0)
+                        if (size < 0) break
+                        info.set(0, size, extractor.sampleTime.coerceAtLeast(0L), extractor.sampleFlags)
+                        active.writeSampleData(outputTrack, buffer, info)
+                        if (!extractor.advance()) break
+                    }
+                } finally {
+                    extractor.release()
+                }
+                if (started) { muxer?.stop(); started = false }
+                muxer?.release()
+                muxer = null
+            }
+            context.contentResolver.update(outputUri, ContentValues().apply {
+                put(MediaStore.Audio.Media.IS_PENDING, 0)
+            }, null, null)
+            return outputUri
+        } catch (error: Exception) {
+            try { if (started) muxer?.stop() } catch (_: Exception) { }
+            try { muxer?.release() } catch (_: Exception) { }
+            context.contentResolver.delete(outputUri, null, null)
+            throw error
         }
     }
 }

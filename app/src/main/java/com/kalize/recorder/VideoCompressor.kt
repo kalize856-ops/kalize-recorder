@@ -31,6 +31,8 @@ enum class CompressionPreset(
     val targetHeight: Int,
     val bitrate: Int
 ) {
+    ULTRA_SMALL("Lowest resolution", "240p · 300 Kbps", 240, 300_000),
+    VERY_SMALL("Very small file", "360p · 600 Kbps", 360, 600_000),
     SMALL("Small file", "480p · 1.2 Mbps", 480, 1_200_000),
     BALANCED("Balanced", "720p · 2.5 Mbps", 720, 2_500_000),
     HIGH("High quality", "1080p · 5 Mbps", 1080, 5_000_000)

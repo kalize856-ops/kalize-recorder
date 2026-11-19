@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Locale
+import org.json.JSONArray
 
 class MultiTrackTimelineActivity : ComponentActivity() {
     private var videoClips by mutableStateOf<List<Uri>>(emptyList())
@@ -34,6 +35,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
     private var transition by mutableStateOf("Crossfade · 1 second")
     private var originalVolume by mutableFloatStateOf(1f)
     private val audioVolumes = mutableStateListOf<Float>()
+    private val projectPrefs by lazy { getSharedPreferences("kalize_timeline_project", MODE_PRIVATE) }
 
     private val videoPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
@@ -52,6 +54,42 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         }
     }
 
+    private fun restoreDraft() {
+        fun readUris(key: String): List<Uri> = runCatching {
+            val array = JSONArray(projectPrefs.getString(key, "[]") ?: "[]")
+            (0 until array.length()).mapNotNull { index ->
+                array.optString(index).takeIf { it.isNotBlank() }?.let(Uri::parse)
+            }
+        }.getOrDefault(emptyList())
+        videoClips = readUris("video_uris")
+        audioClips = readUris("audio_uris")
+        audioVolumes.clear()
+        runCatching {
+            val values = JSONArray(projectPrefs.getString("audio_volumes", "[]") ?: "[]")
+            repeat(audioClips.size) { index -> audioVolumes.add(values.optDouble(index, 0.85).toFloat().coerceIn(0f, 1.5f)) }
+        }.onFailure { repeat(audioClips.size) { audioVolumes.add(0.85f) } }
+        originalVolume = projectPrefs.getFloat("original_volume", 1f).coerceIn(0f, 1.5f)
+        transition = projectPrefs.getString("transition", "Crossfade · 1 second") ?: "Crossfade · 1 second"
+        (videoClips + audioClips).forEach(::keepPermission)
+        if (videoClips.isNotEmpty() || audioClips.isNotEmpty()) {
+            status = "Restored your saved timeline draft."
+        }
+    }
+
+    private fun persistDraft() {
+        val videos = JSONArray().apply { videoClips.forEach { put(it.toString()) } }
+        val audios = JSONArray().apply { audioClips.forEach { put(it.toString()) } }
+        val levels = JSONArray().apply { audioVolumes.forEach { put(it.toDouble()) } }
+        projectPrefs.edit()
+            .putString("video_uris", videos.toString())
+            .putString("audio_uris", audios.toString())
+            .putString("audio_volumes", levels.toString())
+            .putFloat("original_volume", originalVolume)
+            .putString("transition", transition)
+            .putLong("last_saved_at", System.currentTimeMillis())
+            .apply()
+    }
+
     private fun keepPermission(uri: Uri) {
         try {
             contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -60,10 +98,15 @@ class MultiTrackTimelineActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreDraft()
         setContent {
             MaterialTheme {
                 val scope = rememberCoroutineScope()
                 var showTransitionMenu by remember { mutableStateOf(false) }
+                val volumeSnapshot = audioVolumes.toList()
+                LaunchedEffect(videoClips, audioClips, volumeSnapshot, originalVolume, transition) {
+                    persistDraft()
+                }
                 Column(
                     Modifier.fillMaxSize().padding(18.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -71,6 +114,13 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("Multi-track timeline", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("Arrange video clips, overlap transitions, layer music and voice tracks, then export a mixed MP4.")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = {
+                            persistDraft()
+                            status = "Project draft saved on this device. Your timeline will be restored when you reopen the editor."
+                        }, modifier = Modifier.weight(1f)) { Text("Save project draft") }
+                        Text("AUTO-SAVE ON", modifier = Modifier.padding(top = 13.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { videoPicker.launch(arrayOf("video/*")) },

@@ -2,8 +2,6 @@ package com.kalize.recorder
 
 import android.Manifest
 import android.app.Activity
-import android.app.ActivityManager
-import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -14,7 +12,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.provider.MediaStore
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,33 +19,31 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
 import com.google.android.gms.ads.MobileAds
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.viewinterop.AndroidView
 
 class MainActivity : ComponentActivity() {
     private val prefs by lazy { getSharedPreferences("kalize_settings", Context.MODE_PRIVATE) }
     private var screenshotPending = false
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
     private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
             val action = if (screenshotPending) RecorderService.SCREENSHOT else RecorderService.START
@@ -58,11 +53,8 @@ class MainActivity : ComponentActivity() {
                 .putExtra(RecorderService.CODE, result.resultCode)
                 .putExtra(RecorderService.DATA, result.data)
             ContextCompat.startForegroundService(this, serviceIntent)
-        } else {
-            screenshotPending = false
-        }
+        } else screenshotPending = false
     }
-
     private val overlaySettings = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.canDrawOverlays(this)) {
             prefs.edit().putBoolean("bubble_enabled", true).apply()
@@ -73,141 +65,78 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RecordingRecovery.recoverPendingVideos(this)
-        requestNotificationPermissionIfNeeded()
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         MobileAds.initialize(this) { }
+
         setContent {
             var dark by remember { mutableStateOf(prefs.getBoolean("dark_theme", true)) }
-            var page by remember { mutableStateOf("Recorder") }
+            var page by remember { mutableStateOf("Home") }
             var resolution by remember { mutableIntStateOf(prefs.getInt("resolution", 1080)) }
             var fps by remember { mutableIntStateOf(prefs.getInt("fps", 30)) }
             var countdown by remember { mutableIntStateOf(prefs.getInt("countdown", 3)) }
             var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
-
-            val card = if (dark) Color(0xFF171F32) else Color.White
-            val background = if (dark) Color(0xFF0B1020) else Color(0xFFF3F5FA)
-            val foreground = if (dark) Color.White else Color(0xFF172033)
-            val accent = if (dark) Color(0xFF9B88FF) else Color(0xFF6750D8)
-
-            MaterialTheme(
-                colorScheme = if (dark) darkColorScheme(primary = accent, surface = card)
-                else lightColorScheme(primary = accent, surface = card)
-            ) {
-                Surface(Modifier.fillMaxSize(), color = background) {
+            val accent = if (dark) Color(0xFF9B86FF) else Color(0xFF6952D8)
+            val bg = if (dark) Color(0xFF0B1020) else Color(0xFFF4F5FA)
+            val surface = if (dark) Color(0xFF171F32) else Color.White
+            val ink = if (dark) Color.White else Color(0xFF172033)
+            MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = accent, background = bg, surface = surface)
+                else lightColorScheme(primary = accent, background = bg, surface = surface)) {
+                Surface(Modifier.fillMaxSize(), color = bg) {
                     Column(Modifier.fillMaxSize()) {
                         Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 15.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text("KALIZE RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black)
-                                Text(page, color = foreground, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+                                Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = .16f)) {
+                                    Icon(Icons.Default.Videocam, null, tint = accent, modifier = Modifier.padding(10.dp).size(23.dp))
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text("KALIZE RECORDER", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Black)
+                                    Text(page, color = ink, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                                }
                             }
-                            Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.13f)) {
-                                Icon(
-                                    Icons.Default.Videocam,
-                                    contentDescription = "Kalize Recorder",
-                                    tint = accent,
-                                    modifier = Modifier.padding(11.dp)
+                            IconButton(onClick = { page = "Settings" }) { Icon(Icons.Default.Settings, "Settings", tint = ink) }
+                        }
+
+                        Box(Modifier.weight(1f)) {
+                            when (page) {
+                                "Home" -> RecorderDashboard(
+                                    ink, surface, accent,
+                                    onRecord = { requestCapture() },
+                                    onBubble = { enableBubble() },
+                                    onLibrary = { page = "Library" },
+                                    onEdit = { startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java)) },
+                                    onStudio = { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
+                                    onScreenshot = { requestScreenshot() }
+                                )
+                                "Edit" -> EditorDashboard(ink, surface, accent) {
+                                    startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java))
+                                }
+                                "Library" -> RecordingLibrary(onBack = { page = "Home" })
+                                "Settings" -> SettingsDashboard(
+                                    dark, { dark = it; prefs.edit().putBoolean("dark_theme", it).apply() },
+                                    resolution, { resolution = it; prefs.edit().putInt("resolution", it).apply() },
+                                    fps, { fps = it; prefs.edit().putInt("fps", it).apply() },
+                                    countdown, { countdown = it; prefs.edit().putInt("countdown", it).apply() },
+                                    bubbleEnabled, { enabled ->
+                                        bubbleEnabled = enabled
+                                        prefs.edit().putBoolean("bubble_enabled", enabled).apply()
+                                        if (enabled) enableBubble() else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
+                                    },
+                                    { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) }
                                 )
                             }
                         }
-
-                        when (page) {
-                            "Recorder" -> {
-                                Box(Modifier.weight(1f)) {
-                                    RecorderHome(
-                                        foreground = foreground,
-                                        card = card,
-                                        onRecord = { requestCapture() },
-                                        onBubble = { enableBubble() },
-                                        onLibrary = { page = "Library" }
-                                    )
-                                }
-                            }
-                            "Edit" -> {
-                                Box(Modifier.weight(1f)) {
-                                    EditHome(
-                                        foreground = foreground,
-                                        card = card,
-                                        onOpenEditor = {
-                                            startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java))
-                                        }
-                                    )
-                                }
-                            }
-                            "Library" -> {
-                                Box(Modifier.weight(1f)) {
-                                    RecordingLibrary(onBack = { page = "Recorder" })
-                                }
-                            }
-                            "Settings" -> {
-                                Box(Modifier.weight(1f)) {
-                                    SettingsPage(
-                                        dark = dark,
-                                        onDarkChange = {
-                                            dark = it
-                                            prefs.edit().putBoolean("dark_theme", it).apply()
-                                        },
-                                        resolution = resolution,
-                                        onResolution = {
-                                            resolution = it
-                                            prefs.edit().putInt("resolution", it).apply()
-                                        },
-                                        fps = fps,
-                                        onFps = {
-                                            fps = it
-                                            prefs.edit().putInt("fps", it).apply()
-                                        },
-                                        bubbleEnabled = bubbleEnabled,
-                                        onBubbleChange = { enabled ->
-                                            bubbleEnabled = enabled
-                                            prefs.edit().putBoolean("bubble_enabled", enabled).apply()
-                                            if (enabled) enableBubble()
-                                            else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
-                                        },
-                                        countdown = countdown,
-                                        onCountdown = {
-                                            countdown = it
-                                            prefs.edit().putInt("countdown", it).apply()
-                                        },
-                                        onProStudio = {
-                                            startActivity(Intent(this@MainActivity, ProStudioActivity::class.java))
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        if (page == "Recorder" || page == "Library") {
-                            AdMobBanner(modifier = Modifier.fillMaxWidth())
-                        }
-
-                        NavigationBar(containerColor = card) {
-                            NavigationBarItem(
-                                selected = page == "Recorder",
-                                onClick = { page = "Recorder" },
-                                icon = { Icon(Icons.Default.Videocam, contentDescription = null) },
-                                label = { Text("Recorder") }
-                            )
-                            NavigationBarItem(
-                                selected = page == "Edit",
-                                onClick = { page = "Edit" },
-                                icon = { Icon(Icons.Default.Edit, contentDescription = null) },
-                                label = { Text("Edit") }
-                            )
-                            NavigationBarItem(
-                                selected = page == "Library",
-                                onClick = { page = "Library" },
-                                icon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                                label = { Text("Library") }
-                            )
-                            NavigationBarItem(
-                                selected = page == "Settings",
-                                onClick = { page = "Settings" },
-                                icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                                label = { Text("Settings") }
-                            )
+                        if (page == "Home" || page == "Library") KalizeAdBanner()
+                        NavigationBar(containerColor = surface) {
+                            NavigationBarItem(page == "Home", { page = "Home" }, icon = { Icon(Icons.Default.Videocam, null) }, label = { Text("Recorder") })
+                            NavigationBarItem(page == "Edit", { page = "Edit" }, icon = { Icon(Icons.Default.ContentCut, null) }, label = { Text("Edit") })
+                            NavigationBarItem(page == "Library", { page = "Library" }, icon = { Icon(Icons.Default.VideoLibrary, null) }, label = { Text("Library") })
+                            NavigationBarItem(page == "Settings", { page = "Settings" }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Settings") })
                         }
                     }
                 }
@@ -235,19 +164,11 @@ class MainActivity : ComponentActivity() {
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     private fun requestCapture() {
         screenshotPending = false
-        val delaySeconds = prefs.getInt("countdown", 3).coerceIn(0, 10)
-        if (delaySeconds == 0) launchCapturePermission()
-        else Handler(Looper.getMainLooper()).postDelayed({ launchCapturePermission() }, delaySeconds * 1000L)
+        val delay = prefs.getInt("countdown", 3).coerceIn(0, 10)
+        if (delay == 0) launchCapturePermission()
+        else Handler(Looper.getMainLooper()).postDelayed({ launchCapturePermission() }, delay * 1000L)
     }
 
     private fun requestScreenshot() {
@@ -278,422 +199,261 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun RecorderHome(
-    foreground: Color,
-    card: Color,
-    onRecord: () -> Unit,
-    onBubble: () -> Unit,
-    onLibrary: () -> Unit
+private fun RecorderDashboard(
+    ink: Color, surface: Color, accent: Color,
+    onRecord: () -> Unit, onBubble: () -> Unit, onLibrary: () -> Unit,
+    onEdit: () -> Unit, onStudio: () -> Unit, onScreenshot: () -> Unit
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(17.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                Text("Capture your screen", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            }
+            Surface(color = Color(0xFF1EAD78).copy(alpha = .13f), shape = CircleShape) {
+                Row(Modifier.padding(horizontal = 11.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(Modifier.size(7.dp).background(Color(0xFF1EAD78), CircleShape))
+                    Text("READY", color = Color(0xFF1EAD78), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
-    Box(Modifier.fillMaxSize()) {
-        Column(
-            Modifier.fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 18.dp, top = 8.dp, end = 18.dp, bottom = 92.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(26.dp),
+            colors = CardDefaults.cardColors(containerColor = surface)
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color(0xFF30265E), Color(0xFF171F32), Color(0xFF111827))))
+                    .padding(20.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("SCREEN CAPTURE", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                    Text("Ready to record?", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                }
-                Surface(shape = RoundedCornerShape(50), color = accent.copy(alpha = 0.13f)) {
-                    Text("READY", modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp), color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = card)
-            ) {
-                Column(
-                    Modifier.fillMaxWidth()
-                        .background(
-                            brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                                listOf(accent.copy(alpha = 0.18f), card, card)
-                            )
-                        )
-                        .padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text("KALIZE SCREEN RECORDER", color = accent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                    Text(
-                        "Capture every moment.",
-                        color = foreground,
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.ExtraBold
-                    )
-                    Text(
-                        "Record gameplay, tutorials, app demos and anything happening on your screen.",
-                        color = muted,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        "MP4 recordings  •  No watermark  •  Device-dependent quality",
-                        color = muted,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
-
-            Text("QUICK ACCESS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                QuickActionCard(
-                    "Floating controls",
-                    "Record and capture from anywhere",
-                    "◉",
-                    Modifier.weight(1f),
-                    onBubble,
-                    accent,
-                    foreground,
-                    card
-                )
-                QuickActionCard(
-                    "My recordings",
-                    "Browse and share saved clips",
-                    "▤",
-                    Modifier.weight(1f),
-                    onLibrary,
-                    accent,
-                    foreground,
-                    card
-                )
-            }
-
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = card)
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Icon(Icons.Default.Settings, contentDescription = null, tint = accent)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("Recording preferences", color = foreground, fontWeight = FontWeight.SemiBold)
-                        Text("Resolution, frame rate and countdown are in Settings.", color = muted, style = MaterialTheme.typography.bodySmall)
+                Column(verticalArrangement = Arrangement.spacedBy(13.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Text("KALIZE CAPTURE", color = Color(0xFFC4B8FF), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Surface(color = Color.White.copy(alpha = .10f), shape = CircleShape) {
+                            Text("MP4  •  NO WATERMARK", modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), color = Color.White, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    Box(Modifier.fillMaxWidth().height(142.dp), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(116.dp).background(Color(0xFF9B86FF).copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
+                            Box(Modifier.size(82.dp).background(Color(0xFF9B86FF).copy(alpha = .20f), CircleShape), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Smartphone, null, tint = Color.White, modifier = Modifier.size(47.dp))
+                            }
+                        }
+                    }
+                    Text("Ready when you are.", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Record gameplay, tutorials and app demos in clear quality.", color = Color(0xFFB9C0D0), style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = onRecord, modifier = Modifier.fillMaxWidth().height(52.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE94B55)),
+                        shape = RoundedCornerShape(15.dp)
+                    ) {
+                        Icon(Icons.Default.FiberManualRecord, null)
+                        Spacer(Modifier.width(9.dp))
+                        Text("Start recording", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
-        FloatingActionButton(
-            onClick = onRecord,
-            modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp).size(58.dp),
-            containerColor = Color(0xFFE94B45),
-            contentColor = Color.White,
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 10.dp,
-                pressedElevation = 14.dp
-            ),
-            shape = RoundedCornerShape(50)
-        ) {
-            Icon(
-                Icons.Default.Videocam,
-                contentDescription = "Start recording",
-                modifier = Modifier.size(27.dp)
-            )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("QUICK TOOLS", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("TOOLS", color = accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
         }
-    }
-}
-
-@Composable
-private fun EditHome(
-    foreground: Color,
-    card: Color,
-    onOpenEditor: () -> Unit
-) {
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val accent = MaterialTheme.colorScheme.primary
-
-    Column(
-        Modifier.fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("POST-PRODUCTION", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Text("Edit your videos", color = foreground, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("All video editing and export tools live here.", color = muted, style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            DashboardTool("Floating ball", "Quick controls", Icons.Default.BubbleChart, accent, Modifier.weight(1f), onBubble)
+            DashboardTool("Screenshot", "Capture screen", Icons.Default.PhotoCamera, accent, Modifier.weight(1f), onScreenshot)
+            DashboardTool("My videos", "Saved clips", Icons.Default.VideoLibrary, accent, Modifier.weight(1f), onLibrary)
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = card)
-        ) {
-            Column(
-                Modifier.fillMaxWidth().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Surface(shape = RoundedCornerShape(14.dp), color = accent.copy(alpha = 0.14f)) {
-                    Icon(Icons.Default.Edit, contentDescription = null, tint = accent, modifier = Modifier.padding(12.dp))
+        Text("CREATE & MANAGE", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
+            FeatureCard("Video editor", "Trim, merge and compress", Icons.Default.MovieEdit, accent, surface, Modifier.weight(1f), onEdit)
+            FeatureCard("Pro capture", "Audio and quality presets", Icons.Default.Tune, accent, surface, Modifier.weight(1f), onStudio)
+        }
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Icon(Icons.Default.HighQuality, null, tint = accent, modifier = Modifier.size(27.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Recording quality", color = ink, fontWeight = FontWeight.SemiBold)
+                    Text("Choose resolution, FPS and countdown in Settings.", color = muted, style = MaterialTheme.typography.bodySmall)
                 }
-                Text("Video editor", color = foreground, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(
-                    "Trim clips, merge recordings, compress videos, mute or keep audio, rotate exports and adjust playback speed.",
-                    color = muted,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(onClick = onOpenEditor, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                    Icon(Icons.Default.Edit, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Open video editor")
+                Icon(Icons.Default.ChevronRight, null, tint = muted)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+    }
+}
+
+@Composable
+private fun DashboardTool(title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color, modifier: Modifier, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = modifier.height(112.dp), shape = RoundedCornerShape(19.dp)) {
+        Column(Modifier.fillMaxSize().padding(11.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
+            Surface(color = accent.copy(alpha = .14f), shape = RoundedCornerShape(12.dp)) {
+                Icon(icon, null, tint = accent, modifier = Modifier.padding(9.dp).size(21.dp))
+            }
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+        }
+    }
+}
+
+@Composable
+private fun FeatureCard(title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector, accent: Color, surface: Color, modifier: Modifier, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
+        Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Icon(icon, null, tint = accent, modifier = Modifier.size(27.dp))
+            Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun EditorDashboard(ink: Color, surface: Color, accent: Color, onOpen: () -> Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+        Text("KALIZE STUDIO", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Text("Make every clip count.", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Edit and prepare your recordings for sharing.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        FeatureCard("Open video editor", "Trim clips, merge compatible videos, compress and adjust export options.", Icons.Default.MovieEdit, accent, surface, Modifier.fillMaxWidth(), onOpen)
+        listOf(
+            "Trim and cut" to "Choose the exact start and end of a clip.",
+            "Merge clips" to "Combine compatible recordings into one video.",
+            "Video compression" to "Create a smaller copy while keeping the original.",
+            "Audio and speed" to "Choose whether to keep audio and adjust playback speed."
+        ).forEach { (title, desc) ->
+            Card(onClick = onOpen, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = surface)) {
+                Row(Modifier.padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Edit, null, tint = accent)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, fontWeight = FontWeight.SemiBold, color = ink)
+                        Text(desc, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Icon(Icons.Default.ChevronRight, null)
                 }
             }
         }
-
-        Text("EDITING TOOLS", color = muted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        EditToolRow("Trim and cut", "Choose the start and end of a clip", onOpenEditor, foreground, muted, card, accent)
-        EditToolRow("Merge videos", "Join compatible clips into one video", onOpenEditor, foreground, muted, card, accent)
-        EditToolRow("Video compression", "Create a smaller copy of a recording", onOpenEditor, foreground, muted, card, accent)
-        EditToolRow("Audio and playback", "Keep or mute source audio and change speed", onOpenEditor, foreground, muted, card, accent)
-        Text(
-            "Compression and merging exports currently use a rewarded-ad unlock. Original files are kept unchanged.",
-            color = muted,
-            style = MaterialTheme.typography.bodySmall
-        )
     }
 }
 
 @Composable
-private fun EditToolRow(
-    title: String,
-    description: String,
-    onClick: () -> Unit,
-    foreground: Color,
-    muted: Color,
-    card: Color,
-    accent: Color
-) {
-    Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = card)
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(15.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Surface(shape = RoundedCornerShape(12.dp), color = accent.copy(alpha = 0.13f)) {
-                Icon(Icons.Default.Edit, contentDescription = null, tint = accent, modifier = Modifier.padding(10.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, color = foreground, fontWeight = FontWeight.SemiBold)
-                Text(description, color = muted, style = MaterialTheme.typography.bodySmall)
-            }
-            Icon(Icons.Default.Edit, contentDescription = "Open tool", tint = muted)
-        }
-    }
-}
-
-@Composable
-private fun QuickActionCard(
-    title: String,
-    subtitle: String,
-    symbol: String,
-    modifier: Modifier,
-    onClick: () -> Unit,
-    accent: Color,
-    foreground: Color,
-    card: Color
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier,
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = card)
-    ) {
-        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Surface(shape = RoundedCornerShape(13.dp), color = accent.copy(alpha = 0.14f)) {
-                Text(symbol, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = accent, style = MaterialTheme.typography.titleLarge)
-            }
-            Text(title, color = foreground, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-            Text(subtitle, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-        }
-    }
-}
-
-@Composable
-private fun SettingsPage(
-    dark: Boolean,
-    onDarkChange: (Boolean) -> Unit,
-    resolution: Int,
-    onResolution: (Int) -> Unit,
-    fps: Int,
-    onFps: (Int) -> Unit,
-    countdown: Int,
-    onCountdown: (Int) -> Unit,
-    bubbleEnabled: Boolean,
-    onBubbleChange: (Boolean) -> Unit,
-    onProStudio: () -> Unit
+private fun SettingsDashboard(
+    dark: Boolean, onDark: (Boolean) -> Unit,
+    resolution: Int, onResolution: (Int) -> Unit,
+    fps: Int, onFps: (Int) -> Unit,
+    countdown: Int, onCountdown: (Int) -> Unit,
+    bubbleEnabled: Boolean, onBubble: (Boolean) -> Unit,
+    onStudio: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, "show_touches", 0) == 1) }
-    val touchSettingsLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+    val touchLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (Settings.System.canWrite(context)) {
             Settings.System.putInt(context.contentResolver, "show_touches", 1)
             showTouches = true
         }
     }
-    val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("PERSONALISE YOUR STUDIO", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-        Card(shape = RoundedCornerShape(24.dp)) {
-            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                SettingSwitchRow("Dark appearance", "A focused, low-glare studio theme", dark, onDarkChange)
-                HorizontalDivider(color = muted.copy(alpha = 0.18f))
-                Text("Capture controls", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                SettingSwitchRow("Floating controls", "Keep the recorder bubble available over other apps", bubbleEnabled, onBubbleChange)
-                HorizontalDivider(color = muted.copy(alpha = 0.18f))
-                SettingSwitchRow("Touch indicators", "Show Android touch dots while recording", showTouches) { enabled ->
-                    if (!enabled || Settings.System.canWrite(context)) {
-                        Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
-                        showTouches = enabled
-                    } else {
-                        touchSettingsLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
-                    }
-                }
-            }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        SettingsCard("Appearance") {
+            SwitchSetting("Dark theme", "Use the dark recording studio theme", dark, onDark)
         }
-        Card(shape = RoundedCornerShape(24.dp)) {
-            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Recording quality", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Resolution", color = muted, style = MaterialTheme.typography.labelMedium)
-                SettingChoice(resolution, listOf(720, 1080, 1440, 2160), { "${it}p" }, onResolution)
-                Text("Frame-rate target", color = muted, style = MaterialTheme.typography.labelMedium)
-                SettingChoice(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
-                Text("Start delay", color = muted, style = MaterialTheme.typography.labelMedium)
-                SettingChoice(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
-            }
+        SettingsCard("Floating controls") {
+            SwitchSetting("Floating bubble", "Show Kalize controls over other apps", bubbleEnabled, onBubble)
         }
-        Card(shape = RoundedCornerShape(24.dp)) {
-            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Advanced capture", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Capture profiles and bitrate presets are managed separately from everyday settings.", color = muted, style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = onProStudio, modifier = Modifier.fillMaxWidth()) {
-                    Text("Open Pro Studio")
-                }
-            }
+        SettingsCard("Recording quality") {
+            Text("Resolution", style = MaterialTheme.typography.labelMedium)
+            ChoiceSetting(resolution, listOf(720, 1080, 1440, 2160), { "${it}p" }, onResolution)
+            Text("Frame rate", style = MaterialTheme.typography.labelMedium)
+            ChoiceSetting(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
+            Text("Countdown", style = MaterialTheme.typography.labelMedium)
+            ChoiceSetting(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
         }
-        Text("Your device determines the actual resolution and frame rate available. Changes are saved automatically.", color = muted, style = MaterialTheme.typography.bodySmall)
+        SettingsCard("Recording tools") {
+            SwitchSetting("Touch indicators", "Show Android touch dots in recordings", showTouches) { enabled ->
+                if (!enabled || Settings.System.canWrite(context)) {
+                    Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
+                    showTouches = enabled
+                } else touchLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
+            }
+            OutlinedButton(onClick = onStudio, modifier = Modifier.fillMaxWidth()) { Text("Open Pro Studio") }
+        }
+        Text("Actual FPS and resolution depend on your phone's display, encoder and available memory.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }
 
 @Composable
-private fun SettingSwitchRow(title: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-            Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun SettingsCard(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Card(shape = RoundedCornerShape(22.dp)) {
+        Column(Modifier.fillMaxWidth().padding(17.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            content()
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
 @Composable
-private fun SettingChoice(value: Int, options: List<Int>, label: (Int) -> String, onSelect: (Int) -> Unit) {
+private fun SwitchSetting(title: String, detail: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked, onChange)
+    }
+}
+
+@Composable
+private fun ChoiceSetting(value: Int, options: List<Int>, label: (Int) -> String, onSelect: (Int) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(label(value))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) { Text(label(value)) }
+        DropdownMenu(expanded, { expanded = false }) {
             options.forEach { option ->
-                DropdownMenuItem(text = { Text(label(option)) }, onClick = {
-                    onSelect(option)
-                    expanded = false
-                })
+                DropdownMenuItem(text = { Text(label(option)) }, onClick = { onSelect(option); expanded = false })
             }
         }
     }
 }
 
-
-/**
- * Makes completed MediaStore recordings visible again if Android killed the app
- * before the IS_PENDING flag could be cleared. Never touches a live recording.
- */
-private object RecordingRecovery {
-    fun recoverPendingVideos(context: Context) {
-        if (Build.VERSION.SDK_INT < 29 || recorderServiceIsRunning(context)) return
-        val collection = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-        val projection = arrayOf(MediaStore.Video.Media._ID, MediaStore.Video.Media.SIZE)
-        val selection = "${MediaStore.Video.Media.IS_PENDING} = 1 AND ${MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
-        val args = arrayOf("%Movies/Kalize Recorder%")
-        val resolver = context.contentResolver
-        val pending = mutableListOf<Pair<Uri, Long>>()
-        try {
-            resolver.query(collection, projection, selection, args, null)?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-                val sizeColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
-                while (cursor.moveToNext()) {
-                    val id = cursor.getLong(idColumn)
-                    val size = cursor.getLong(sizeColumn)
-                    pending += android.content.ContentUris.withAppendedId(collection, id) to size
-                }
-            }
-            pending.forEach { (uri, size) ->
-                if (size >= 64 * 1024L) {
-                    val values = ContentValues().apply {
-                        put(MediaStore.Video.Media.IS_PENDING, 0)
-                    }
-                    resolver.update(uri, values, null, null)
-                } else {
-                    resolver.delete(uri, null, null)
-                }
-            }
-        } catch (_: Exception) {
-            // Recovery is best-effort and must never prevent the recorder UI opening.
-        }
-    }
-
-    @Suppress("DEPRECATION")
-    private fun recorderServiceIsRunning(context: Context): Boolean {
-        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        return manager.getRunningServices(Int.MAX_VALUE).any {
-            it.service.className == RecorderService::class.java.name
-        }
-    }
-}
-
-
-/**
- * Anchored adaptive AdMob banner. Uses Google's official test ad unit until
- * Kalize's own AdMob ad unit is configured for production.
- */
 @Composable
-private fun AdMobBanner(modifier: Modifier = Modifier) {
+private fun KalizeAdBanner() {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val widthDp = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
-    val adView = remember(context, widthDp) {
+    val width = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp
+    val ad = remember(context, width) {
         AdView(context).apply {
             adUnitId = "ca-app-pub-3940256099942544/9214589741"
-            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, widthDp))
+            setAdSize(AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(context, width))
             loadAd(AdRequest.Builder().build())
         }
     }
+    AndroidView(factory = { ad }, modifier = Modifier.fillMaxWidth().wrapContentHeight())
+    DisposableEffect(ad) { onDispose { ad.destroy() } }
+}
 
-    AndroidView(
-        factory = { adView },
-        modifier = modifier.wrapContentHeight()
-    )
-
-    DisposableEffect(adView) {
-        onDispose { adView.destroy() }
+/** Best-effort recovery for complete videos left pending if Android terminated the app. */
+private object RecordingRecovery {
+    fun recoverPendingVideos(context: Context) {
+        if (Build.VERSION.SDK_INT < 29) return
+        val collection = android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(android.provider.MediaStore.Video.Media._ID, android.provider.MediaStore.Video.Media.SIZE)
+        val selection = "${android.provider.MediaStore.Video.Media.IS_PENDING} = 1 AND ${android.provider.MediaStore.Video.Media.RELATIVE_PATH} LIKE ?"
+        try {
+            context.contentResolver.query(collection, projection, selection, arrayOf("%Movies/Kalize Recorder%"), null)?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media._ID)
+                val sizeCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.Video.Media.SIZE)
+                while (cursor.moveToNext()) {
+                    val uri = android.content.ContentUris.withAppendedId(collection, cursor.getLong(idCol))
+                    if (cursor.getLong(sizeCol) >= 65536L) {
+                        val values = android.content.ContentValues().apply { put(android.provider.MediaStore.Video.Media.IS_PENDING, 0) }
+                        context.contentResolver.update(uri, values, null, null)
+                    } else context.contentResolver.delete(uri, null, null)
+                }
+            }
+        } catch (_: Exception) { }
     }
 }

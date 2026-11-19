@@ -1,5 +1,7 @@
 # Kalize Recorder
 
+Current development version: **1.0.1** (version code 2).
+
 Native Android screen recorder and video utility app.
 
 ## Build

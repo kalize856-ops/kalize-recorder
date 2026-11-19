@@ -184,6 +184,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreenshot() {
+        // Reuse the active MediaProjection session while recording. Android does not
+        // permit opening a second screen-capture consent session for the same task.
+        if (prefs.getBoolean("recording_active", false)) {
+            startService(Intent(this, RecorderService::class.java).setAction(RecorderService.SCREENSHOT))
+            return
+        }
         screenshotPending = true
         launchCapturePermission()
     }

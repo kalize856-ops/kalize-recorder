@@ -265,14 +265,17 @@ private fun RecorderDashboard(
                     }
                     Text("Ready when you are.", color = Color.White, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                     Text("Record gameplay, tutorials and app demos in clear quality.", color = Color(0xFFB9C0D0), style = MaterialTheme.typography.bodyMedium)
-                    Button(
-                        onClick = onRecord, modifier = Modifier.fillMaxWidth().height(52.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE94B55)),
-                        shape = RoundedCornerShape(15.dp)
-                    ) {
-                        Icon(Icons.Default.FiberManualRecord, null)
-                        Spacer(Modifier.width(9.dp))
-                        Text("Start recording", fontWeight = FontWeight.Bold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        FilledTonalButton(
+                            onClick = onRecord,
+                            shape = RoundedCornerShape(50.dp),
+                            contentPadding = PaddingValues(horizontal = 17.dp, vertical = 10.dp),
+                            colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFFE94B55), contentColor = Color.White)
+                        ) {
+                            Icon(Icons.Default.FiberManualRecord, null, modifier = Modifier.size(17.dp))
+                            Spacer(Modifier.width(7.dp))
+                            Text("Record", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

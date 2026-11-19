@@ -54,9 +54,8 @@ class RecorderService : Service() {
             PAUSE -> pauseRecording()
             RESUME -> resumeRecording()
             SCREENSHOT -> {
-                if (recordingActive) {
-                    Toast.makeText(this, "Stop recording before taking a screenshot", Toast.LENGTH_SHORT).show()
-                } else if (projection != null) {
+                // Reuse the current projection when a recording is active.
+                if (projection != null) {
                     captureScreenshot()
                 } else {
                     startCapture(intent, screenshotOnly = true)
@@ -182,6 +181,7 @@ class RecorderService : Service() {
             mediaRecorder.start()
             recordingActive = true
             getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", true).apply()
+            setBubbleCaptureVisibility(hidden = true)
         } catch (_: Exception) {
             stopCapture()
         }
@@ -234,6 +234,7 @@ class RecorderService : Service() {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.resume()
                 getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
+        setBubbleCaptureVisibility(hidden = false)
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
             }
@@ -395,6 +396,16 @@ class RecorderService : Service() {
         outputFile = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    private fun setBubbleCaptureVisibility(hidden: Boolean) {
+        if (!getSharedPreferences("kalize_settings", MODE_PRIVATE).getBoolean("bubble_enabled", false)) return
+        val action = if (hidden) FloatingBubbleService.HIDE_FOR_CAPTURE else FloatingBubbleService.SHOW_AFTER_CAPTURE
+        try {
+            startService(Intent(this, FloatingBubbleService::class.java).setAction(action))
+        } catch (_: Exception) {
+            // Overlay visibility must never interrupt recording.
+        }
     }
 
     private fun createNotificationChannel() {

@@ -44,6 +44,14 @@ class FloatingBubbleService : Service() {
     private val bubbleOpacity get() = getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_opacity", 100).coerceIn(50, 100) / 100f
     private val expandedOffset get() = (expandedSize - collapsedSize) / 2
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            HIDE_FOR_CAPTURE -> if (::root.isInitialized) root.visibility = android.view.View.GONE
+            SHOW_AFTER_CAPTURE -> if (::root.isInitialized) root.visibility = android.view.View.VISIBLE
+        }
+        return START_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -304,6 +312,11 @@ class FloatingBubbleService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    companion object {
+        const val HIDE_FOR_CAPTURE = "com.kalize.recorder.HIDE_BUBBLE_FOR_CAPTURE"
+        const val SHOW_AFTER_CAPTURE = "com.kalize.recorder.SHOW_BUBBLE_AFTER_CAPTURE"
+    }
 
     private data class BubbleAction(
         val glyph: String,

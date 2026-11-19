@@ -49,3 +49,12 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - A production release still needs a protected signing configuration and release-build validation.
 - Screen recording requires the user's explicit Android screen-capture consent for each session.
 - Touch indicators use Android's system-wide SHOW_TOUCHES setting and require the user to authorize modification in Android Settings. The app does not change it without user action.
+
+
+## Multi-track studio timeline (1.0.2 development)
+
+- Separate main video sequence with clip reordering and removal.
+- Multiple independent audio sequences layered over the video, with per-track gain controls, original-video audio level control, and automatic audio fade-in/fade-out.
+- Transition options: direct cut or a short dip-to-black separator between clips.
+- Timeline export uses AndroidX Media3 Transformer and saves a new MP4 under Movies/Kalize Recorder/Edits.
+- True overlapping video crossfades are not included: Media3 Composition currently does not support crossfading video or audio tracks. The dip-to-black transition is used instead.

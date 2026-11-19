@@ -48,7 +48,14 @@ object VideoCompressor {
         // Treat 240p/360p as the shorter edge for both landscape and portrait videos.
         val outputShortEdge = minOf(sourceWidth, sourceHeight, preset.targetHeight).coerceAtLeast(144)
         // Scale the short edge consistently for portrait and landscape videos.
-        val presentation = Presentation.createForShortSide(outputShortEdge)
+        val scale = outputShortEdge.toFloat() / minOf(sourceWidth, sourceHeight).toFloat()
+        val outputWidth = (sourceWidth * scale).toInt().coerceAtLeast(1)
+        val outputHeight = (sourceHeight * scale).toInt().coerceAtLeast(1)
+        val presentation = Presentation.createForWidthAndHeight(
+            outputWidth,
+            outputHeight,
+            Presentation.LAYOUT_SCALE_TO_FIT
+        )
         val tempFile = File(context.cacheDir, "kalize_compressed_" + System.currentTimeMillis() + ".mp4")
         try {
             withContext(Dispatchers.Main.immediate) {

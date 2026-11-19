@@ -39,8 +39,9 @@ class FloatingBubbleService : Service() {
     private var savedX = 0
     private var savedY = 0
 
-    private val collapsedSize get() = dp(58)
+    private val collapsedSize get() = dp(getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_size", 58).coerceIn(44, 68))
     private val expandedSize get() = dp(224)
+    private val bubbleOpacity get() = getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_opacity", 100).coerceIn(50, 100) / 100f
     private val expandedOffset get() = (expandedSize - collapsedSize) / 2
 
     override fun onCreate() {
@@ -85,6 +86,7 @@ class FloatingBubbleService : Service() {
             setTextColor(0xFFFFFFFF.toInt())
             background = rounded(0xFF7659EA.toInt(), 30)
             elevation = dp(8).toFloat()
+            alpha = bubbleOpacity
             contentDescription = "Kalize floating controls"
             setOnTouchListener { _, event -> handleBubbleTouch(event) }
         }
@@ -199,6 +201,7 @@ class FloatingBubbleService : Service() {
                     28
                 )
                 elevation = dp(7).toFloat()
+                alpha = bubbleOpacity
                 contentDescription = action.label
                 setOnClickListener { action.run() }
             }
@@ -222,7 +225,7 @@ class FloatingBubbleService : Service() {
         params.x = savedX
         params.y = savedY
         bubble.text = "K"
-        root.addView(bubble, FrameLayout.LayoutParams(dp(46), dp(46), Gravity.CENTER))
+        root.addView(bubble, FrameLayout.LayoutParams((collapsedSize * 0.8f).toInt(), (collapsedSize * 0.8f).toInt(), Gravity.CENTER))
         updateWindow()
     }
 

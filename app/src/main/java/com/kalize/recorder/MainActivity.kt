@@ -394,7 +394,7 @@ private fun SettingsDashboard(
         }
         SettingsCard("Recording quality") {
             Text("Resolution", style = MaterialTheme.typography.labelMedium)
-            ChoiceSetting(resolution, listOf(720, 1080, 1440, 2160), { "${it}p" }, onResolution)
+            ChoiceSetting(resolution, listOf(240, 360, 480, 720, 1080, 1440, 2160), { "${it}p" }, onResolution)
             Text("Frame rate", style = MaterialTheme.typography.labelMedium)
             ChoiceSetting(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
             Text("Countdown", style = MaterialTheme.typography.labelMedium)

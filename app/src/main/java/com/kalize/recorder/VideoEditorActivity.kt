@@ -99,6 +99,7 @@ class VideoEditorActivity : ComponentActivity() {
                         onClick = { startActivity(Intent(this@VideoEditorActivity, AdvancedVideoToolsActivity::class.java)) },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Advanced effects · crop · resize") }
+                    OutlinedButton(onClick = { startActivity(Intent(this@VideoEditorActivity, MultiTrackTimelineActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Multi-track timeline · transitions · audio mixer") }
                     OutlinedButton(onClick = { mergePicker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (mergeUris.isEmpty()) "Select multiple clips to merge" else "Change clips (${mergeUris.size} selected)")
                     }

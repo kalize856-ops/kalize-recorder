@@ -25,12 +25,13 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Android MediaProjection screen recording to MP4 with an ongoing foreground notification
 - Draggable floating controls with record, stop, screenshot, app launch, and Pro Studio shortcuts
 - Floating overlay uses Android's secure-window flag to prevent its own window from appearing in screenshots and screen captures
-- Resolution targets from 720p to 2160p and frame-rate targets up to 240 FPS, subject to device encoder and display support
+- Recording resolution targets from 240p to 2160p (4K) and frame-rate targets up to 240 FPS, subject to device encoder and display support
 - Countdown before capture and optional microphone recording
 - Optional Android touch indicators with an explicit system-settings authorization step
 - Pro Studio capture profiles and video bitrate presets
 - Recording and screenshot library with playback, sharing, and refresh
-- Video compression with Small (480p), Balanced (720p), and High (1080p) presets; saves a separate compressed copy
+- Video compression presets from 240p through 2160p (4K), with bitrate targets and aspect-ratio preservation; saves a separate copy
+- Split a selected video into two equal-duration clips without changing the original
 - Basic video trimming with optional source-audio retention
 - Clip merging for compatible media tracks
 - Trim export controls for rotation and playback speed
@@ -38,7 +39,7 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 
 ## Limitations
 
-- This is not yet a full multi-track editor. Timeline editing, transitions, filters/effects, crop controls, and advanced audio mixing are not implemented.
+- This is not yet a full multi-track editor. Multi-layer timeline editing, transitions, advanced audio mixing, and a visual clip-reordering timeline are not implemented. Basic filters, crop, resize, trim, split, rotation, playback speed, mute, and audio extraction are available.
 - Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail to merge.
 - Microphone recording captures microphone input; internal game/system audio capture is not included.
 - Resolution and FPS settings are requests, not guarantees. Android hardware and encoder capabilities determine the actual output.

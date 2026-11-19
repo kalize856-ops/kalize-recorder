@@ -183,6 +183,37 @@ class VideoEditorActivity : ComponentActivity() {
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Extract audio from video") }
+                        OutlinedButton(
+                            enabled = !exporting && durationMs >= 2_000L,
+                            onClick = {
+                                val source = selectedUri ?: return@OutlinedButton
+                                val midpoint = durationMs / 2L
+                                val retainAudio = keepAudio
+                                exporting = true
+                                message = "Splitting video into two clips…"
+                                scope.launch {
+                                    val result = withContext(Dispatchers.IO) {
+                                        runCatching {
+                                            val first = BasicVideoTrimmer.export(
+                                                this@VideoEditorActivity, source, 0L, midpoint,
+                                                retainAudio, 0, 1f
+                                            )
+                                            val second = BasicVideoTrimmer.export(
+                                                this@VideoEditorActivity, source, midpoint, durationMs,
+                                                retainAudio, 0, 1f
+                                            )
+                                            first to second
+                                        }
+                                    }
+                                    exporting = false
+                                    message = result.fold(
+                                        { "Split complete. Both clips are saved in Movies/Kalize Recorder/Edits." },
+                                        { "Split failed: ${it.message ?: "unsupported video format"}" }
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Split video into two clips") }
                         HorizontalDivider()
                         Text("Trim one video", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                         Text("Video length: ${formatTime(durationMs)}")

@@ -35,7 +35,9 @@ enum class CompressionPreset(
     VERY_SMALL("Very small file", "360p · 600 Kbps", 360, 600_000),
     SMALL("Small file", "480p · 1.2 Mbps", 480, 1_200_000),
     BALANCED("Balanced", "720p · 2.5 Mbps", 720, 2_500_000),
-    HIGH("High quality", "1080p · 5 Mbps", 1080, 5_000_000)
+    HIGH("High quality", "1080p · 5 Mbps", 1080, 5_000_000),
+    VERY_HIGH("Very high quality", "1440p · 12 Mbps", 1440, 12_000_000),
+    ULTRA_HD("Ultra HD", "2160p · 28 Mbps", 2160, 28_000_000)
 }
 
 @OptIn(UnstableApi::class)

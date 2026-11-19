@@ -271,6 +271,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         clipInfo.forEach { inputPaths += it.file.absolutePath }
         audioFiles.forEach { inputPaths += it.absolutePath }
 
+        val outputFile = File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4")
         val command = buildString {
             append("-y ")
             inputPaths.forEach { append("-i ${shellQuote(it)} ") }
@@ -278,7 +279,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration))} ")
             append("-map [vout] -map [aout] -t ${decimal(outputDuration)} ")
             append("-c:v h264_mediacodec -b:v 8M -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ")
-            append("${shellQuote(File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4").absolutePath)}")
+            append("${shellQuote(outputFile.absolutePath)}")
         }
 
         var session = FFmpegKit.execute(command)
@@ -296,12 +297,6 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             }
         }
 
-        val rendered = File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4")
-        // The command output name is generated separately below; use the latest matching render.
-        val outputFile = cacheDir.listFiles()
-            ?.filter { it.name.startsWith("kalize_crossfade_") && it.extension == "mp4" }
-            ?.maxByOrNull { it.lastModified() }
-            ?: rendered
         require(outputFile.exists() && outputFile.length() > 0L) {
             "FFmpeg finished without creating the output video."
         }

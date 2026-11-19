@@ -40,7 +40,7 @@ class FloatingBubbleService : Service() {
     private var savedY = 0
 
     private val collapsedSize get() = dp(getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_size", 58).coerceIn(44, 68))
-    private val expandedSize get() = dp(224)
+    private val expandedSize get() = dp(248)
     private val bubbleOpacity get() = getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_opacity", 100).coerceIn(50, 100) / 100f
     private val expandedOffset get() = (expandedSize - collapsedSize) / 2
 
@@ -166,7 +166,8 @@ class FloatingBubbleService : Service() {
         params.y = (savedY + collapsedSize / 2 - expandedSize / 2)
             .coerceIn(0, (screenHeight - expandedSize).coerceAtLeast(0))
 
-        // Eight separate circular controls arranged around the main bubble.
+        // Eight evenly spaced mini-bubbles surround the main K bubble.
+        // Tapping the centre K collapses the controls, so a separate close bubble is unnecessary.
         val actions = listOf(
             BubbleAction("●", "Start recording", 270f) {
                 openMain(MainActivity.ACTION_RECORD)
@@ -181,32 +182,29 @@ class FloatingBubbleService : Service() {
                 startService(Intent(this, RecorderService::class.java).setAction(RecorderService.STOP))
                 collapseControls()
             },
-            BubbleAction("✂", "Open video editor", 70f) {
+            BubbleAction("✂", "Open video editor", 90f) {
                 collapseControls()
                 startActivity(Intent(this, VideoEditorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
-            BubbleAction("⚙", "Pro Studio settings", 110f) {
+            BubbleAction("⚙", "Pro Studio settings", 135f) {
                 collapseControls()
                 startActivity(Intent(this, ProStudioActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
-            BubbleAction("✎", "Draw on screen", 150f) {
+            BubbleAction("✎", "Draw on screen", 180f) {
                 collapseControls()
                 startService(Intent(this, AnnotationOverlayService::class.java))
             },
-            BubbleAction("⌂", "Open Kalize", 190f) {
+            BubbleAction("⌂", "Open Kalize", 225f) {
                 openMain(null)
-            },
-            BubbleAction("×", "Close controls", 230f) {
-                collapseControls()
             }
         )
 
         val center = expandedSize / 2
-        val radius = dp(78)
+        val radius = dp(88)
         actions.forEach { action ->
             val radians = action.angle * PI / 180.0
-            val x = (center + cos(radians) * radius).toInt() - dp(22)
-            val y = (center + sin(radians) * radius).toInt() - dp(22)
+            val x = (center + cos(radians) * radius).toInt() - dp(21)
+            val y = (center + sin(radians) * radius).toInt() - dp(21)
             val mini = TextView(this).apply {
                 text = action.glyph
                 textSize = 20f
@@ -223,7 +221,7 @@ class FloatingBubbleService : Service() {
                 contentDescription = action.label
                 setOnClickListener { action.run() }
             }
-            val lp = FrameLayout.LayoutParams(dp(44), dp(44))
+            val lp = FrameLayout.LayoutParams(dp(42), dp(42))
             lp.leftMargin = x
             lp.topMargin = y
             root.addView(mini, lp)

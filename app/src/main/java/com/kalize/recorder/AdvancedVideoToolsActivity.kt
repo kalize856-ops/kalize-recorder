@@ -89,7 +89,16 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
                         Text("Center crop removes equal amounts from the outer edges.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         HorizontalDivider()
                         Text("OUTPUT SIZE", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                        listOf(0 to "Keep source size", 1080 to "1080p", 720 to "720p", 480 to "480p").forEach { item ->
+                        listOf(
+                            0 to "Keep source size",
+                            240 to "240p",
+                            360 to "360p",
+                            480 to "480p",
+                            720 to "720p",
+                            1080 to "1080p",
+                            1440 to "1440p · 2K",
+                            2160 to "2160p · 4K"
+                        ).forEach { item ->
                             FilterChip(selected = resolution == item.first, onClick = { resolution = item.first }, label = { Text(item.second) })
                         }
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

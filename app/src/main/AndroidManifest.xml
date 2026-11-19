@@ -22,6 +22,9 @@
             android:name=".AdvancedVideoToolsActivity"
             android:exported="false" />
         <activity
+            android:name=".AudioExtractionActivity"
+            android:exported="false" />
+        <activity
             android:name=".MultiTrackTimelineActivity"
             android:exported="false" />
         <activity

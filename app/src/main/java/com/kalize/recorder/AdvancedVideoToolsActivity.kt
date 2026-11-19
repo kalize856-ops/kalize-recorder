@@ -73,6 +73,7 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("Advanced video tools", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("Apply a visual filter, crop the frame or resize the export. Your original video remains untouched.")
+                    OutlinedButton(onClick = { startActivity(android.content.Intent(this@AdvancedVideoToolsActivity, AudioExtractionActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) { Text("Extract audio from video") }
                     OutlinedButton(onClick = { picker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (sourceUri == null) "Choose video" else "Choose a different video")
                     }

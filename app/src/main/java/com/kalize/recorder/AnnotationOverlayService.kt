@@ -16,8 +16,8 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
-import kotlin.math.max
+
+private data class AnnotationStroke(val path: Path, val color: Int, val width: Float, val clear: Boolean)
 
 /**
  * On-screen annotation layer. Drawings are rendered by Android as a normal
@@ -119,8 +119,7 @@ class AnnotationOverlayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     private inner class DrawingSurface : View(this@AnnotationOverlayService) {
-        private data class Stroke(val path: Path, val color: Int, val width: Float, val clear: Boolean)
-        private val strokes = mutableListOf<Stroke>()
+        private val strokes = mutableListOf<AnnotationStroke>()
         private var activePath: Path? = null
         private var activeColor = Color.RED
         private var activeWidth = dp(4).toFloat()
@@ -187,7 +186,7 @@ class AnnotationOverlayService : Service() {
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     activePath?.let { path ->
-                        strokes += Stroke(Path(path), activeColor, activeWidth, clearMode)
+                        strokes += AnnotationStroke(Path(path), activeColor, activeWidth, clearMode)
                     }
                     activePath = null
                     invalidate()

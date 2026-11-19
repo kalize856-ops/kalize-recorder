@@ -35,6 +35,7 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Video compression presets from 240p through 2160p (4K), with bitrate targets and aspect-ratio preservation; saves a separate copy
 - Split a selected video into two equal-duration clips without changing the original
 - Basic video trimming with optional source-audio retention
+- Audio extraction to a separate M4A file when the source audio codec is compatible with the MP4 container
 - Clip merging for compatible media tracks
 - Trim export controls for rotation and playback speed
 - No watermark is added to exported recordings

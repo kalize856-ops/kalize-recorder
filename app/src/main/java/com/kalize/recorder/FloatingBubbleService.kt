@@ -134,6 +134,7 @@ class FloatingBubbleService : Service() {
                 if (!moved) {
                     if (expanded) collapseControls() else expandControls()
                 } else {
+                    snapToNearestEdge()
                     savePosition()
                 }
                 return true
@@ -149,8 +150,13 @@ class FloatingBubbleService : Service() {
         root.removeAllViews()
         params.width = expandedSize
         params.height = expandedSize
-        params.x = (savedX - expandedOffset).coerceAtLeast(0)
-        params.y = (savedY - expandedOffset).coerceAtLeast(0)
+        val metrics = resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        val screenHeight = metrics.heightPixels
+        params.x = (savedX + collapsedSize / 2 - expandedSize / 2)
+            .coerceIn(0, (screenWidth - expandedSize).coerceAtLeast(0))
+        params.y = (savedY + collapsedSize / 2 - expandedSize / 2)
+            .coerceIn(0, (screenHeight - expandedSize).coerceAtLeast(0))
 
         // Eight separate circular controls arranged around the main bubble.
         val actions = listOf(
@@ -244,6 +250,19 @@ class FloatingBubbleService : Service() {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         if (action != null) intent.action = action
         startActivity(intent)
+    }
+
+    /** Snap the collapsed bubble to the nearest screen edge and keep it fully visible. */
+    private fun snapToNearestEdge() {
+        val metrics = resources.displayMetrics
+        val maxX = (metrics.widthPixels - collapsedSize).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - collapsedSize).coerceAtLeast(0)
+        val bubbleCenterX = savedX + collapsedSize / 2
+        savedX = if (bubbleCenterX < metrics.widthPixels / 2) 0 else maxX
+        savedY = savedY.coerceIn(0, maxY)
+        params.x = savedX
+        params.y = savedY
+        updateWindow()
     }
 
     private fun savePosition() {

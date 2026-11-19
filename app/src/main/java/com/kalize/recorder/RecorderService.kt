@@ -128,9 +128,11 @@ class RecorderService : Service() {
             }
 
             val preferences = getSharedPreferences("kalize_settings", MODE_PRIVATE)
-            val targetLongEdge = preferences.getInt("resolution", 1080).coerceIn(240, 2160)
-            val sourceLongEdge = maxOf(metrics.widthPixels, metrics.heightPixels)
-            val scale = minOf(1f, targetLongEdge.toFloat() / sourceLongEdge.toFloat())
+            // Resolution presets use the conventional short-edge value (240p, 360p, etc.).
+            // Scaling the long edge made portrait 240p recordings far smaller than intended.
+            val targetShortEdge = preferences.getInt("resolution", 1080).coerceIn(240, 2160)
+            val sourceShortEdge = minOf(metrics.widthPixels, metrics.heightPixels).coerceAtLeast(1)
+            val scale = minOf(1f, targetShortEdge.toFloat() / sourceShortEdge.toFloat())
             val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
             val height = ((metrics.heightPixels * scale).toInt() / 2) * 2
 

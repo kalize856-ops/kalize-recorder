@@ -94,6 +94,10 @@ class VideoEditorActivity : ComponentActivity() {
                     OutlinedButton(onClick = { picker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (selectedUri == null) "Choose one video to trim" else "Choose another video to trim")
                     }
+                    OutlinedButton(
+                        onClick = { startActivity(Intent(this@VideoEditorActivity, AdvancedVideoToolsActivity::class.java)) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Advanced effects · crop · resize") }
                     OutlinedButton(onClick = { mergePicker.launch(arrayOf("video/*")) }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (mergeUris.isEmpty()) "Select multiple clips to merge" else "Change clips (${mergeUris.size} selected)")
                     }

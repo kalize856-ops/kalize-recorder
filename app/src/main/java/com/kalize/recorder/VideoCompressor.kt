@@ -41,9 +41,17 @@ enum class CompressionPreset(
 @OptIn(UnstableApi::class)
 object VideoCompressor {
     suspend fun compress(context: Context, source: Uri, preset: CompressionPreset): Uri {
-        val sourceHeight = readVideoHeight(context, source)
-        require(sourceHeight > 0) { "Could not read the selected video's dimensions." }
-        val outputHeight = minOf(sourceHeight, preset.targetHeight).coerceAtLeast(144)
+        val dimensions = readVideoDimensions(context, source)
+        val sourceWidth = dimensions.first
+        val sourceHeight = dimensions.second
+        require(sourceWidth > 0 && sourceHeight > 0) { "Could not read the selected video's dimensions." }
+        // Treat 240p/360p as the shorter edge for both landscape and portrait videos.
+        val outputShortEdge = minOf(sourceWidth, sourceHeight, preset.targetHeight).coerceAtLeast(144)
+        val presentation = if (sourceWidth <= sourceHeight) {
+            Presentation.createForWidth(outputShortEdge)
+        } else {
+            Presentation.createForHeight(outputShortEdge)
+        }
         val tempFile = File(context.cacheDir, "kalize_compressed_" + System.currentTimeMillis() + ".mp4")
         try {
             withContext(Dispatchers.Main.immediate) {
@@ -76,7 +84,7 @@ object VideoCompressor {
                     }
                     try {
                         val editedItem = EditedMediaItem.Builder(MediaItem.fromUri(source))
-                            .setEffects(Effects(emptyList(), listOf(Presentation.createForHeight(outputHeight))))
+                            .setEffects(Effects(emptyList(), listOf(presentation)))
                             .build()
                         transformer.start(editedItem, tempFile.absolutePath)
                     } catch (error: Exception) {
@@ -90,11 +98,13 @@ object VideoCompressor {
         }
     }
 
-    private fun readVideoHeight(context: Context, uri: Uri): Int {
+    private fun readVideoDimensions(context: Context, uri: Uri): Pair<Int, Int> {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(context, uri)
-            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+            val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+            width to height
         } finally {
             retriever.release()
         }

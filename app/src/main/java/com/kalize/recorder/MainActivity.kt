@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
             var fps by remember { mutableIntStateOf(prefs.getInt("fps", 30)) }
             var countdown by remember { mutableIntStateOf(prefs.getInt("countdown", 3)) }
             var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
+            var bubbleSize by remember { mutableIntStateOf(prefs.getInt("bubble_size", 58)) }
+            var bubbleOpacity by remember { mutableIntStateOf(prefs.getInt("bubble_opacity", 100)) }
             val accent = if (dark) Color(0xFF9B86FF) else Color(0xFF6952D8)
             val bg = if (dark) Color(0xFF0B1020) else Color(0xFFF4F5FA)
             val surface = if (dark) Color(0xFF171F32) else Color.White
@@ -126,6 +128,16 @@ class MainActivity : ComponentActivity() {
                                         bubbleEnabled = enabled
                                         prefs.edit().putBoolean("bubble_enabled", enabled).apply()
                                         if (enabled) enableBubble() else stopService(Intent(this@MainActivity, FloatingBubbleService::class.java))
+                                    },
+                                    bubbleSize, { value ->
+                                        bubbleSize = value
+                                        prefs.edit().putInt("bubble_size", value).apply()
+                                        if (bubbleEnabled) { stopService(Intent(this@MainActivity, FloatingBubbleService::class.java)); startBubbleService() }
+                                    },
+                                    bubbleOpacity, { value ->
+                                        bubbleOpacity = value
+                                        prefs.edit().putInt("bubble_opacity", value).apply()
+                                        if (bubbleEnabled) { stopService(Intent(this@MainActivity, FloatingBubbleService::class.java)); startBubbleService() }
                                     },
                                     { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) }
                                 )
@@ -348,6 +360,8 @@ private fun SettingsDashboard(
     fps: Int, onFps: (Int) -> Unit,
     countdown: Int, onCountdown: (Int) -> Unit,
     bubbleEnabled: Boolean, onBubble: (Boolean) -> Unit,
+    bubbleSize: Int, onBubbleSize: (Int) -> Unit,
+    bubbleOpacity: Int, onBubbleOpacity: (Int) -> Unit,
     onStudio: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -364,6 +378,10 @@ private fun SettingsDashboard(
         }
         SettingsCard("Floating controls") {
             SwitchSetting("Floating bubble", "Show Kalize controls over other apps", bubbleEnabled, onBubble)
+            Text("Bubble size · ${bubbleSize} dp", style = MaterialTheme.typography.labelMedium)
+            Slider(value = bubbleSize.toFloat(), onValueChange = { onBubbleSize(it.toInt()) }, valueRange = 44f..68f, steps = 5, enabled = bubbleEnabled)
+            Text("Bubble opacity · $bubbleOpacity%", style = MaterialTheme.typography.labelMedium)
+            Slider(value = bubbleOpacity.toFloat(), onValueChange = { onBubbleOpacity(it.toInt()) }, valueRange = 50f..100f, steps = 9, enabled = bubbleEnabled)
         }
         SettingsCard("Recording quality") {
             Text("Resolution", style = MaterialTheme.typography.labelMedium)

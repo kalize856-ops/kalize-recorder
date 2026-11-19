@@ -173,18 +173,22 @@ class FloatingBubbleService : Service() {
                 startService(Intent(this, RecorderService::class.java).setAction(RecorderService.STOP))
                 collapseControls()
             },
-            BubbleAction("✂", "Open video editor", 90f) {
+            BubbleAction("✂", "Open video editor", 70f) {
                 collapseControls()
                 startActivity(Intent(this, VideoEditorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
-            BubbleAction("⚙", "Pro Studio settings", 135f) {
+            BubbleAction("⚙", "Pro Studio settings", 110f) {
                 collapseControls()
                 startActivity(Intent(this, ProStudioActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
-            BubbleAction("⌂", "Open Kalize", 180f) {
+            BubbleAction("✎", "Draw on screen", 150f) {
+                collapseControls()
+                startService(Intent(this, AnnotationOverlayService::class.java))
+            },
+            BubbleAction("⌂", "Open Kalize", 190f) {
                 openMain(null)
             },
-            BubbleAction("×", "Close controls", 225f) {
+            BubbleAction("×", "Close controls", 230f) {
                 collapseControls()
             }
         )

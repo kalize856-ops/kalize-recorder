@@ -41,5 +41,8 @@
         <service
             android:name=".FloatingBubbleService"
             android:exported="false" />
+        <service
+            android:name=".AnnotationOverlayService"
+            android:exported="false" />
     </application>
 </manifest>

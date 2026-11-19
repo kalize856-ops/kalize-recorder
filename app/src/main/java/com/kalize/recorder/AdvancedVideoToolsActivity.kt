@@ -155,7 +155,14 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
             val shortEdge = minOf(dimensions.first, dimensions.second)
             val outputSize = minOf(resolution, shortEdge)
             // Media3 1.5.1 uses createForShortSide to preserve portrait and landscape aspect ratios.
-            val presentation = Presentation.createForShortSide(outputSize)
+            val scale = outputSize.toFloat() / shortEdge.toFloat()
+            val outputWidth = (dimensions.first * scale).toInt().coerceAtLeast(1)
+            val outputHeight = (dimensions.second * scale).toInt().coerceAtLeast(1)
+            val presentation = Presentation.createForWidthAndHeight(
+                outputWidth,
+                outputHeight,
+                Presentation.LAYOUT_SCALE_TO_FIT
+            )
             effects.add(presentation)
         }
         val edited = EditedMediaItem.Builder(MediaItem.fromUri(source))

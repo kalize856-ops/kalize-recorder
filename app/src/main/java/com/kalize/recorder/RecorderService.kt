@@ -128,7 +128,7 @@ class RecorderService : Service() {
             }
 
             val preferences = getSharedPreferences("kalize_settings", MODE_PRIVATE)
-            val targetLongEdge = preferences.getInt("resolution", 1080).coerceIn(720, 2160)
+            val targetLongEdge = preferences.getInt("resolution", 1080).coerceIn(240, 2160)
             val sourceLongEdge = maxOf(metrics.widthPixels, metrics.heightPixels)
             val scale = minOf(1f, targetLongEdge.toFloat() / sourceLongEdge.toFloat())
             val width = ((metrics.widthPixels * scale).toInt() / 2) * 2
@@ -166,7 +166,10 @@ class RecorderService : Service() {
                 maxOf(width, height) >= 2160 -> 35_000_000
                 maxOf(width, height) >= 1440 -> 24_000_000
                 maxOf(width, height) >= 1080 -> 16_000_000
-                else -> 10_000_000
+                maxOf(width, height) >= 720 -> 10_000_000
+                maxOf(width, height) >= 480 -> 4_000_000
+                maxOf(width, height) >= 360 -> 2_500_000
+                else -> 1_500_000
             }
             mediaRecorder.setVideoEncodingBitRate(minOf(presetBitrate, resolutionLimit))
             val descriptor = outputDescriptor

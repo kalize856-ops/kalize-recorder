@@ -272,7 +272,7 @@ private fun RecorderDashboard(
 
         Text("CREATE & MANAGE", color = ink, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(11.dp)) {
-            FeatureCard("Video editor", "Trim, merge and compress", Icons.Default.MovieEdit, accent, surface, Modifier.weight(1f), onEdit)
+            FeatureCard("Video editor", "Trim, merge and compress", Icons.Default.ContentCut, accent, surface, Modifier.weight(1f), onEdit)
             FeatureCard("Pro capture", "Audio and quality presets", Icons.Default.Tune, accent, surface, Modifier.weight(1f), onStudio)
         }
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
@@ -319,7 +319,7 @@ private fun EditorDashboard(ink: Color, surface: Color, accent: Color, onOpen: (
         Text("KALIZE STUDIO", color = accent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
         Text("Make every clip count.", color = ink, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Edit and prepare your recordings for sharing.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        FeatureCard("Open video editor", "Trim clips, merge compatible videos, compress and adjust export options.", Icons.Default.MovieEdit, accent, surface, Modifier.fillMaxWidth(), onOpen)
+        FeatureCard("Open video editor", "Trim clips, merge compatible videos, compress and adjust export options.", Icons.Default.ContentCut, accent, surface, Modifier.fillMaxWidth(), onOpen)
         listOf(
             "Trim and cut" to "Choose the exact start and end of a clip.",
             "Merge clips" to "Combine compatible recordings into one video.",

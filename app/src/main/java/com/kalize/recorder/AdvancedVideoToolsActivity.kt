@@ -139,7 +139,25 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
             "Center crop · 10%" -> effects.add(Crop(-0.8f, 0.8f, -0.8f, 0.8f))
             "Center crop · 20%" -> effects.add(Crop(-0.6f, 0.6f, -0.6f, 0.6f))
         }
-        if (resolution > 0) effects.add(Presentation.createForHeight(resolution))
+        if (resolution > 0) {
+            val retriever = MediaMetadataRetriever()
+            val dimensions = try {
+                retriever.setDataSource(this, source)
+                val width = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                width to height
+            } finally {
+                retriever.release()
+            }
+            val shortEdge = minOf(dimensions.first, dimensions.second).coerceAtLeast(1)
+            val outputSize = minOf(resolution, shortEdge)
+            val presentation = if (dimensions.first <= dimensions.second) {
+                Presentation.createForWidth(outputSize)
+            } else {
+                Presentation.createForHeight(outputSize)
+            }
+            effects.add(presentation)
+        }
         val edited = EditedMediaItem.Builder(MediaItem.fromUri(source))
             .setRemoveAudio(!keepAudio)
             .setEffects(Effects(emptyList(), effects))

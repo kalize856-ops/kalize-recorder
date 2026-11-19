@@ -149,7 +149,10 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
             } finally {
                 retriever.release()
             }
-            val shortEdge = minOf(dimensions.first, dimensions.second).coerceAtLeast(1)
+            require(dimensions.first > 0 && dimensions.second > 0) {
+                "Could not read the selected video's dimensions."
+            }
+            val shortEdge = minOf(dimensions.first, dimensions.second)
             val outputSize = minOf(resolution, shortEdge)
             val presentation = if (dimensions.first <= dimensions.second) {
                 Presentation.createForWidth(outputSize)

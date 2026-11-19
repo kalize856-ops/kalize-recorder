@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.1** (version code 2).
+Current development version: **1.0.2** (version code 3).
 
 Native Android screen recorder and video utility app.
 
@@ -51,10 +51,11 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Touch indicators use Android's system-wide SHOW_TOUCHES setting and require the user to authorize modification in Android Settings. The app does not change it without user action.
 
 
-## Multi-track studio timeline (1.0.2 development)
+## Multi-track studio timeline (1.0.2)
 
 - Separate main video sequence with clip reordering and removal.
 - Multiple independent audio sequences layered over the video, with per-track gain controls, original-video audio level control, and automatic audio fade-in/fade-out.
-- Transition options: direct cut or a short dip-to-black separator between clips.
-- Timeline export uses AndroidX Media3 Transformer and saves a new MP4 under Movies/Kalize Recorder/Edits.
-- True overlapping video crossfades are not included: Media3 Composition currently does not support crossfading video or audio tracks. The dip-to-black transition is used instead.
+- True overlapping video crossfades (0.5s, 1s, or 2s), dip-to-black transitions, or hard cuts; matching audio crossfades are rendered with FFmpeg.
+- Multi-track export uses a local FFmpeg rendering pipeline and saves a new MP4 under Movies/Kalize Recorder/Edits.
+- Crossfade exports normalize clips to 720p at 30 FPS for consistent transition rendering. Hardware H.264 encoding is attempted first, with an MPEG-4 fallback when the device encoder is unavailable.
+- The FFmpegKit-compatible Android dependency is LGPL-licensed; review the bundled notices and dependency license before distributing builds.

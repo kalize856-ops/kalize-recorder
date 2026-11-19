@@ -21,8 +21,8 @@ android {
         applicationId = "com.kalize.recorder"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
 
     signingConfigs {
@@ -66,5 +66,6 @@ dependencies {
     implementation("androidx.media3:media3-common:1.5.1")
     implementation("androidx.media3:media3-effect:1.5.1")
     implementation("androidx.media3:media3-transformer:1.5.1")
+    implementation("dev.ffmpegkit-maintained:ffmpeg-kit-full:8.1.7")
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

@@ -1,9 +1,7 @@
 package com.kalize.recorder
 
 import android.content.ContentValues
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
+import android.media.MediaExtractor
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Bundle
@@ -20,34 +18,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
-import androidx.media3.common.MediaItem
-import androidx.media3.common.audio.DefaultGainProvider
-import androidx.media3.common.audio.GainProcessor
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.EditedMediaItemSequence
-import androidx.media3.transformer.Effects
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Transformer
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
-import java.io.FileOutputStream
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.util.Locale
 
-@OptIn(UnstableApi::class)
 class MultiTrackTimelineActivity : ComponentActivity() {
     private var videoClips by mutableStateOf<List<Uri>>(emptyList())
     private var audioClips by mutableStateOf<List<Uri>>(emptyList())
     private var exporting by mutableStateOf(false)
     private var status by mutableStateOf("Add video clips and optional music or voice tracks.")
-    private var transition by mutableStateOf("Dip to black")
+    private var transition by mutableStateOf("Crossfade · 1 second")
     private var originalVolume by mutableFloatStateOf(1f)
     private val audioVolumes = mutableStateListOf<Float>()
 
@@ -69,8 +53,9 @@ class MultiTrackTimelineActivity : ComponentActivity() {
     }
 
     private fun keepPermission(uri: Uri) {
-        try { contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        catch (_: SecurityException) { }
+        try {
+            contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (_: SecurityException) { }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,38 +64,90 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             MaterialTheme {
                 val scope = rememberCoroutineScope()
                 var showTransitionMenu by remember { mutableStateOf(false) }
-                Column(Modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Column(
+                    Modifier.fillMaxSize().padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("Multi-track timeline", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Arrange video clips, layer separate audio tracks, balance their levels and export a mixed MP4.")
+                    Text("Arrange video clips, overlap transitions, layer music and voice tracks, then export a mixed MP4.")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { videoPicker.launch(arrayOf("video/*")) }, modifier = Modifier.weight(1f)) { Text("Add video clips") }
-                        OutlinedButton(onClick = { audioPicker.launch(arrayOf("audio/*")) }, modifier = Modifier.weight(1f)) { Text("Add audio") }
+                        OutlinedButton(
+                            onClick = { videoPicker.launch(arrayOf("video/*")) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Add video clips") }
+                        OutlinedButton(
+                            onClick = { audioPicker.launch(arrayOf("audio/*")) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Add audio") }
                     }
                     Card {
-                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                        Column(
+                            Modifier.fillMaxWidth().padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(7.dp)
+                        ) {
                             Text("TIMELINE TRACKS", fontWeight = FontWeight.Bold)
                             Text("VIDEO 1 · Main sequence", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                             if (videoClips.isEmpty()) Text("No video clips yet.", style = MaterialTheme.typography.bodySmall)
-                            LazyColumn(Modifier.heightIn(max = 210.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            LazyColumn(
+                                Modifier.heightIn(max = 190.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
                                 itemsIndexed(videoClips) { index, uri ->
                                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text("${index + 1}. ${uri.lastPathSegment ?: "Video clip"}", Modifier.weight(1f), maxLines = 1, style = MaterialTheme.typography.bodySmall)
-                                        TextButton(enabled = index > 0, onClick = { videoClips = videoClips.toMutableList().also { val v = it.removeAt(index); it.add(index - 1, v) } }) { Text("↑") }
-                                        TextButton(enabled = index < videoClips.lastIndex, onClick = { videoClips = videoClips.toMutableList().also { val v = it.removeAt(index); it.add(index + 1, v) } }) { Text("↓") }
-                                        TextButton(onClick = { videoClips = videoClips.toMutableList().also { it.removeAt(index) } }) { Text("×") }
+                                        Text(
+                                            "${index + 1}. ${uri.lastPathSegment ?: "Video clip"}",
+                                            Modifier.weight(1f),
+                                            maxLines = 1,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                        TextButton(
+                                            enabled = index > 0,
+                                            onClick = {
+                                                videoClips = videoClips.toMutableList().also {
+                                                    val item = it.removeAt(index)
+                                                    it.add(index - 1, item)
+                                                }
+                                            }
+                                        ) { Text("↑") }
+                                        TextButton(
+                                            enabled = index < videoClips.lastIndex,
+                                            onClick = {
+                                                videoClips = videoClips.toMutableList().also {
+                                                    val item = it.removeAt(index)
+                                                    it.add(index + 1, item)
+                                                }
+                                            }
+                                        ) { Text("↓") }
+                                        TextButton(onClick = {
+                                            videoClips = videoClips.toMutableList().also { it.removeAt(index) }
+                                        }) { Text("×") }
                                     }
                                 }
                             }
                             HorizontalDivider()
                             Text("AUDIO TRACKS · Layered mix", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                            if (audioClips.isEmpty()) Text("No added audio tracks. Original clip audio can still be mixed.", style = MaterialTheme.typography.bodySmall)
+                            if (audioClips.isEmpty()) {
+                                Text("No added audio tracks. Original clip sound is retained when available.", style = MaterialTheme.typography.bodySmall)
+                            }
                             audioClips.forEachIndexed { index, uri ->
                                 Column {
-                                    Text("AUDIO ${index + 1} · ${uri.lastPathSegment ?: "Audio clip"}", maxLines = 1, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        "AUDIO ${index + 1} · ${uri.lastPathSegment ?: "Audio clip"}",
+                                        maxLines = 1,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
                                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                                        Slider(value = audioVolumes.getOrElse(index) { 0.85f }, onValueChange = { if (index < audioVolumes.size) audioVolumes[index] = it }, valueRange = 0f..1.5f, modifier = Modifier.weight(1f))
-                                        Text("${(audioVolumes.getOrElse(index) { 0.85f } * 100).toInt()}%", style = MaterialTheme.typography.labelSmall)
+                                        Slider(
+                                            value = audioVolumes.getOrElse(index) { 0.85f },
+                                            onValueChange = { if (index < audioVolumes.size) audioVolumes[index] = it },
+                                            valueRange = 0f..1.5f,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        Text(
+                                            "${(audioVolumes.getOrElse(index) { 0.85f } * 100).toInt()}%",
+                                            style = MaterialTheme.typography.labelSmall
+                                        )
                                     }
                                 }
                             }
@@ -123,121 +160,312 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                         Box {
                             OutlinedButton(onClick = { showTransitionMenu = true }) { Text(transition) }
                             DropdownMenu(expanded = showTransitionMenu, onDismissRequest = { showTransitionMenu = false }) {
-                                listOf("Hard cut", "Dip to black").forEach { choice ->
-                                    DropdownMenuItem(text = { Text(choice) }, onClick = { transition = choice; showTransitionMenu = false })
+                                listOf(
+                                    "Crossfade · 0.5 second",
+                                    "Crossfade · 1 second",
+                                    "Crossfade · 2 seconds",
+                                    "Dip to black · 1 second",
+                                    "Hard cut"
+                                ).forEach { choice ->
+                                    DropdownMenuItem(
+                                        text = { Text(choice) },
+                                        onClick = { transition = choice; showTransitionMenu = false }
+                                    )
                                 }
                             }
                         }
                     }
-                    Text(if (transition == "Dip to black") "Inserts a short black separator between clips (a dip-to-black transition)." else "Clips join directly with a clean cut.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        when {
+                            transition.startsWith("Crossfade") ->
+                                "Real overlapping transition: the outgoing image fades down while the incoming image fades up. Their audio crossfades too."
+                            transition.startsWith("Dip") ->
+                                "Overlapping fade through black, with a matching audio crossfade."
+                            else -> "Clips join directly. Audio is joined at the same edit point."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Text("Audio mixing", fontWeight = FontWeight.SemiBold)
-                    Text("Every added audio file is placed on its own overlapping audio sequence. Set each track's level independently; each added track fades in and out automatically.", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Each added music or voice file has its own level control and is mixed over the video soundtrack. Export runs locally on this device.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     Button(
                         enabled = !exporting && videoClips.isNotEmpty(),
                         onClick = {
                             exporting = true
-                            status = "Preparing timeline and mixing audio…"
+                            status = "Preparing clips and rendering overlapping transitions…"
                             val videos = videoClips.toList()
                             val audios = audioClips.toList()
                             val levels = audioVolumes.toList()
                             val original = originalVolume
                             val style = transition
                             scope.launch {
-                                val result = runCatching { exportTimeline(videos, audios, levels, original, style) }
+                                val result = runCatching {
+                                    exportTimeline(videos, audios, levels, original, style)
+                                }
                                 exporting = false
                                 status = result.fold(
-                                    { "Export complete. Mixed video saved in Movies/Kalize Recorder/Edits." },
-                                    { "Export failed: ${it.message ?: "this media combination is not supported on this device"}" }
+                                    { "Export complete. Crossfaded video saved in Movies/Kalize Recorder/Edits." },
+                                    { "Export failed: ${it.message ?: "unsupported media combination"}" }
                                 )
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (exporting) "Exporting timeline…" else "Export mixed timeline") }
+                    ) { Text(if (exporting) "Rendering timeline…" else "Export mixed timeline") }
                     if (exporting) LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
-                    OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Back to video editor") }
+                    OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) {
+                        Text("Back to video editor")
+                    }
                 }
             }
         }
     }
 
-    private suspend fun exportTimeline(videos: List<Uri>, audios: List<Uri>, levels: List<Float>, originalLevel: Float, transitionStyle: String): Uri {
+    private data class ClipInfo(
+        val file: File,
+        val durationSeconds: Double,
+        val hasAudio: Boolean
+    )
+
+    private suspend fun exportTimeline(
+        videos: List<Uri>,
+        audios: List<Uri>,
+        levels: List<Float>,
+        originalLevel: Float,
+        transitionStyle: String
+    ): Uri = withContext(Dispatchers.IO) {
         require(videos.isNotEmpty()) { "Add at least one video clip." }
-        val videoItems = mutableListOf<EditedMediaItem>()
-        videos.forEachIndexed { index, uri ->
-            val originalGain = DefaultGainProvider.Builder(originalLevel).build()
-            videoItems += EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                .setEffects(Effects(listOf(GainProcessor(originalGain)), emptyList()))
-                .build()
-            if (transitionStyle == "Dip to black" && index < videos.lastIndex) {
-                val black = File(cacheDir, "kalize_black_transition.png")
-                if (!black.exists()) {
-                    val bitmap = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
-                    Canvas(bitmap).drawColor(Color.BLACK)
-                    FileOutputStream(black).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                    bitmap.recycle()
+
+        val videoFiles = videos.mapIndexed { index, uri -> copyToCache(uri, "kalize_video_${index}_", ".mp4") }
+        val audioFiles = audios.mapIndexed { index, uri -> copyToCache(uri, "kalize_audio_${index}_", ".audio") }
+        val clipInfo = videos.mapIndexed { index, uri ->
+            val duration = readDurationSeconds(uri)
+            require(duration > 0.1) { "Could not read the duration of video clip ${index + 1}." }
+            require(hasVideoTrack(uri)) { "Clip ${index + 1} does not contain a video track." }
+            ClipInfo(videoFiles[index], duration, hasAudioTrack(uri))
+        }
+
+        val transitionSeconds = when {
+            transitionStyle.contains("0.5") -> 0.5
+            transitionStyle.contains("2 seconds") -> 2.0
+            transitionStyle.startsWith("Hard cut") -> 0.0
+            else -> 1.0
+        }
+        if (transitionSeconds > 0.0) {
+            clipInfo.forEachIndexed { index, clip ->
+                require(clip.durationSeconds > transitionSeconds) {
+                    "Clip ${index + 1} must be longer than the selected ${transitionSeconds}s transition."
                 }
-                val still = MediaItem.Builder().setUri(black.toUri()).setImageDurationMs(450).build()
-                videoItems += EditedMediaItem.Builder(still).build()
             }
         }
-        val sequences = mutableListOf<EditedMediaItemSequence>()
-        sequences += EditedMediaItemSequence.withAudioAndVideoFrom(videoItems)
-        audios.forEachIndexed { index, uri ->
-            val durationUs = readDurationUs(uri).coerceAtLeast(2_000_000L)
-            val fadeUs = minOf(1_000_000L, durationUs / 3L).coerceAtLeast(1L)
-            val gain = DefaultGainProvider.Builder(levels.getOrElse(index) { 0.85f })
-                .addFadeAt(0L, fadeUs, DefaultGainProvider.FADE_IN_LINEAR)
-                .addFadeAt((durationUs - fadeUs).coerceAtLeast(0L), fadeUs, DefaultGainProvider.FADE_OUT_LINEAR)
-                .build()
-            val audioItem = EditedMediaItem.Builder(MediaItem.fromUri(uri))
-                .setRemoveVideo(true)
-                .setEffects(Effects(listOf(GainProcessor(gain)), emptyList()))
-                .build()
-            sequences += EditedMediaItemSequence.withAudioFrom(listOf(audioItem))
+
+        val outputDuration = clipInfo.sumOf { it.durationSeconds } -
+            transitionSeconds * (clipInfo.size - 1)
+        require(outputDuration > 0.2) { "The selected clips are too short for this transition." }
+
+        val inputPaths = mutableListOf<String>()
+        clipInfo.forEach { inputPaths += it.file.absolutePath }
+        audioFiles.forEach { inputPaths += it.absolutePath }
+
+        val command = buildString {
+            append("-y ")
+            inputPaths.forEach { append("-i ${shellQuote(it)} ") }
+            append("-filter_complex_threads 1 ")
+            append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration))} ")
+            append("-map [vout] -map [aout] -t ${decimal(outputDuration)} ")
+            append("-c:v h264_mediacodec -b:v 8M -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ")
+            append("${shellQuote(File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4").absolutePath)}")
         }
-        val composition = Composition.Builder(sequences.first(), *sequences.drop(1).toTypedArray()).build()
-        val temporary = File(cacheDir, "kalize_timeline_${System.currentTimeMillis()}.mp4")
-        suspendCancellableCoroutine<Unit> { continuation ->
-            val transformer = Transformer.Builder(this).addListener(object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
-                    if (continuation.isActive) continuation.resume(Unit)
-                }
-                override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
-                    if (continuation.isActive) continuation.resumeWithException(exportException)
-                }
-            }).build()
-            transformer.start(composition, temporary.absolutePath)
+
+        var session = FFmpegKit.execute(command)
+        if (!ReturnCode.isSuccess(session.returnCode)) {
+            val hardwareError = session.allLogsAsString
+            val fallbackCommand = command
+                .replace("-c:v h264_mediacodec -b:v 8M", "-c:v mpeg4 -q:v 3")
+            session = FFmpegKit.execute(fallbackCommand)
+            if (!ReturnCode.isSuccess(session.returnCode)) {
+                throw IllegalStateException(
+                    (session.failStackTrace ?: session.allLogsAsString ?: hardwareError)
+                        .takeLast(1800)
+                        .ifBlank { "The video encoder could not render this timeline." }
+                )
+            }
         }
-        require(temporary.exists() && temporary.length() > 0L) { "The export did not create a video file." }
-        return withContext(Dispatchers.IO) {
-            val values = ContentValues().apply {
-                put(MediaStore.Video.Media.DISPLAY_NAME, "Kalize_Timeline_${System.currentTimeMillis()}.mp4")
-                put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
-                put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Kalize Recorder/Edits")
-                put(MediaStore.Video.Media.IS_PENDING, 1)
-            }
-            val output = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
-                ?: throw IllegalStateException("Could not create the output video.")
-            try {
-                contentResolver.openOutputStream(output)?.use { sink -> temporary.inputStream().use { it.copyTo(sink) } }
-                    ?: throw IllegalStateException("Could not open the output video.")
-                contentResolver.update(output, ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }, null, null)
-                temporary.delete()
-                output
-            } catch (error: Exception) {
-                contentResolver.delete(output, null, null)
-                throw error
-            }
+
+        val rendered = File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4")
+        // The command output name is generated separately below; use the latest matching render.
+        val outputFile = cacheDir.listFiles()
+            ?.filter { it.name.startsWith("kalize_crossfade_") && it.extension == "mp4" }
+            ?.maxByOrNull { it.lastModified() }
+            ?: rendered
+        require(outputFile.exists() && outputFile.length() > 0L) {
+            "FFmpeg finished without creating the output video."
+        }
+
+        val values = ContentValues().apply {
+            put(MediaStore.Video.Media.DISPLAY_NAME, "Kalize_Crossfade_${System.currentTimeMillis()}.mp4")
+            put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+            put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Kalize Recorder/Edits")
+            put(MediaStore.Video.Media.IS_PENDING, 1)
+        }
+        val outputUri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Could not create the output video.")
+        try {
+            contentResolver.openOutputStream(outputUri)?.use { sink ->
+                outputFile.inputStream().use { source -> source.copyTo(sink) }
+            } ?: throw IllegalStateException("Could not open the output video.")
+            contentResolver.update(
+                outputUri,
+                ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) },
+                null,
+                null
+            )
+            outputFile.delete()
+            videoFiles.forEach { it.delete() }
+            audioFiles.forEach { it.delete() }
+            outputUri
+        } catch (error: Exception) {
+            contentResolver.delete(outputUri, null, null)
+            throw error
         }
     }
 
-    private fun readDurationUs(uri: Uri): Long {
+    private fun buildFilterGraph(
+        clips: List<ClipInfo>,
+        audioFiles: List<File>,
+        levels: List<Float>,
+        originalLevel: Float,
+        transitionStyle: String,
+        transitionSeconds: Double,
+        outputDuration: Double
+    ): String {
+        val filters = mutableListOf<String>()
+        clips.forEachIndexed { index, clip ->
+            filters += "[$index:v:0]setpts=PTS-STARTPTS,scale=1280:720:force_original_aspect_ratio=decrease," +
+                "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=yuv420p,settb=AVTB[v$index]"
+        }
+
+        if (clips.size == 1) {
+            filters += "[v0]null[vout]"
+        } else if (transitionSeconds == 0.0) {
+            val inputs = clips.indices.joinToString("") { "[v$it]" }
+            filters += "${inputs}concat=n=${clips.size}:v=1:a=0[vout]"
+        } else {
+            var accumulated = clips.first().durationSeconds
+            var previous = "v0"
+            for (index in 1 until clips.size) {
+                val outputLabel = if (index == clips.lastIndex) "vout" else "vx$index"
+                val transitionName = if (transitionStyle.startsWith("Dip")) "fadeblack" else "fade"
+                val offset = (accumulated - transitionSeconds).coerceAtLeast(0.0)
+                filters += "[$previous][v$index]xfade=transition=$transitionName:duration=${decimal(transitionSeconds)}:" +
+                    "offset=${decimal(offset)}[$outputLabel]"
+                accumulated += clips[index].durationSeconds - transitionSeconds
+                previous = outputLabel
+            }
+        }
+
+        val audioLabels = mutableListOf<String>()
+        clips.forEachIndexed { index, clip ->
+            val label = "orig$index"
+            if (clip.hasAudio) {
+                filters += "[$index:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo," +
+                    "volume=${decimal(originalLevel.toDouble())},asetpts=PTS-STARTPTS[$label]"
+            } else {
+                filters += "anullsrc=r=48000:cl=stereo,atrim=duration=${decimal(clip.durationSeconds)}," +
+                    "asetpts=PTS-STARTPTS[$label]"
+            }
+            audioLabels += label
+        }
+
+        var originalLabel = audioLabels.first()
+        if (audioLabels.size > 1) {
+            if (transitionSeconds == 0.0) {
+                val inputs = audioLabels.joinToString("") { "[$it]" }
+                filters += "${inputs}concat=n=${audioLabels.size}:v=0:a=1[origmix]"
+            } else {
+                var prior = audioLabels.first()
+                for (index in 1 until audioLabels.size) {
+                    val next = if (index == audioLabels.lastIndex) "origmix" else "ax$index"
+                    filters += "[$prior][${audioLabels[index]}]acrossfade=d=${decimal(transitionSeconds)}:" +
+                        "c1=tri:c2=tri[$next]"
+                    prior = next
+                }
+            }
+            originalLabel = "origmix"
+        }
+
+        val mixLabels = mutableListOf(originalLabel)
+        audioFiles.forEachIndexed { index, _ ->
+            val inputIndex = clips.size + index
+            val label = "music$index"
+            val duration = readDurationSecondsFromFile(audioFiles[index]).coerceAtLeast(0.2)
+            val fade = minOf(1.0, duration / 3.0).coerceAtLeast(0.05)
+            val fadeOutStart = (duration - fade).coerceAtLeast(0.0)
+            filters += "[$inputIndex:a:0]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo," +
+                "volume=${decimal(levels.getOrElse(index) { 0.85f }.toDouble())}," +
+                "afade=t=in:st=0:d=${decimal(fade)},afade=t=out:st=${decimal(fadeOutStart)}:d=${decimal(fade)}," +
+                "apad,atrim=duration=${decimal(outputDuration)}[$label]"
+            mixLabels += label
+        }
+
+        if (mixLabels.size == 1) {
+            filters += "[$originalLabel]apad,atrim=duration=${decimal(outputDuration)}[aout]"
+        } else {
+            val inputs = mixLabels.joinToString("") { "[$it]" }
+            filters += "${inputs}amix=inputs=${mixLabels.size}:duration=first:dropout_transition=0:normalize=0," +
+                "atrim=duration=${decimal(outputDuration)}[aout]"
+        }
+        return filters.joinToString(";")
+    }
+
+    private fun copyToCache(uri: Uri, prefix: String, suffix: String): File {
+        val target = File.createTempFile(prefix, suffix, cacheDir)
+        contentResolver.openInputStream(uri)?.use { input ->
+            target.outputStream().use { output -> input.copyTo(output) }
+        } ?: throw IllegalStateException("Could not read selected media: $uri")
+        return target
+    }
+
+    private fun readDurationSeconds(uri: Uri): Double {
         val retriever = MediaMetadataRetriever()
         return try {
             retriever.setDataSource(this, uri)
-            (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L) * 1000L
-        } finally { retriever.release() }
+            (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull() ?: 0.0) / 1000.0
+        } finally {
+            retriever.release()
+        }
     }
+
+    private fun readDurationSecondsFromFile(file: File): Double {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(file.absolutePath)
+            (retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toDoubleOrNull() ?: 0.0) / 1000.0
+        } finally {
+            retriever.release()
+        }
+    }
+
+    private fun hasVideoTrack(uri: Uri): Boolean = hasTrack(uri, "video/")
+    private fun hasAudioTrack(uri: Uri): Boolean = hasTrack(uri, "audio/")
+
+    private fun hasTrack(uri: Uri, prefix: String): Boolean {
+        val extractor = MediaExtractor()
+        return try {
+            extractor.setDataSource(this, uri, null)
+            (0 until extractor.trackCount).any { index ->
+                extractor.getTrackFormat(index).getString(android.media.MediaFormat.KEY_MIME)?.startsWith(prefix) == true
+            }
+        } finally {
+            extractor.release()
+        }
+    }
+
+    private fun decimal(value: Double): String = String.format(Locale.US, "%.3f", value.coerceAtLeast(0.0))
+
+    private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 }

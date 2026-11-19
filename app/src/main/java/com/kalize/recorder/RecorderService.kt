@@ -181,6 +181,7 @@ class RecorderService : Service() {
             )
             mediaRecorder.start()
             recordingActive = true
+            getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", true).apply()
         } catch (_: Exception) {
             stopCapture()
         }
@@ -218,6 +219,7 @@ class RecorderService : Service() {
         try {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.pause()
+                getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", true).apply()
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = true))
             }
@@ -231,6 +233,7 @@ class RecorderService : Service() {
         try {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.resume()
+                getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
             }
@@ -363,6 +366,8 @@ class RecorderService : Service() {
         display = null
         projection = null
         recordingActive = false
+        getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", false).apply()
+        getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
 
         var saved = false
         try {

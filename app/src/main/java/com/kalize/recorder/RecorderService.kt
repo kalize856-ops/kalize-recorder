@@ -122,6 +122,7 @@ class RecorderService : Service() {
             windowManager.defaultDisplay.getRealMetrics(metrics)
 
             if (screenshotOnly) {
+                setBubbleCaptureVisibility(hidden = true)
                 captureScreenshot()
                 return
             }
@@ -182,7 +183,8 @@ class RecorderService : Service() {
             recordingActive = true
             getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", true).apply()
             setBubbleCaptureVisibility(hidden = true)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Toast.makeText(this, "Recording could not start: ${error.localizedMessage ?: "unsupported device configuration"}", Toast.LENGTH_LONG).show()
             stopCapture()
         }
     }
@@ -234,7 +236,6 @@ class RecorderService : Service() {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.resume()
                 getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
-        setBubbleCaptureVisibility(hidden = false)
                 val manager = getSystemService(NotificationManager::class.java)
                 manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
             }
@@ -369,6 +370,7 @@ class RecorderService : Service() {
         recordingActive = false
         getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", false).apply()
         getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
+        setBubbleCaptureVisibility(hidden = false)
 
         var saved = false
         try {

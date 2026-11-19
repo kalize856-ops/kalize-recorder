@@ -252,7 +252,8 @@ class FloatingBubbleService : Service() {
         val paused = preferences.getBoolean("recording_paused", false)
         val nextAction = if (paused) RecorderService.RESUME else RecorderService.PAUSE
         startService(Intent(this, RecorderService::class.java).setAction(nextAction))
-        preferences.edit().putBoolean("recording_paused", !paused).apply()
+        // RecorderService owns the authoritative paused state and updates this preference
+        // only after the encoder successfully pauses or resumes.
         collapseControls()
     }
 

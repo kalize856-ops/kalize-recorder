@@ -1,6 +1,7 @@
 package com.kalize.recorder
 
 import android.content.ContentValues
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -147,7 +148,7 @@ class AudioExtractionActivity : ComponentActivity() {
                     inputFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE).coerceIn(64 * 1024, 4 * 1024 * 1024)
                 else 1024 * 1024
                 val buffer = ByteBuffer.allocateDirect(maxInput)
-                val info = MediaMuxer.BufferInfo()
+                val info = MediaCodec.BufferInfo()
                 while (true) {
                     buffer.clear()
                     val size = extractor.readSampleData(buffer, 0)

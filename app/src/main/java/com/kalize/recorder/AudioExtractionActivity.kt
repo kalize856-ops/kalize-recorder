@@ -135,8 +135,8 @@ class AudioExtractionActivity : ComponentActivity() {
             } ?: throw IllegalArgumentException("This video has no audio track.")
             val inputFormat = extractor.getTrackFormat(audioTrack)
             val mime = inputFormat.getString(MediaFormat.KEY_MIME).orEmpty()
-            require(mime == "audio/mp4a-latm" || mime == "audio/3gpp" || mime == "audio/amr-wb") {
-                "The source audio codec cannot be copied into an M4A container on this device."
+            require(mime == "audio/mp4a-latm") {
+                "Only AAC audio can currently be copied directly into an M4A container. This video uses $mime."
             }
             val muxer = MediaMuxer(temporary.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             try {

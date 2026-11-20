@@ -17,6 +17,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import kotlin.math.sqrt
 
 /**
@@ -36,6 +38,9 @@ class DeviceToolsActivity : ComponentActivity() {
                 var score by remember { mutableStateOf<Int?>(null) }
                 var benchmarkMessage by remember { mutableStateOf("Run the short CPU test when the phone is idle.") }
                 var sessionMessage by remember { mutableStateOf("Game Session does not overclock the phone or terminate other apps.") }
+                var speedRunning by remember { mutableStateOf(false) }
+                var speedResult by remember { mutableStateOf("No speed test run yet.") }
+                var showSpeedConsent by remember { mutableStateOf(false) }
 
                 DisposableEffect(gameSession) {
                     if (gameSession) {
@@ -78,7 +83,10 @@ class DeviceToolsActivity : ComponentActivity() {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                             Text("NETWORK CHECK", style = MaterialTheme.typography.titleMedium)
                             Text(networkReport(), style = MaterialTheme.typography.bodyMedium)
-                            Text("This checks connectivity and reported link capacity; it is not a measured download/upload speed test.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Android link-capacity estimates are not measured throughput.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Button(onClick = { showSpeedConsent = true }, enabled = !speedRunning, modifier = Modifier.fillMaxWidth()) { Text(if (speedRunning) "Measuring network…" else "Run internet speed test") }
+                            Text(speedResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("The test transfers up to about 4 MB using Cloudflare speed-test endpoints. Mobile data charges may apply.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Card(Modifier.fillMaxWidth()) {
@@ -159,6 +167,58 @@ class DeviceToolsActivity : ComponentActivity() {
             append(transport).append(if (validated) " · Internet verified" else " · Internet not verified")
             if (down > 0) append("\nReported downstream capacity: ").append(down).append(" Kbps")
             if (up > 0) append("\nReported upstream capacity: ").append(up).append(" Kbps")
+        }
+    }
+
+    private fun runInternetSpeedTest(): String {
+        fun measure(url: String, method: String, bytes: Int): Double {
+            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = method
+                connectTimeout = 12_000
+                readTimeout = 20_000
+                useCaches = false
+                if (method == "POST") {
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/octet-stream")
+                    setFixedLengthStreamingMode(bytes)
+                }
+            }
+            return try {
+                val start = System.nanoTime()
+                if (method == "POST") {
+                    connection.outputStream.use { output ->
+                        val chunk = ByteArray(16 * 1024)
+                        var remaining = bytes
+                        while (remaining > 0) {
+                            val count = minOf(chunk.size, remaining)
+                            output.write(chunk, 0, count)
+                            remaining -= count
+                        }
+                    }
+                }
+                val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
+                var transferred = if (method == "POST") bytes.toLong() else 0L
+                stream?.use { input ->
+                    val buffer = ByteArray(16 * 1024)
+                    while (true) {
+                        val count = input.read(buffer)
+                        if (count < 0) break
+                        if (method == "GET") transferred += count
+                    }
+                }
+                val seconds = ((System.nanoTime() - start).coerceAtLeast(1L)) / 1_000_000_000.0
+                require(connection.responseCode in 200..299) { "Speed-test server returned HTTP ${connection.responseCode}" }
+                (transferred * 8.0 / seconds) / 1_000_000.0
+            } finally {
+                connection.disconnect()
+            }
+        }
+        return try {
+            val download = measure("https://speed.cloudflare.com/__down?bytes=3000000", "GET", 3_000_000)
+            val upload = measure("https://speed.cloudflare.com/__up", "POST", 1_000_000)
+            "Measured result: ${"%.1f".format(java.util.Locale.US, download)} Mbps down · ${"%.1f".format(java.util.Locale.US, upload)} Mbps up. Results vary with server load and signal quality."
+        } catch (error: Exception) {
+            "Speed test failed: ${error.localizedMessage ?: "connection unavailable"}. Check your connection and try again."
         }
     }
 

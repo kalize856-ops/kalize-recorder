@@ -566,6 +566,12 @@ class RecorderService : Service() {
         }
     }
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Closing the app task ends capture and releases MediaProjection/encoder resources.
+        stopCapture()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {

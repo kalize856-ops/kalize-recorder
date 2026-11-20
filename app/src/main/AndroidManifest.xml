@@ -49,13 +49,16 @@
         <service
             android:name=".RecorderService"
             android:exported="false"
+            android:stopWithTask="true"
             android:foregroundServiceType="mediaProjection|microphone" />
         <service
             android:name=".FloatingBubbleService"
-            android:exported="false" />
+            android:exported="false"
+            android:stopWithTask="true" />
         <service
             android:name=".AnnotationOverlayService"
-            android:exported="false" />
-        <service android:name=".FpsCounterOverlayService" android:exported="false" />
+            android:exported="false"
+            android:stopWithTask="true" />
+        <service android:name=".FpsCounterOverlayService" android:exported="false" android:stopWithTask="true" />
     </application>
 </manifest>

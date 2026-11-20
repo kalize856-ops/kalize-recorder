@@ -3,17 +3,28 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path android:fillColor="#09051F" android:pathData="M0,0 H108 V108 H0 Z" />
-    <path android:fillColor="#2A0A69" android:pathData="M0,0 H108 V108 H0 Z" />
-    <path android:fillColor="#09051F" android:pathData="M0,0 H82 C58,18 48,37 54,54 C61,74 85,88 108,91 V108 H0 Z" />
-    <path android:fillColor="#00000000" android:strokeColor="#7E35F5" android:strokeWidth="3" android:pathData="M54,14 A40,40 0,1 1,54 94 A40,40 0,1 1,54 14" />
-    <path android:fillColor="#00000000" android:strokeColor="#B77BFF" android:strokeWidth="1.5" android:pathData="M54,21 A33,33 0,1 1,54 87 A33,33 0,1 1,54 21" />
-    <path android:fillColor="#4A1BB4" android:pathData="M74,44 L88,35 C91,33 94,35 94,39 L94,69 C94,73 91,75 88,73 L74,64 Z" />
-    <path android:fillColor="#4A1BB4" android:pathData="M36,28 H65 C72,28 77,33 77,40 V70 C77,78 72,83 65,83 H36 C29,83 24,78 24,70 V41 C24,33 29,28 36,28 Z" />
-    <path android:fillColor="#F7F3FF" android:pathData="M74,41 L88,32 C91,30 94,32 94,36 L94,68 C94,72 91,74 88,72 L74,63 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M36,26 H65 C72,26 77,31 77,38 V69 C77,77 72,82 65,82 H36 C29,82 24,77 24,69 V39 C24,31 29,26 36,26 Z" />
-    <path android:fillColor="#DCCBFF" android:pathData="M27,59 H74 V69 C74,76 70,80 64,80 H37 C31,80 27,76 27,69 Z" />
-    <path android:fillColor="#7A35ED" android:pathData="M43,33 A10,10 0,1 1,43 53 A10,10 0,1 1,43 33" />
-    <path android:fillColor="#FF244F" android:pathData="M43,35 A8,8 0,1 1,43 51 A8,8 0,1 1,43 35" />
-    <path android:fillColor="#FF8DA8" android:pathData="M39,38 A3,3 0,1 1,39 44 A3,3 0,1 1,39 38" />
+
+    <!-- Rich purple-to-blue field with a warm orange accent -->
+    <path android:fillColor="#25105C" android:pathData="M0,0 H108 V108 H0 Z" />
+    <path android:fillColor="#6730D8" android:pathData="M0,0 H108 V108 H0 Z" />
+    <path android:fillColor="#3157D8" android:pathData="M108,0 V108 H44 C70,79 77,51 63,30 C57,20 51,10 45,0 Z" />
+    <path android:fillColor="#FF7048" android:pathData="M108,0 V39 C91,48 83,62 86,79 C88,91 97,101 108,108 Z" />
+
+    <!-- White camera outline -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M29,34 H41 L47,27 H64 L70,34 H79 C84,34 87,37 87,42 V68 C87,73 84,76 79,76 H29 C24,76 21,73 21,68 V42 C21,37 24,34 29,34 Z" />
+
+    <!-- Orange and pink play symbol -->
+    <path android:fillColor="#FF914D" android:pathData="M46,43 C44,42 42,43.5 42,46 V64 C42,66.5 44,68 46,67 L65,57 C67,56 67,54 65,53 Z" />
+    <path android:fillColor="#FF5D91" android:pathData="M46,43 C44,42 42,43.5 42,46 V53 L57,53 Z" />
+
+    <!-- Small motion accents -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M16,47 C16,45.9 16.9,45 18,45 H20 V49 H18 C16.9,49 16,48.1 16,47 Z" />
+    <path android:fillColor="#FFFFFFFF" android:pathData="M88,47 H91 C92.1,47 93,47.9 93,49 C93,50.1 92.1,51 91,51 H88 Z" />
+    <path android:fillColor="#FFB36B" android:pathData="M31,83 H39 C40.1,83 41,83.9 41,85 C41,86.1 40.1,87 39,87 H31 C29.9,87 29,86.1 29,85 C29,83.9 29.9,83 31,83 Z" />
 </vector>

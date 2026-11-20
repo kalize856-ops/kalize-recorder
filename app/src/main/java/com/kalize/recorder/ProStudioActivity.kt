@@ -27,6 +27,7 @@ class ProStudioActivity : ComponentActivity() {
     private var adMessage by mutableStateOf("Loading a reward ad for Pro capture options…")
 
     private var requestingInternalAudio = false
+    private var permissionGrantedAction: (() -> Unit)? = null
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) {
             if (requestingInternalAudio) {
@@ -34,7 +35,9 @@ class ProStudioActivity : ComponentActivity() {
             } else {
                 prefs.edit().putBoolean("microphone_enabled", true).putBoolean("internal_audio_enabled", false).apply()
             }
+            permissionGrantedAction?.invoke()
         }
+        permissionGrantedAction = null
         requestingInternalAudio = false
     }
 
@@ -139,6 +142,7 @@ class ProStudioActivity : ComponentActivity() {
                         Switch(checked = microphone, onCheckedChange = { enabled ->
                             if (enabled && ContextCompat.checkSelfPermission(this@ProStudioActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                                 requestingInternalAudio = false
+                                permissionGrantedAction = { microphone = true; internalAudio = false }
                                 audioPermission.launch(Manifest.permission.RECORD_AUDIO)
                             } else {
                                 microphone = enabled
@@ -157,6 +161,7 @@ class ProStudioActivity : ComponentActivity() {
                         Switch(checked = internalAudio, enabled = android.os.Build.VERSION.SDK_INT >= 29 && !microphone, onCheckedChange = { enabled ->
                             if (enabled && ContextCompat.checkSelfPermission(this@ProStudioActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                                 requestingInternalAudio = true
+                                permissionGrantedAction = { internalAudio = true; microphone = false }
                                 audioPermission.launch(Manifest.permission.RECORD_AUDIO)
                                 internalAudio = false
                             } else {

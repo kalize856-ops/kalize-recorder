@@ -55,7 +55,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 
 - The 120/240 FPS values are configuration targets, not guarantees of sustained frame delivery. Physical-device testing is required.
 - The dedicated MediaCodec path currently handles video-only sessions. Microphone sessions use MediaRecorder; internal app/game audio capture is not implemented.
-- Pause/resume is not available in the dedicated MediaCodec path yet.
+- Pause/resume on the dedicated MediaCodec path detaches and reattaches the virtual-display surface; verify timestamp continuity on physical devices.
 - Game Session does not overclock the CPU, close other apps, or change system performance governors; Android does not grant ordinary apps those controls.
 - Network details use Android's reported connection capabilities; this is not a true upload/download speed test.
 - Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail.

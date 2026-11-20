@@ -36,6 +36,8 @@ class FloatingBubbleService : Service() {
     private var startX = 0
     private var startY = 0
     private var moved = false
+    private var deleteMode = false
+    private var deleteTarget: TextView? = null
     private var savedX = 0
     private var savedY = 0
 
@@ -119,6 +121,7 @@ class FloatingBubbleService : Service() {
                 startX = params.x
                 startY = params.y
                 moved = false
+                deleteMode = false
                 return true
             }
 
@@ -127,6 +130,10 @@ class FloatingBubbleService : Service() {
                 val dy = (event.rawY - downY).toInt()
                 if (kotlin.math.abs(dx) > dp(5) || kotlin.math.abs(dy) > dp(5)) {
                     moved = true
+                }
+                if (moved && !expanded && !deleteMode && event.eventTime - event.downTime >= android.view.ViewConfiguration.getLongPressTimeout()) {
+                    deleteMode = true
+                    showDeleteTarget()
                 }
                 if (moved && !expanded) {
                     params.x = (startX + dx).coerceAtLeast(0)
@@ -139,6 +146,13 @@ class FloatingBubbleService : Service() {
             }
 
             MotionEvent.ACTION_UP -> {
+                if (deleteMode && isBubbleOverDeleteTarget()) {
+                    hideDeleteTarget()
+                    stopSelf()
+                    return true
+                }
+                hideDeleteTarget()
+                deleteMode = false
                 if (!moved) {
                     if (expanded) collapseControls() else expandControls()
                 } else {
@@ -149,6 +163,41 @@ class FloatingBubbleService : Service() {
             }
         }
         return true
+    }
+
+    private fun showDeleteTarget() {
+        if (deleteTarget != null) return
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        val target = TextView(this).apply {
+            text = "×"
+            textSize = 34f
+            gravity = Gravity.CENTER
+            setTextColor(0xFFFFFFFF.toInt())
+            background = rounded(0xFFE53935.toInt(), 48)
+            elevation = dp(12).toFloat()
+            contentDescription = "Drop here to dismiss floating bubble"
+        }
+        val lp = WindowManager.LayoutParams(dp(64), dp(64), type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_SECURE,
+            PixelFormat.TRANSLUCENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (resources.displayMetrics.widthPixels - dp(64)) / 2
+            y = (resources.displayMetrics.heightPixels - dp(150)).coerceAtLeast(0)
+        }
+        try { windowManager.addView(target, lp); deleteTarget = target } catch (_: Exception) { }
+    }
+
+    private fun hideDeleteTarget() {
+        deleteTarget?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }
+        deleteTarget = null
+    }
+
+    private fun isBubbleOverDeleteTarget(): Boolean {
+        val cx = params.x + collapsedSize / 2
+        val cy = params.y + collapsedSize / 2
+        val tx = resources.displayMetrics.widthPixels / 2
+        val ty = resources.displayMetrics.heightPixels - dp(118)
+        return kotlin.math.hypot((cx - tx).toDouble(), (cy - ty).toDouble()) < dp(82)
     }
 
     private fun expandControls() {
@@ -303,6 +352,7 @@ class FloatingBubbleService : Service() {
         (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        hideDeleteTarget()
         try {
             windowManager.removeView(root)
         } catch (_: Exception) {

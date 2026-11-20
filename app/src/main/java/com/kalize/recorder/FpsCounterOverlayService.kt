@@ -78,7 +78,7 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
         }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_NOT_STICKY
 
     override fun doFrame(frameTimeNanos: Long) {
         if (!attached) return
@@ -131,6 +131,12 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
         }
         attached = false
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Do not keep or recreate the FPS overlay after the app task is dismissed.
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

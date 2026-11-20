@@ -42,15 +42,14 @@ class MultiTrackTimelineActivity : ComponentActivity() {
     private val videoPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
             uris.forEach(::keepPermission)
-            videoClips = uris
+            videoClips = videoClips + uris
             status = "${uris.size} video clips added to the main timeline."
         }
     }
     private val audioPicker = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) {
             uris.forEach(::keepPermission)
-            audioClips = uris
-            audioVolumes.clear()
+            audioClips = audioClips + uris
             repeat(uris.size) { audioVolumes.add(0.85f) }
             status = "${uris.size} independent audio track(s) added."
         }
@@ -314,7 +313,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                                 }
                                 exporting = false
                                 status = result.fold(
-                                    { "Export complete. Crossfaded video saved in Movies/Kalize Recorder/Edits." },
+                                    { "Export complete. Video saved in Movies/Kalize Recorder/Edits." },
                                     { "Export failed: ${it.message ?: "unsupported media combination"}" }
                                 )
                             }
@@ -403,7 +402,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         audioFiles.forEach { inputPaths += it.absolutePath }
 
         val outputFile = File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4")
-        val outputWidth = (outputHeight * 16 / 9).coerceAtLeast(1)
+        val outputWidth = ((outputHeight * 16 / 9) / 2 * 2).coerceAtLeast(2)
         val videoBitrate = when (outputHeight) { 480 -> "2M"; 1080 -> "10M"; else -> "5M" }
         val command = buildString {
             append("-y ")
@@ -435,7 +434,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         }
 
         val values = ContentValues().apply {
-            put(MediaStore.Video.Media.DISPLAY_NAME, "Kalize_Crossfade_${System.currentTimeMillis()}.mp4")
+            put(MediaStore.Video.Media.DISPLAY_NAME, "Kalize_Timeline_${System.currentTimeMillis()}.mp4")
             put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
             put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/Kalize Recorder/Edits")
             put(MediaStore.Video.Media.IS_PENDING, 1)

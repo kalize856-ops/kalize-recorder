@@ -27,7 +27,9 @@ class ProStudioActivity : ComponentActivity() {
     private var adMessage by mutableStateOf("Loading a reward ad for Pro capture options…")
 
     private val audioPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        prefs.edit().putBoolean("microphone_enabled", granted).apply()
+        if (granted) {
+            prefs.edit().putBoolean("microphone_enabled", true).putBoolean("internal_audio_enabled", false).apply()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +43,7 @@ class ProStudioActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 var microphone by remember { mutableStateOf(prefs.getBoolean("microphone_enabled", false)) }
+                var internalAudio by remember { mutableStateOf(prefs.getBoolean("internal_audio_enabled", false)) }
                 var bitrate by remember { mutableIntStateOf(prefs.getInt("bitrate_preset", 1)) }
                 var profile by remember { mutableStateOf(prefs.getString("capture_profile", "Gameplay") ?: "Gameplay") }
                 var proUnlocked by remember { mutableStateOf(false) }
@@ -132,11 +135,29 @@ class ProStudioActivity : ComponentActivity() {
                                 audioPermission.launch(Manifest.permission.RECORD_AUDIO)
                             } else {
                                 microphone = enabled
-                                prefs.edit().putBoolean("microphone_enabled", enabled).apply()
+                                if (enabled) internalAudio = false
+                                prefs.edit().putBoolean("microphone_enabled", enabled).putBoolean("internal_audio_enabled", if (enabled) false else internalAudio).apply()
                             }
                         })
                     }
-                    Text("Audio recording requires microphone permission. It records microphone input only; internal game audio capture is not included in this build.",
+                    HorizontalDivider()
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Internal app/game audio")
+                            Text("Capture eligible playback audio on Android 10+; some apps block capture.", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Switch(checked = internalAudio, enabled = android.os.Build.VERSION.SDK_INT >= 29 && !microphone, onCheckedChange = { enabled ->
+                            if (enabled && ContextCompat.checkSelfPermission(this@ProStudioActivity, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                                audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+                                internalAudio = false
+                            } else {
+                                internalAudio = enabled
+                                prefs.edit().putBoolean("internal_audio_enabled", enabled).putBoolean("microphone_enabled", if (enabled) false else microphone).apply()
+                            }
+                        })
+                    }
+                    Text("Microphone and internal audio are separate modes. Internal audio uses Android playback-capture rules and may be silent when the game or app opts out. If capture cannot start, Kalize falls back to video-only recording.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
                     Button(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Save and close") }

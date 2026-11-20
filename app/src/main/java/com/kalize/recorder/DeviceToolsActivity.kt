@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import android.net.TrafficStats
-import kotlin.math.sqrt
 
 /**
  * Honest device diagnostics and a short repeatable CPU workload.
@@ -31,11 +30,11 @@ class DeviceToolsActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val device = buildDeviceReport()
         setContent {
-            MaterialTheme {
+            KalizeTheme {
                 val scope = rememberCoroutineScope()
                 var gameSession by remember { mutableStateOf(false) }
                 var running by remember { mutableStateOf(false) }
-                var score by remember { mutableStateOf<Int?>(null) }
+                var score by remember { mutableStateOf<CpuBenchmarkResult?>(null) }
                 var benchmarkMessage by remember { mutableStateOf("Run the short CPU test when the phone is idle.") }
                 var sessionMessage by remember { mutableStateOf("Game Session does not overclock the phone or terminate other apps.") }
                 var liveDownloadMbps by remember { mutableStateOf(0.0) }
@@ -141,12 +140,30 @@ class DeviceToolsActivity : ComponentActivity() {
                                     scope.launch {
                                         val result = withContext(Dispatchers.Default) { runCpuBenchmark() }
                                         score = result
-                                        benchmarkMessage = "Completed. Higher scores mean more loop iterations in the fixed test window; this is not a universal device ranking."
+                                        benchmarkMessage = result.explanation
                                         running = false
                                     }
                                 }
                             ) { Text(if (running) "Testing…" else "Run CPU benchmark") }
-                            score?.let { Text("Score: $it iterations", style = MaterialTheme.typography.headlineSmall) }
+                            score?.let { result ->
+                                Text("Kalize score: ${result.overallScore}", style = MaterialTheme.typography.headlineSmall)
+                                Text(result.rating, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Column {
+                                        Text("Single-core", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(result.singleCoreScore.toString(), style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    Column {
+                                        Text("Multi-core", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(result.multiCoreScore.toString(), style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    Column {
+                                        Text("Stability", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("${result.stabilityPercent}%", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                                Text("Tested with ${result.coreCount} worker(s). This is a Kalize workload index, not a guaranteed game-FPS prediction.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                             Text(benchmarkMessage, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (running) LinearProgressIndicator(Modifier.fillMaxWidth())
                         }
@@ -209,15 +226,5 @@ class DeviceToolsActivity : ComponentActivity() {
         }
     }
 
-    private fun runCpuBenchmark(): Int {
-        val end = System.nanoTime() + 2_000_000_000L
-        var iterations = 0
-        var value = 1.0001
-        while (System.nanoTime() < end) {
-            value = sqrt(value * 1.0000001 + (iterations % 97) * 0.000001)
-            iterations++
-        }
-        // Fold the final value into the result so the workload remains observable.
-        return if (value > 0.0) iterations else 0
-    }
+    private fun runCpuBenchmark(): CpuBenchmarkResult = CpuBenchmark.run()
 }

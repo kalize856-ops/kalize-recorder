@@ -50,7 +50,7 @@ class ProStudioActivity : ComponentActivity() {
         }
         MobileAds.initialize(this) { loadRewardedAd() }
         setContent {
-            MaterialTheme {
+            KalizeTheme {
                 var microphone by remember { mutableStateOf(prefs.getBoolean("microphone_enabled", false)) }
                 var internalAudio by remember { mutableStateOf(prefs.getBoolean("internal_audio_enabled", false)) }
                 var bitrate by remember { mutableIntStateOf(prefs.getInt("bitrate_preset", 1)) }

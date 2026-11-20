@@ -81,7 +81,7 @@ class VideoEditorActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         MobileAds.initialize(this) { loadCompressionRewardAd() }
         setContent {
-            MaterialTheme {
+            KalizeTheme {
                 var range by remember { mutableStateOf(0f..1f) }
                 var keepAudio by remember { mutableStateOf(true) }
                 var rotation by remember { mutableIntStateOf(0) }

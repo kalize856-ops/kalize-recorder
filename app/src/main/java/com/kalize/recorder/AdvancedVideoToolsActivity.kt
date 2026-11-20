@@ -64,7 +64,7 @@ class AdvancedVideoToolsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
+            KalizeTheme {
                 var filter by remember { mutableStateOf("Original") }
                 var crop by remember { mutableStateOf("Full frame") }
                 var resolution by remember { mutableIntStateOf(0) }

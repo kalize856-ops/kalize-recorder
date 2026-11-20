@@ -103,7 +103,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         restoreDraft()
         setContent {
-            MaterialTheme {
+            KalizeTheme {
                 val scope = rememberCoroutineScope()
                 var showTransitionMenu by remember { mutableStateOf(false) }
                 val volumeSnapshot = audioVolumes.toList()

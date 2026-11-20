@@ -165,17 +165,41 @@ class RecorderService : Service() {
             // Prefer direct MediaCodec surface encoding for video-only sessions.
             // Microphone sessions retain MediaRecorder until a synchronized audio
             // encoder/muxer path is available.
+            val internalAudioRequested = preferences.getBoolean("internal_audio_enabled", false) &&
+                Build.VERSION.SDK_INT >= 29 &&
+                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
             if (!microphoneEnabled) {
-                val codecRecorder = runCatching {
+                var codecRecorder = runCatching {
                     MediaCodecRecordingPipeline(
                         width = width.coerceAtLeast(2),
                         height = height.coerceAtLeast(2),
                         frameRate = frameRate,
                         bitRate = outputBitrate,
                         outputDescriptor = outputDescriptor,
-                        outputFile = outputFile
+                        outputFile = outputFile,
+                        projection = activeProjection,
+                        capturePlaybackAudio = internalAudioRequested
                     ).also { it.start() }
                 }.getOrNull()
+
+                // If playback capture is blocked by the device or target app, retry
+                // as a normal video-only recording rather than losing the session.
+                if (codecRecorder == null && internalAudioRequested) {
+                    codecRecorder = runCatching {
+                        MediaCodecRecordingPipeline(
+                            width = width.coerceAtLeast(2),
+                            height = height.coerceAtLeast(2),
+                            frameRate = frameRate,
+                            bitRate = outputBitrate,
+                            outputDescriptor = outputDescriptor,
+                            outputFile = outputFile
+                        ).also { it.start() }
+                    }.getOrNull()
+                    preferences.edit().putBoolean("last_internal_audio_captured", false).apply()
+                } else if (codecRecorder?.audioCaptureActive == true) {
+                    preferences.edit().putBoolean("last_internal_audio_captured", true).apply()
+                }
 
                 if (codecRecorder != null) {
                     codecPipeline = codecRecorder

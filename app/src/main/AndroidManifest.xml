@@ -56,5 +56,6 @@
         <service
             android:name=".AnnotationOverlayService"
             android:exported="false" />
+        <service android:name=".FpsCounterOverlayService" android:exported="false" />
     </application>
 </manifest>

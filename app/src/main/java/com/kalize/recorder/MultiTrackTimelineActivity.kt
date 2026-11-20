@@ -237,11 +237,14 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                     }
                     Text(
                         when {
-                            transition.startsWith("Crossfade") ->
-                                "Real overlapping transition: the outgoing image fades down while the incoming image fades up. Their audio crossfades too."
+                            transition.startsWith("Crossfade") || transition.startsWith("Dissolve") ->
+                                "The clips overlap during the selected blend. Their audio crossfades at the same edit point."
                             transition.startsWith("Dip") ->
                                 "Overlapping fade through black, with a matching audio crossfade."
-                            else -> "Clips join directly. Audio is joined at the same edit point."
+                            transition.startsWith("Hard cut") ->
+                                "Clips join directly without a visual transition."
+                            else ->
+                                "The clips overlap during the selected wipe, slide or reveal transition. Their audio crossfades too."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

@@ -49,7 +49,7 @@ class FloatingBubbleService : Service() {
             HIDE_FOR_CAPTURE -> if (::root.isInitialized) root.visibility = android.view.View.GONE
             SHOW_AFTER_CAPTURE -> if (::root.isInitialized) root.visibility = android.view.View.VISIBLE
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onCreate() {
@@ -308,6 +308,12 @@ class FloatingBubbleService : Service() {
         } catch (_: Exception) {
         }
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // A removed app task is an explicit exit: never resurrect the floating overlay.
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null

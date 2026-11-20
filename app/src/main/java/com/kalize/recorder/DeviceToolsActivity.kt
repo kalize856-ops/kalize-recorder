@@ -17,8 +17,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
+import kotlinx.coroutines.delay
+import android.net.TrafficStats
 import kotlin.math.sqrt
 
 /**
@@ -38,9 +38,34 @@ class DeviceToolsActivity : ComponentActivity() {
                 var score by remember { mutableStateOf<Int?>(null) }
                 var benchmarkMessage by remember { mutableStateOf("Run the short CPU test when the phone is idle.") }
                 var sessionMessage by remember { mutableStateOf("Game Session does not overclock the phone or terminate other apps.") }
-                var speedRunning by remember { mutableStateOf(false) }
-                var speedResult by remember { mutableStateOf("No speed test run yet.") }
-                var showSpeedConsent by remember { mutableStateOf(false) }
+                var liveDownloadMbps by remember { mutableStateOf(0.0) }
+                var liveUploadMbps by remember { mutableStateOf(0.0) }
+                var speedAvailable by remember { mutableStateOf(true) }
+
+                // Passively samples device network counters while Device Lab is visible.
+                // This creates no test traffic and therefore does not consume extra data.
+                LaunchedEffect(Unit) {
+                    var previousRx = TrafficStats.getTotalRxBytes()
+                    var previousTx = TrafficStats.getTotalTxBytes()
+                    var previousTime = android.os.SystemClock.elapsedRealtimeNanos()
+                    if (previousRx < 0L || previousTx < 0L) speedAvailable = false
+                    while (true) {
+                        delay(1000)
+                        val currentRx = TrafficStats.getTotalRxBytes()
+                        val currentTx = TrafficStats.getTotalTxBytes()
+                        val currentTime = android.os.SystemClock.elapsedRealtimeNanos()
+                        val elapsedSeconds = (currentTime - previousTime).coerceAtLeast(1L) / 1_000_000_000.0
+                        if (currentRx >= 0L && currentTx >= 0L && previousRx >= 0L && previousTx >= 0L) {
+                            liveDownloadMbps = ((currentRx - previousRx).coerceAtLeast(0L) * 8.0 / elapsedSeconds) / 1_000_000.0
+                            liveUploadMbps = ((currentTx - previousTx).coerceAtLeast(0L) * 8.0 / elapsedSeconds) / 1_000_000.0
+                        } else {
+                            speedAvailable = false
+                        }
+                        previousRx = currentRx
+                        previousTx = currentTx
+                        previousTime = currentTime
+                    }
+                }
 
                 DisposableEffect(gameSession) {
                     if (gameSession) {
@@ -84,9 +109,23 @@ class DeviceToolsActivity : ComponentActivity() {
                             Text("NETWORK CHECK", style = MaterialTheme.typography.titleMedium)
                             Text(networkReport(), style = MaterialTheme.typography.bodyMedium)
                             Text("Android link-capacity estimates are not measured throughput.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Button(onClick = { showSpeedConsent = true }, enabled = !speedRunning, modifier = Modifier.fillMaxWidth()) { Text(if (speedRunning) "Measuring network…" else "Run internet speed test") }
-                            Text(speedResult, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("The test transfers up to about 4 MB using Cloudflare speed-test endpoints. Mobile data charges may apply.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column(Modifier.weight(1f)) {
+                                    Text("↓ Download", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (speedAvailable) "%.2f Mbps".format(java.util.Locale.US, liveDownloadMbps) else "Unavailable", style = MaterialTheme.typography.headlineSmall)
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("↑ Upload", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (speedAvailable) "%.2f Mbps".format(java.util.Locale.US, liveUploadMbps) else "Unavailable", style = MaterialTheme.typography.headlineSmall)
+                                }
+                            }
+                            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                                Box(Modifier.size(8.dp).padding(0.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCircle(color = if (speedAvailable) androidx.compose.ui.graphics.Color(0xFF20B26B) else androidx.compose.ui.graphics.Color.Gray) }
+                                }
+                                Text(if (speedAvailable) "Live · updates every second while this page is open" else "Live network counters are not supported on this device", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text("Measured from actual device network traffic. Other apps' downloads and uploads are included. No test data is downloaded or uploaded.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Card(Modifier.fillMaxWidth()) {
@@ -167,58 +206,6 @@ class DeviceToolsActivity : ComponentActivity() {
             append(transport).append(if (validated) " · Internet verified" else " · Internet not verified")
             if (down > 0) append("\nReported downstream capacity: ").append(down).append(" Kbps")
             if (up > 0) append("\nReported upstream capacity: ").append(up).append(" Kbps")
-        }
-    }
-
-    private fun runInternetSpeedTest(): String {
-        fun measure(url: String, method: String, bytes: Int): Double {
-            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = method
-                connectTimeout = 12_000
-                readTimeout = 20_000
-                useCaches = false
-                if (method == "POST") {
-                    doOutput = true
-                    setRequestProperty("Content-Type", "application/octet-stream")
-                    setFixedLengthStreamingMode(bytes)
-                }
-            }
-            return try {
-                val start = System.nanoTime()
-                if (method == "POST") {
-                    connection.outputStream.use { output ->
-                        val chunk = ByteArray(16 * 1024)
-                        var remaining = bytes
-                        while (remaining > 0) {
-                            val count = minOf(chunk.size, remaining)
-                            output.write(chunk, 0, count)
-                            remaining -= count
-                        }
-                    }
-                }
-                val stream = if (connection.responseCode in 200..299) connection.inputStream else connection.errorStream
-                var transferred = if (method == "POST") bytes.toLong() else 0L
-                stream?.use { input ->
-                    val buffer = ByteArray(16 * 1024)
-                    while (true) {
-                        val count = input.read(buffer)
-                        if (count < 0) break
-                        if (method == "GET") transferred += count
-                    }
-                }
-                val seconds = ((System.nanoTime() - start).coerceAtLeast(1L)) / 1_000_000_000.0
-                require(connection.responseCode in 200..299) { "Speed-test server returned HTTP ${connection.responseCode}" }
-                (transferred * 8.0 / seconds) / 1_000_000.0
-            } finally {
-                connection.disconnect()
-            }
-        }
-        return try {
-            val download = measure("https://speed.cloudflare.com/__down?bytes=3000000", "GET", 3_000_000)
-            val upload = measure("https://speed.cloudflare.com/__up", "POST", 1_000_000)
-            "Measured result: ${"%.1f".format(java.util.Locale.US, download)} Mbps down · ${"%.1f".format(java.util.Locale.US, upload)} Mbps up. Results vary with server load and signal quality."
-        } catch (error: Exception) {
-            "Speed test failed: ${error.localizedMessage ?: "connection unavailable"}. Check your connection and try again."
         }
     }
 

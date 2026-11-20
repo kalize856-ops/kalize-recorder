@@ -409,6 +409,12 @@ private fun SettingsDashboard(
             }
             OutlinedButton(onClick = onStudio, modifier = Modifier.fillMaxWidth()) { Text("Open Pro Studio") }
         }
+        SettingsCard("Device diagnostics") {
+            Text("Review RAM, storage, battery, processor and network connection details. Clear temporary app cache without deleting recordings.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { context.startActivity(Intent(context, DeviceDiagnosticsActivity::class.java)) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Open device diagnostics")
+            }
+        }
         Text("Actual FPS and resolution depend on your phone's display, encoder and available memory.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
     }
 }

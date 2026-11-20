@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.2** (version code 3).
+Current development version: **1.0.3** (version code 4).
 
 Native Android screen recorder and video utility app.
 
@@ -22,7 +22,7 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 
 ## Current features
 
-- Jetpack Compose recorder interface with organized Recorder, Library, and Settings pages
+- Jetpack Compose recorder interface with organized Recorder, Library, Edit, and Settings pages\n- Device diagnostics for processor/ABI, CPU core count, RAM, storage, battery temperature/status and network transport\n- Safe temporary-cache cleanup that does not delete recordings, exported videos or editing projects
 - Dark and light appearance
 - Android MediaProjection screen recording to MP4 with an ongoing foreground notification
 - Draggable floating controls with record, stop, screenshot, app launch, and Pro Studio shortcuts
@@ -60,3 +60,4 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Multi-track export uses a local FFmpeg rendering pipeline and saves a new MP4 under Movies/Kalize Recorder/Edits.
 - Crossfade exports normalize clips to 720p at 30 FPS for consistent transition rendering. Hardware H.264 encoding is attempted first, with an MPEG-4 fallback when the device encoder is unavailable.
 - The FFmpegKit-compatible Android dependency is LGPL-licensed; review the bundled notices and dependency license before distributing builds.
+\n\n## Device diagnostics (1.0.3)\n\n- Read-only device overview for Android version, model, processor identifier, CPU core count and supported ABIs.\n- Current RAM availability, device storage capacity, and Kalize temporary cache size.\n- Battery charge, charging state and reported battery temperature.\n- Active network connectivity and transport type (Wi-Fi, mobile data, Ethernet, VPN or other).\n- User-confirmed cleanup of the app's cache directories only; recordings and editing projects are not removed.\n- Network status is not presented as a speed test, and no synthetic CPU benchmark score is shown.\n

@@ -48,6 +48,7 @@ class MediaCodecRecordingPipeline(
     private var encodedAudioSamples = 0L
     private val stopping = AtomicBoolean(false)
     private val muxerLock = Any()
+    @Volatile private var playbackAudioPaused = false
     @Volatile private var drainFailure: Throwable? = null
 
     lateinit var inputSurface: Surface
@@ -223,6 +224,20 @@ class MediaCodecRecordingPipeline(
         }
     }
 
+    fun pausePlaybackAudio() {
+        if (audioRecord == null || stopping.get()) return
+        playbackAudioPaused = true
+        runCatching { audioRecord?.stop() }
+    }
+
+    fun resumePlaybackAudio() {
+        if (audioRecord == null || stopping.get()) return
+        runCatching {
+            audioRecord?.startRecording()
+            playbackAudioPaused = false
+        }.onFailure { drainFailure = it }
+    }
+
     private fun feedAudioEncoder() {
         val record = audioRecord ?: return
         val codec = audioEncoder ?: return
@@ -231,7 +246,10 @@ class MediaCodecRecordingPipeline(
         try {
             while (!stopping.get()) {
                 val read = record.read(pcm, 0, pcm.size, AudioRecord.READ_BLOCKING)
-                if (read <= 0) continue
+                if (read <= 0) {
+                    if (playbackAudioPaused && !stopping.get()) Thread.sleep(20)
+                    continue
+                }
                 var offset = 0
                 while (offset < read && !stopping.get()) {
                     val inputIndex = codec.dequeueInputBuffer(10_000)

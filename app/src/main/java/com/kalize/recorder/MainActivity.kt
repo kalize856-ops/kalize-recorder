@@ -197,8 +197,22 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        applyKeepScreenAwake()
         RecordingRecovery.recoverPendingVideos(this)
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
+    }
+
+    override fun onPause() {
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        super.onPause()
+    }
+
+    private fun applyKeepScreenAwake() {
+        if (prefs.getBoolean("keep_screen_awake", false)) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
     }
 
     private fun requestCapture() {
@@ -411,9 +425,6 @@ private fun SettingsDashboard(
     val prefs = remember { context.getSharedPreferences("kalize_settings", Context.MODE_PRIVATE) }
     var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean("keep_screen_awake", false)) }
     var vibrateControls by remember { mutableStateOf(prefs.getBoolean("control_vibration", true)) }
-    var autoSave by remember { mutableStateOf(prefs.getBoolean("auto_save_recordings", true)) }
-    var showRecordingTimer by remember { mutableStateOf(prefs.getBoolean("show_recording_timer", true)) }
-    var confirmStop by remember { mutableStateOf(prefs.getBoolean("confirm_stop_recording", false)) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
@@ -446,12 +457,8 @@ private fun SettingsDashboard(
             ChoiceSetting(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
             Text("Start countdown", style = MaterialTheme.typography.labelMedium)
             ChoiceSetting(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
-            SwitchSetting("Show recording timer", "Remember this preference for the recording interface", showRecordingTimer) {
-                showRecordingTimer = it; prefs.edit().putBoolean("show_recording_timer", it).apply()
-            }
-            SwitchSetting("Confirm before stopping", "Store your preference for stop-confirmation support", confirmStop) {
-                confirmStop = it; prefs.edit().putBoolean("confirm_stop_recording", it).apply()
-            }
+            Text("Recording controls and the live recording notification are managed by Android while capture is active. Countdown is configured above.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("The phone's display refresh rate and hardware encoder determine the actual frame rate. Kalize records at the highest supported rate up to your selection.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -497,9 +504,8 @@ private fun SettingsDashboard(
         }
 
         SettingsCard("Storage & saved recordings") {
-            SwitchSetting("Save completed recordings automatically", "Keep completed recordings in the Kalize Recorder media folder", autoSave) {
-                autoSave = it; prefs.edit().putBoolean("auto_save_recordings", it).apply()
-            }
+            Text("Automatic saving is enabled. Completed recordings are published to Movies/Kalize Recorder and appear in your device media library. This build does not yet support choosing a custom folder or SD-card destination from this screen.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text("Recordings are stored in Movies/Kalize Recorder and are visible in your device's media library. Available storage and Android permissions can affect saving.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

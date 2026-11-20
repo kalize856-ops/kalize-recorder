@@ -23,6 +23,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -88,7 +90,7 @@ class VideoEditorActivity : ComponentActivity() {
                 var speed by remember { mutableFloatStateOf(1f) }
                 var compressionPreset by remember { mutableStateOf(CompressionPreset.BALANCED) }
                 val scope = rememberCoroutineScope()
-                Column(Modifier.fillMaxSize().padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Text("KALIZE STUDIO", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     Text("Video editor", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text("Trim a clip or combine compatible recordings. Every export is saved as a new file; your originals stay untouched.")

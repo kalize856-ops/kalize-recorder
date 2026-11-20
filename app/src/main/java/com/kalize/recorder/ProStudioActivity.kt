@@ -14,6 +14,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -74,7 +76,7 @@ class ProStudioActivity : ComponentActivity() {
                 }
 
                 Column(
-                    Modifier.fillMaxSize().padding(22.dp),
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text("KALIZE PRO STUDIO", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)

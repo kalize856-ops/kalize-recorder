@@ -7,6 +7,8 @@ import android.os.Environment
 import android.os.StatFs
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -76,14 +78,14 @@ fun RecordingLibrary(onBack: () -> Unit) {
                 else "Recycle Bin requires Android 11 or later.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (shown.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(if (recycleBin) "Recycle bin is empty" else "Your library is empty", style = MaterialTheme.typography.titleLarge)
                     if (!recycleBin) OutlinedButton(onClick = onBack) { Text("Start recording") }
                 }
             }
         } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 if (!recycleBin && images.isNotEmpty()) {
                     item { Text("Screenshots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
                     items(images, key = { "img${it.id}" }) { item ->

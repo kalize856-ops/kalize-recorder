@@ -143,24 +143,8 @@ class RecorderService : Service() {
             val frameRate = selectSupportedFrameRate(width.coerceAtLeast(2), height.coerceAtLeast(2), requestedFps, displayRefresh)
             preferences.edit().putInt("last_selected_fps", frameRate).apply()
             prepareVideoOutput()
-            val mediaRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else {
-                @Suppress("DEPRECATION")
-                MediaRecorder()
-            }
-            recorder = mediaRecorder
-            mediaRecorder.setVideoSource(MediaRecorder.VideoSource.SURFACE)
             val microphoneEnabled = preferences.getBoolean("microphone_enabled", false) &&
                 checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (microphoneEnabled) mediaRecorder.setAudioSource(MediaRecorder.AudioSource.MIC)
-            mediaRecorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            mediaRecorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            if (microphoneEnabled) {
-                mediaRecorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                mediaRecorder.setAudioEncodingBitRate(128_000)
-                mediaRecorder.setAudioSamplingRate(44_100)
-            }
-            mediaRecorder.setVideoSize(width.coerceAtLeast(2), height.coerceAtLeast(2))
-            mediaRecorder.setVideoFrameRate(frameRate)
             val presetBitrate = when (preferences.getInt("bitrate_preset", 1).coerceIn(0, 2)) {
                 0 -> 8_000_000
                 1 -> 16_000_000
@@ -175,11 +159,55 @@ class RecorderService : Service() {
                 maxOf(width, height) >= 360 -> 2_500_000
                 else -> 1_500_000
             }
-            mediaRecorder.setVideoEncodingBitRate(minOf(presetBitrate, resolutionLimit))
+            val outputBitrate = minOf(presetBitrate, resolutionLimit)
             val descriptor = outputDescriptor
-            if (descriptor != null) mediaRecorder.setOutputFile(descriptor.fileDescriptor)
-            else mediaRecorder.setOutputFile(outputFile!!.absolutePath)
-            mediaRecorder.prepare()
+            val fpsFallbacks = listOf(frameRate, 120, 90, 60, 30)
+                .distinct()
+                .filter { it in 30..frameRate }
+                .sortedDescending()
+            var preparedRecorder: MediaRecorder? = null
+            var actualFrameRate = frameRate
+            var lastPrepareError: Exception? = null
+
+            // Some devices report a codec capability but MediaRecorder selects a
+            // different encoder. Retry lower rates before giving up completely.
+            for (candidateFps in fpsFallbacks) {
+                val candidate = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else {
+                    @Suppress("DEPRECATION")
+                    MediaRecorder()
+                }
+                try {
+                    candidate.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+                    if (microphoneEnabled) candidate.setAudioSource(MediaRecorder.AudioSource.MIC)
+                    candidate.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                    candidate.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+                    if (microphoneEnabled) {
+                        candidate.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                        candidate.setAudioEncodingBitRate(128_000)
+                        candidate.setAudioSamplingRate(44_100)
+                    }
+                    candidate.setVideoSize(width.coerceAtLeast(2), height.coerceAtLeast(2))
+                    candidate.setVideoFrameRate(candidateFps)
+                    candidate.setVideoEncodingBitRate(outputBitrate)
+                    if (descriptor != null) candidate.setOutputFile(descriptor.fileDescriptor)
+                    else candidate.setOutputFile(outputFile!!.absolutePath)
+                    candidate.prepare()
+                    preparedRecorder = candidate
+                    actualFrameRate = candidateFps
+                    break
+                } catch (error: Exception) {
+                    lastPrepareError = error
+                    try { candidate.reset() } catch (_: Exception) { }
+                    try { candidate.release() } catch (_: Exception) { }
+                }
+            }
+
+            val mediaRecorder = preparedRecorder ?: throw IllegalStateException(
+                "This device could not prepare screen recording at 30–${frameRate} FPS.",
+                lastPrepareError
+            )
+            recorder = mediaRecorder
+            preferences.edit().putInt("last_selected_fps", actualFrameRate).apply()
 
             display = activeProjection.createVirtualDisplay(
                 "KalizeCapture", width, height, metrics.densityDpi,

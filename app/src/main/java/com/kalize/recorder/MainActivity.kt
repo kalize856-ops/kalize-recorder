@@ -408,43 +408,125 @@ private fun SettingsDashboard(
             showTouches = true
         }
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        SettingsCard("Appearance") {
-            SwitchSetting("Dark theme", "Use the dark recording studio theme", dark, onDark)
+    val prefs = remember { context.getSharedPreferences("kalize_settings", Context.MODE_PRIVATE) }
+    var keepScreenAwake by remember { mutableStateOf(prefs.getBoolean("keep_screen_awake", false)) }
+    var vibrateControls by remember { mutableStateOf(prefs.getBoolean("control_vibration", true)) }
+    var autoSave by remember { mutableStateOf(prefs.getBoolean("auto_save_recordings", true)) }
+    var showRecordingTimer by remember { mutableStateOf(prefs.getBoolean("show_recording_timer", true)) }
+    var confirmStop by remember { mutableStateOf(prefs.getBoolean("confirm_stop_recording", false)) }
+
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("PERSONALIZE YOUR RECORDER", color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Everything organized by what it controls. Changes are saved on this device.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        SettingsCard("Floating controls") {
-            SwitchSetting("Floating bubble", "Show Kalize controls over other apps", bubbleEnabled, onBubble)
-            Text("Bubble size · ${bubbleSize} dp", style = MaterialTheme.typography.labelMedium)
-            Slider(value = bubbleSize.toFloat(), onValueChange = { onBubbleSize(it.toInt()) }, valueRange = 44f..68f, steps = 5, enabled = bubbleEnabled)
-            Text("Bubble opacity · $bubbleOpacity%", style = MaterialTheme.typography.labelMedium)
-            Slider(value = bubbleOpacity.toFloat(), onValueChange = { onBubbleOpacity(it.toInt()) }, valueRange = 50f..100f, steps = 9, enabled = bubbleEnabled)
+
+        SettingsCard("Appearance & experience") {
+            SwitchSetting("Dark theme", "Use the dark theme throughout Kalize screens", dark, onDark)
+            SwitchSetting("Keep screen awake", "Prevent the display from sleeping while Kalize is open", keepScreenAwake) {
+                keepScreenAwake = it; prefs.edit().putBoolean("keep_screen_awake", it).apply()
+                if (it) (context as? Activity)?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else (context as? Activity)?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+            SwitchSetting("Control vibration", "Haptic feedback for supported controls", vibrateControls) {
+                vibrateControls = it; prefs.edit().putBoolean("control_vibration", it).apply()
+            }
         }
-        SettingsCard("Network monitoring") {
-            SwitchSetting(
-                "Live network speed",
-                "Measure device download and upload traffic every second while Kalize is open. Includes other apps’ traffic and uses no test data.",
-                networkMonitor,
-                onNetworkMonitor
-            )
-        }
-        SettingsCard("Recording quality") {
-            Text("Resolution", style = MaterialTheme.typography.labelMedium)
+
+        SettingsCard("Recording") {
+            Text("Video resolution", style = MaterialTheme.typography.labelMedium)
             ChoiceSetting(resolution, listOf(240, 360, 480, 720, 1080, 1440, 2160), { "${it}p" }, onResolution)
             Text("Frame rate", style = MaterialTheme.typography.labelMedium)
             ChoiceSetting(fps, listOf(30, 60, 120, 240), { "${it} FPS" }, onFps)
-            Text("Countdown", style = MaterialTheme.typography.labelMedium)
+            Text("Start countdown", style = MaterialTheme.typography.labelMedium)
             ChoiceSetting(countdown, listOf(0, 3, 5, 10), { if (it == 0) "Off" else "${it} seconds" }, onCountdown)
+            SwitchSetting("Show recording timer", "Remember this preference for the recording interface", showRecordingTimer) {
+                showRecordingTimer = it; prefs.edit().putBoolean("show_recording_timer", it).apply()
+            }
+            SwitchSetting("Confirm before stopping", "Store your preference for stop-confirmation support", confirmStop) {
+                confirmStop = it; prefs.edit().putBoolean("confirm_stop_recording", it).apply()
+            }
+            Text("The phone's display refresh rate and hardware encoder determine the actual frame rate. Kalize records at the highest supported rate up to your selection.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        SettingsCard("Recording tools") {
-            SwitchSetting("Touch indicators", "Show Android touch dots in recordings", showTouches) { enabled ->
+
+        SettingsCard("Audio") {
+            Text("Choose microphone or eligible internal app/game audio, and configure capture quality in Pro Studio.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = onStudio, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.MusicNote, null); Spacer(Modifier.width(8.dp)); Text("Open audio & capture settings")
+            }
+        }
+
+        SettingsCard("Floating controls") {
+            SwitchSetting("Floating bubble", "Show quick recording tools over other apps", bubbleEnabled, onBubble)
+            Text("Bubble size · ${bubbleSize} dp", style = MaterialTheme.typography.labelMedium)
+            Slider(value = bubbleSize.toFloat(), onValueChange = { onBubbleSize(it.toInt()) },
+                valueRange = 44f..68f, steps = 5, enabled = bubbleEnabled)
+            Text("Bubble opacity · ${bubbleOpacity}%", style = MaterialTheme.typography.labelMedium)
+            Slider(value = bubbleOpacity.toFloat(), onValueChange = { onBubbleOpacity(it.toInt()) },
+                valueRange = 50f..100f, steps = 9, enabled = bubbleEnabled)
+            Text("Android requires the display-over-other-apps permission for the floating controls.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        SettingsCard("Screenshot & touch controls") {
+            SwitchSetting("Touch indicators", "Show Android touch dots during screen capture", showTouches) { enabled ->
                 if (!enabled || Settings.System.canWrite(context)) {
                     Settings.System.putInt(context.contentResolver, "show_touches", if (enabled) 1 else 0)
                     showTouches = enabled
                 } else touchLauncher.launch(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}")))
             }
+            Text("Use the screenshot action from the floating bubble or the Recorder home screen. Screenshots are saved to the device media library.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        SettingsCard("Performance & network") {
+            SwitchSetting("Live network speed", "Continuously measure this device's download and upload traffic while Kalize is open. This is traffic monitoring, not a speed-test download.", networkMonitor, onNetworkMonitor)
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(context, DeviceToolsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.Speed, null); Spacer(Modifier.width(8.dp)); Text("Open Device Lab & CPU benchmark")
+            }
+        }
+
+        SettingsCard("Storage & saved recordings") {
+            SwitchSetting("Save completed recordings automatically", "Keep completed recordings in the Kalize Recorder media folder", autoSave) {
+                autoSave = it; prefs.edit().putBoolean("auto_save_recordings", it).apply()
+            }
+            Text("Recordings are stored in Movies/Kalize Recorder and are visible in your device's media library. Available storage and Android permissions can affect saving.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        SettingsCard("Editing & export") {
+            Text("Open the editor for trimming, merging, compression and available export controls. Editing tools are separate from recording preferences.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(context, VideoEditorActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.fillMaxWidth()) { Text("Open video editor") }
             OutlinedButton(onClick = onStudio, modifier = Modifier.fillMaxWidth()) { Text("Open Pro Studio") }
         }
-        Text("Actual FPS and resolution depend on your phone's display, encoder and available memory.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+
+        SettingsCard("Notifications & permissions") {
+            Text("Android controls notification permission, microphone access, screen capture consent and overlay access. You can review app permissions in Android Settings.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+            }, modifier = Modifier.fillMaxWidth()) { Text("Open Android app permissions") }
+        }
+
+        SettingsCard("About Kalize Recorder") {
+            Text("Kalize Recorder · Version 1.0.8", fontWeight = FontWeight.SemiBold)
+            Text("A no-watermark screen recorder. Features that depend on Android version, device hardware or app playback-capture permissions may not be available on every phone.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.height(12.dp))
     }
 }
 

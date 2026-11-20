@@ -30,6 +30,8 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
     private var lastSampleNanos = 0L
     private var lastFrameNanos = 0L
     private var displayedFps = 0
+    private var deleteMode = false
+    private var deleteTarget: TextView? = null
     private val choreographer by lazy { Choreographer.getInstance() }
 
     override fun onCreate() {
@@ -102,15 +104,27 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
                 downRawY = event.rawY
                 startX = params.x
                 startY = params.y
+                deleteMode = false
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
+                if (!deleteMode && event.eventTime - event.downTime >= android.view.ViewConfiguration.getLongPressTimeout()) {
+                    deleteMode = true
+                    showDeleteTarget()
+                }
                 params.x = (startX + (event.rawX - downRawX).toInt()).coerceAtLeast(0)
                 params.y = (startY + (event.rawY - downRawY).toInt()).coerceAtLeast(0)
                 try { windowManager.updateViewLayout(label, params) } catch (_: Exception) { }
                 return true
             }
             MotionEvent.ACTION_UP -> {
+                if (deleteMode && isCounterOverDeleteTarget()) {
+                    hideDeleteTarget()
+                    stopSelf()
+                    return true
+                }
+                hideDeleteTarget()
+                deleteMode = false
                 getSharedPreferences(POSITION_PREFS, MODE_PRIVATE).edit()
                     .putInt("fps_x", params.x)
                     .putInt("fps_y", params.y)
@@ -121,10 +135,49 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
         return true
     }
 
+    private fun showDeleteTarget() {
+        if (deleteTarget != null) return
+        val type = if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else WindowManager.LayoutParams.TYPE_PHONE
+        val target = TextView(this).apply {
+            text = "×"
+            textSize = 34f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFFE53935.toInt())
+                cornerRadius = dp(40).toFloat()
+            }
+            elevation = dp(12).toFloat()
+            contentDescription = "Drop here to dismiss FPS counter"
+        }
+        val lp = WindowManager.LayoutParams(dp(64), dp(64), type,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_SECURE,
+            PixelFormat.TRANSLUCENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = (resources.displayMetrics.widthPixels - dp(64)) / 2
+            y = (resources.displayMetrics.heightPixels - dp(150)).coerceAtLeast(0)
+        }
+        try { windowManager.addView(target, lp); deleteTarget = target } catch (_: Exception) { }
+    }
+
+    private fun hideDeleteTarget() {
+        deleteTarget?.let { try { windowManager.removeView(it) } catch (_: Exception) { } }
+        deleteTarget = null
+    }
+
+    private fun isCounterOverDeleteTarget(): Boolean {
+        val cx = params.x + label.width / 2
+        val cy = params.y + label.height / 2
+        val tx = resources.displayMetrics.widthPixels / 2
+        val ty = resources.displayMetrics.heightPixels - dp(118)
+        return kotlin.math.hypot((cx - tx).toDouble(), (cy - ty).toDouble()) < dp(82)
+    }
+
     private fun dp(value: Int): Int =
         (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        hideDeleteTarget()
         choreographer.removeFrameCallback(this)
         if (attached) {
             try { windowManager.removeView(label) } catch (_: Exception) { }

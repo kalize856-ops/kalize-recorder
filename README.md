@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.5** (version code 6).
+Current development version: **1.0.6** (version code 7).
 
 Native Android screen recorder and video utility app.
 
@@ -28,6 +28,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 - Video-only sessions prefer a dedicated surface-input H.264 MediaCodec pipeline, with hardware encoder selection, configurable bitrate/frame-rate hints, output draining and MP4 muxing.
 - MediaRecorder fallback if the dedicated codec cannot start.
 - Microphone capture remains on the MediaRecorder path.
+- Optional Android 10+ internal playback capture uses AudioPlaybackCapture, AAC encoding and MP4 muxing on eligible apps; Android playback-capture policy can block particular apps.
 - Resolution targets from 240p through 2160p (4K), and frame-rate targets up to 240 FPS, subject to device display and encoder limits.
 - Countdown, optional microphone capture and Android touch indicators.
 - Draggable floating controls with record, stop, screenshot, pause/resume (standard MediaRecorder mode), editor, Pro Studio, annotation and app shortcuts.
@@ -54,7 +55,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 ## Current limitations and release checks
 
 - The 120/240 FPS values are configuration targets, not guarantees of sustained frame delivery. Physical-device testing is required.
-- The dedicated MediaCodec path currently handles video-only sessions. Microphone sessions use MediaRecorder; internal app/game audio capture is not implemented.
+- Internal playback capture is limited to eligible apps/audio usages and can be blocked by app policy. Microphone and internal playback are separate modes; simultaneous mixing is not included.
 - Pause/resume on the dedicated MediaCodec path detaches and reattaches the virtual-display surface; verify timestamp continuity on physical devices.
 - Game Session does not overclock the CPU, close other apps, or change system performance governors; Android does not grant ordinary apps those controls.
 - The optional internet speed test transfers approximately 4 MB through Cloudflare endpoints; results depend on server load and network conditions.

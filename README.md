@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.2** (version code 3).
+Current development version: **1.0.4** (version code 5).
 
 Native Android screen recorder and video utility app.
 
@@ -22,7 +22,9 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 
 ## Current features
 
-- Jetpack Compose recorder interface with organized Recorder, Library, and Settings pages
+- Jetpack Compose recorder interface with organized Recorder, Library, Edit, and Settings pages
+- Device diagnostics for processor/ABI, CPU core count, RAM, storage, battery temperature/status and network transport
+- Safe temporary-cache cleanup that does not delete recordings, exported videos or editing projects
 - Dark and light appearance
 - Android MediaProjection screen recording to MP4 with an ongoing foreground notification
 - Draggable floating controls with record, stop, screenshot, app launch, and Pro Studio shortcuts
@@ -58,5 +60,18 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Multiple independent audio sequences layered over the video, with per-track gain controls, original-video audio level control, and automatic audio fade-in/fade-out.
 - True overlapping video crossfades (0.5s, 1s, or 2s), dip-to-black transitions, or hard cuts; matching audio crossfades are rendered with FFmpeg.
 - Multi-track export uses a local FFmpeg rendering pipeline and saves a new MP4 under Movies/Kalize Recorder/Edits.
+- Multi-track export presets: 480p, 720p and 1080p at 30 or 60 FPS, subject to the phone's encoder and performance.
+- Additional overlapping slide, wipe, smooth reveal and zoom transitions alongside crossfade, dip-to-black and hard cuts.
+- Audio tracks can be reordered, individually volume-adjusted or removed; clearing a project draft never deletes the original media.
 - Crossfade exports normalize clips to 720p at 30 FPS for consistent transition rendering. Hardware H.264 encoding is attempted first, with an MPEG-4 fallback when the device encoder is unavailable.
 - The FFmpegKit-compatible Android dependency is LGPL-licensed; review the bundled notices and dependency license before distributing builds.
+
+
+## Device diagnostics (1.0.3)
+
+- Read-only device overview for Android version, model, processor identifier, CPU core count and supported ABIs.
+- Current RAM availability, device storage capacity, and Kalize temporary cache size.
+- Battery charge, charging state and reported battery temperature.
+- Active network connectivity and transport type (Wi-Fi, mobile data, Ethernet, VPN or other).
+- User-confirmed cleanup of the app's cache directories only; recordings and editing projects are not removed.
+- Network status is not presented as a speed test, and no synthetic CPU benchmark score is shown.

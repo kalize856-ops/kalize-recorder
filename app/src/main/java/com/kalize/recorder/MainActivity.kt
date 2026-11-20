@@ -113,7 +113,8 @@ class MainActivity : ComponentActivity() {
                                     onLibrary = { page = "Library" },
                                     onEdit = { startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java)) },
                                     onStudio = { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
-                                    onScreenshot = { requestScreenshot() }
+                                    onScreenshot = { requestScreenshot() },
+                                    onDeviceLab = { startActivity(Intent(this@MainActivity, DeviceToolsActivity::class.java)) }
                                 )
                                 "Edit" -> EditorDashboard(ink, surface, accent) {
                                     startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java))
@@ -220,7 +221,7 @@ class MainActivity : ComponentActivity() {
 private fun RecorderDashboard(
     ink: Color, surface: Color, accent: Color,
     onRecord: () -> Unit, onBubble: () -> Unit, onLibrary: () -> Unit,
-    onEdit: () -> Unit, onStudio: () -> Unit, onScreenshot: () -> Unit
+    onEdit: () -> Unit, onStudio: () -> Unit, onScreenshot: () -> Unit, onDeviceLab: () -> Unit
 ) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     Column(
@@ -296,6 +297,7 @@ private fun RecorderDashboard(
             FeatureCard("Video editor", "Trim, merge and compress", Icons.Default.ContentCut, accent, surface, Modifier.weight(1f), onEdit)
             FeatureCard("Pro capture", "Audio and quality presets", Icons.Default.Tune, accent, surface, Modifier.weight(1f), onStudio)
         }
+        FeatureCard("Device Lab", "CPU benchmark, network check and game session", Icons.Default.Speed, accent, surface, Modifier.fillMaxWidth(), onDeviceLab)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Default.HighQuality, null, tint = accent, modifier = Modifier.size(27.dp))

@@ -143,6 +143,13 @@ class VideoEditorActivity : ComponentActivity() {
                                 CompressionPreset.entries.forEach { preset ->
                                     FilterChip(selected = compressionPreset == preset, onClick = { compressionPreset = preset }, label = { Text("${preset.title} · ${preset.detail}") })
                                 }
+                                val estimatedBytes = ((compressionPreset.bitrate + 128_000L) * durationMs / 8_000L)
+                                val estimatedMiB = estimatedBytes.toDouble() / (1024.0 * 1024.0)
+                                Text(
+                                    "Estimated output: about ${"%.1f".format(java.util.Locale.US, estimatedMiB)} MB. Actual size varies with motion, audio and encoder support; output resolution never exceeds the source video.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                                 Text(
                                     "Watch one short rewarded ad to unlock this compression export. Basic recording and trimming remain free. Merging and compression exports require a rewarded ad.",
                                     style = MaterialTheme.typography.bodySmall,

@@ -534,10 +534,18 @@ class MultiTrackTimelineActivity : ComponentActivity() {
 
     private fun copyToCache(uri: Uri, prefix: String, suffix: String): File {
         val target = File.createTempFile(prefix, suffix, cacheDir)
-        contentResolver.openInputStream(uri)?.use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        } ?: throw IllegalStateException("Could not read selected media: $uri")
-        return target
+        try {
+            contentResolver.openInputStream(uri)?.buffered(64 * 1024)?.use { input ->
+                target.outputStream().buffered(64 * 1024).use { output ->
+                    input.copyTo(output, 64 * 1024)
+                }
+            } ?: throw IllegalStateException("Could not read selected media.")
+            return target
+        } catch (error: Exception) {
+            // A failed/cancelled import must not leave a partial media file in cache.
+            target.delete()
+            throw error
+        }
     }
 
     private fun readDurationSeconds(uri: Uri): Double {

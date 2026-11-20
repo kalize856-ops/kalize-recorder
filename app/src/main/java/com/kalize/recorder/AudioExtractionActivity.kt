@@ -27,6 +27,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
+import com.arthenica.ffmpegkit.FFmpegKit
+import com.arthenica.ffmpegkit.ReturnCode
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -126,50 +129,30 @@ class AudioExtractionActivity : ComponentActivity() {
         }
     }
 
+    /** Re-encodes any decodable source audio track to broadly compatible AAC/M4A. */
     private fun extract(uri: Uri) {
-        val extractor = MediaExtractor()
-        val temporary = File(cacheDir, "kalize_audio_${System.currentTimeMillis()}.m4a")
+        val stamp = System.currentTimeMillis()
+        val input = File(cacheDir, "kalize_audio_source_$stamp")
+        val output = File(cacheDir, "kalize_audio_$stamp.m4a")
         try {
-            extractor.setDataSource(this, uri, null)
-            val audioTrack = (0 until extractor.trackCount).firstOrNull {
-                extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
-            } ?: throw IllegalArgumentException("This video has no audio track.")
-            val inputFormat = extractor.getTrackFormat(audioTrack)
-            val mime = inputFormat.getString(MediaFormat.KEY_MIME).orEmpty()
-            require(mime == "audio/mp4a-latm") {
-                "Only AAC audio can currently be copied directly into an M4A container. This video uses $mime."
+            contentResolver.openInputStream(uri)?.use { source ->
+                FileOutputStream(input).use { target -> source.copyTo(target) }
+            } ?: throw IllegalStateException("Could not open the selected video.")
+            val command = "-y -i ${shellQuote(input.absolutePath)} -map 0:a:0 -vn -c:a aac -b:a 192k -movflags +faststart ${shellQuote(output.absolutePath)}"
+            val session = FFmpegKit.execute(command)
+            if (!ReturnCode.isSuccess(session.returnCode) || !output.exists() || output.length() == 0L) {
+                val reason = session.failStackTrace ?: session.allLogsAsString
+                throw IllegalStateException(reason?.take(500) ?: "The audio codec could not be converted.")
             }
-            val muxer = MediaMuxer(temporary.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-            try {
-                val outputTrack = muxer.addTrack(inputFormat)
-                muxer.start()
-                extractor.selectTrack(audioTrack)
-                val maxInput = if (inputFormat.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE))
-                    inputFormat.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE).coerceIn(64 * 1024, 4 * 1024 * 1024)
-                else 1024 * 1024
-                val buffer = ByteBuffer.allocateDirect(maxInput)
-                val info = MediaCodec.BufferInfo()
-                while (true) {
-                    buffer.clear()
-                    val size = extractor.readSampleData(buffer, 0)
-                    if (size < 0) break
-                    info.offset = 0
-                    info.size = size
-                    info.presentationTimeUs = extractor.sampleTime
-                    info.flags = extractor.sampleFlags
-                    muxer.writeSampleData(outputTrack, buffer, info)
-                    if (!extractor.advance()) break
-                }
-                muxer.stop()
-            } finally {
-                muxer.release()
-            }
-            saveAudio(temporary)
+            saveAudio(output)
         } finally {
-            extractor.release()
-            temporary.delete()
+            input.delete()
+            output.delete()
         }
     }
+
+    private fun shellQuote(value: String): String =
+        "'" + value.replace("'", "'\\''") + "'"
 
     private fun saveAudio(file: File): Uri {
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())

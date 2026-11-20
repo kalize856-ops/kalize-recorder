@@ -86,6 +86,9 @@ class MediaCodecRecordingPipeline(
                 runCatching { candidate?.stop() }
                 runCatching { candidate?.release() }
                 runCatching { if (::inputSurface.isInitialized) inputSurface.release() }
+                runCatching { muxer?.release() }
+                muxer = null
+                muxerStarted = false
                 encoder = null
             }
         }

@@ -79,6 +79,9 @@ class MainActivity : ComponentActivity() {
             var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
             var bubbleSize by remember { mutableIntStateOf(prefs.getInt("bubble_size", 58)) }
             var bubbleOpacity by remember { mutableIntStateOf(prefs.getInt("bubble_opacity", 100)) }
+            var fpsCounterEnabled by remember { mutableStateOf(prefs.getBoolean("fps_counter_enabled", false)) }
+            var fpsCounterSize by remember { mutableIntStateOf(prefs.getInt("fps_counter_size", 12)) }
+            var fpsCounterOpacity by remember { mutableIntStateOf(prefs.getInt("fps_counter_opacity", 75)) }
             var networkMonitor by remember { mutableStateOf(prefs.getBoolean("network_monitor_enabled", false)) }
             val accent = if (dark) Color(0xFF9B86FF) else Color(0xFF6952D8)
             val bg = if (dark) Color(0xFF0B1020) else Color(0xFFF4F5FA)
@@ -141,6 +144,31 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putInt("bubble_opacity", value).apply()
                                         if (bubbleEnabled) { stopService(Intent(this@MainActivity, FloatingBubbleService::class.java)); startBubbleService() }
                                     },
+                                    fpsCounterEnabled, { enabled ->
+                                        fpsCounterEnabled = enabled
+                                        prefs.edit().putBoolean("fps_counter_enabled", enabled).apply()
+                                        if (enabled && !Settings.canDrawOverlays(this@MainActivity)) {
+                                            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                                        } else if (enabled) {
+                                            startService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                        } else stopService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                    },
+                                    fpsCounterSize, { value ->
+                                        fpsCounterSize = value
+                                        prefs.edit().putInt("fps_counter_size", value).apply()
+                                        if (fpsCounterEnabled && Settings.canDrawOverlays(this@MainActivity)) {
+                                            stopService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                            startService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                        }
+                                    },
+                                    fpsCounterOpacity, { value ->
+                                        fpsCounterOpacity = value
+                                        prefs.edit().putInt("fps_counter_opacity", value).apply()
+                                        if (fpsCounterEnabled && Settings.canDrawOverlays(this@MainActivity)) {
+                                            stopService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                            startService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
+                                        }
+                                    },
                                     { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
                                     networkMonitor, { enabled ->
                                         networkMonitor = enabled
@@ -200,6 +228,9 @@ class MainActivity : ComponentActivity() {
         applyKeepScreenAwake()
         RecordingRecovery.recoverPendingVideos(this)
         if (Settings.canDrawOverlays(this) && prefs.getBoolean("bubble_enabled", false)) startBubbleService()
+        if (Settings.canDrawOverlays(this) && prefs.getBoolean("fps_counter_enabled", false)) {
+            startService(Intent(this, FpsCounterOverlayService::class.java))
+        }
     }
 
     override fun onPause() {
@@ -411,6 +442,9 @@ private fun SettingsDashboard(
     bubbleEnabled: Boolean, onBubble: (Boolean) -> Unit,
     bubbleSize: Int, onBubbleSize: (Int) -> Unit,
     bubbleOpacity: Int, onBubbleOpacity: (Int) -> Unit,
+    fpsCounterEnabled: Boolean, onFpsCounterEnabled: (Boolean) -> Unit,
+    fpsCounterSize: Int, onFpsCounterSize: (Int) -> Unit,
+    fpsCounterOpacity: Int, onFpsCounterOpacity: (Int) -> Unit,
     onStudio: () -> Unit,
     networkMonitor: Boolean, onNetworkMonitor: (Boolean) -> Unit
 ) {
@@ -481,6 +515,15 @@ private fun SettingsDashboard(
                 valueRange = 50f..100f, steps = 9, enabled = bubbleEnabled)
             Text("Android requires the display-over-other-apps permission for the floating controls.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        SettingsCard("FPS counter overlay") {
+            SwitchSetting("Show FPS counter", "Display a compact, transparent counter over other apps. Requires display-over-other-apps permission.", fpsCounterEnabled, onFpsCounterEnabled)
+            Text("Text size · ${fpsCounterSize} sp", style = MaterialTheme.typography.labelMedium)
+            Slider(value = fpsCounterSize.toFloat(), onValueChange = { onFpsCounterSize(it.toInt()) }, valueRange = 9f..22f, steps = 12, enabled = fpsCounterEnabled)
+            Text("Opacity · ${fpsCounterOpacity}%", style = MaterialTheme.typography.labelMedium)
+            Slider(value = fpsCounterOpacity.toFloat(), onValueChange = { onFpsCounterOpacity(it.toInt()) }, valueRange = 15f..100f, steps = 16, enabled = fpsCounterEnabled)
+            Text("Drag the counter to move it. Its position is saved automatically. The displayed value is an estimate of the device frame-callback rate, not a guaranteed reading of another app’s internal game-rendering FPS.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
         SettingsCard("Screenshot & touch controls") {

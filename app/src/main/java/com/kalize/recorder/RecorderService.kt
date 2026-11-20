@@ -12,6 +12,7 @@ import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
+import android.media.MediaCodecList
 import android.media.MediaRecorder
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -139,7 +140,8 @@ class RecorderService : Service() {
             val requestedFps = preferences.getInt("fps", 30).coerceIn(30, 240)
             @Suppress("DEPRECATION")
             val displayRefresh = windowManager.defaultDisplay.refreshRate.toInt().coerceAtLeast(30)
-            val frameRate = minOf(requestedFps, displayRefresh, 240)
+            val frameRate = selectSupportedFrameRate(width.coerceAtLeast(2), height.coerceAtLeast(2), requestedFps, displayRefresh)
+            preferences.edit().putInt("last_selected_fps", frameRate).apply()
             prepareVideoOutput()
             val mediaRecorder = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else {
                 @Suppress("DEPRECATION")
@@ -191,6 +193,32 @@ class RecorderService : Service() {
         } catch (error: Exception) {
             Toast.makeText(this, "Recording could not start: ${error.localizedMessage ?: "unsupported device configuration"}", Toast.LENGTH_LONG).show()
             stopCapture()
+        }
+    }
+
+    /**
+     * Selects the highest H.264 surface-encoder rate that Android reports for this
+     * exact capture size, never exceeding the user's request or display refresh.
+     * MediaRecorder still chooses the platform encoder, so this is a capability
+     * check rather than a promise of sustained real-world frame delivery.
+     */
+    private fun selectSupportedFrameRate(width: Int, height: Int, requested: Int, displayRefresh: Int): Int {
+        val ceiling = minOf(requested, displayRefresh, 240)
+        val candidates = listOf(240, 120, 90, 60, 30).filter { it <= ceiling }
+        return try {
+            val codecs = MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+                .filter { it.isEncoder && it.supportedTypes.any { type -> type.equals("video/avc", ignoreCase = true) } }
+            candidates.firstOrNull { fps ->
+                codecs.any { codec ->
+                    runCatching {
+                        val caps = codec.getCapabilitiesForType("video/avc")
+                        caps.colorFormats.contains(android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) &&
+                            caps.videoCapabilities.areSizeAndRateSupported(width, height, fps.toDouble())
+                    }.getOrDefault(false)
+                }
+            } ?: minOf(ceiling, 60).coerceAtLeast(30)
+        } catch (_: Exception) {
+            minOf(ceiling, 60).coerceAtLeast(30)
         }
     }
 

@@ -4,8 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
-import android.os.Debug
-import android.os.Process
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -172,8 +170,7 @@ class DeviceToolsActivity : ComponentActivity() {
             value = sqrt(value * 1.0000001 + (iterations % 97) * 0.000001)
             iterations++
         }
-        // Keep the calculation observable so the JIT cannot discard the workload.
-        if (value.isNaN()) Debug.stopMethodTracing()
-        return iterations
+        // Fold the final value into the result so the workload remains observable.
+        return if (value > 0.0) iterations else 0
     }
 }

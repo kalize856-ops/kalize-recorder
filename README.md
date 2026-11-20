@@ -60,6 +60,9 @@ GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `K
 - Multiple independent audio sequences layered over the video, with per-track gain controls, original-video audio level control, and automatic audio fade-in/fade-out.
 - True overlapping video crossfades (0.5s, 1s, or 2s), dip-to-black transitions, or hard cuts; matching audio crossfades are rendered with FFmpeg.
 - Multi-track export uses a local FFmpeg rendering pipeline and saves a new MP4 under Movies/Kalize Recorder/Edits.
+- Multi-track export presets: 480p, 720p and 1080p at 30 or 60 FPS, subject to the phone's encoder and performance.
+- Additional overlapping slide, wipe, smooth reveal and zoom transitions alongside crossfade, dip-to-black and hard cuts.
+- Audio tracks can be reordered, individually volume-adjusted or removed; clearing a project draft never deletes the original media.
 - Crossfade exports normalize clips to 720p at 30 FPS for consistent transition rendering. Hardware H.264 encoding is attempted first, with an MPEG-4 fallback when the device encoder is unavailable.
 - The FFmpegKit-compatible Android dependency is LGPL-licensed; review the bundled notices and dependency license before distributing builds.
 

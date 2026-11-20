@@ -33,6 +33,8 @@ class MultiTrackTimelineActivity : ComponentActivity() {
     private var exporting by mutableStateOf(false)
     private var status by mutableStateOf("Add video clips and optional music or voice tracks.")
     private var transition by mutableStateOf("Crossfade · 1 second")
+    private var exportHeight by mutableIntStateOf(720)
+    private var exportFps by mutableIntStateOf(30)
     private var originalVolume by mutableFloatStateOf(1f)
     private val audioVolumes = mutableStateListOf<Float>()
     private val projectPrefs by lazy { getSharedPreferences("kalize_timeline_project", MODE_PRIVATE) }
@@ -70,6 +72,8 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         }.onFailure { repeat(audioClips.size) { audioVolumes.add(0.85f) } }
         originalVolume = projectPrefs.getFloat("original_volume", 1f).coerceIn(0f, 1.5f)
         transition = projectPrefs.getString("transition", "Crossfade · 1 second") ?: "Crossfade · 1 second"
+        exportHeight = projectPrefs.getInt("export_height", 720).let { if (it in listOf(480, 720, 1080)) it else 720 }
+        exportFps = projectPrefs.getInt("export_fps", 30).let { if (it in listOf(30, 60)) it else 30 }
         (videoClips + audioClips).forEach(::keepPermission)
         if (videoClips.isNotEmpty() || audioClips.isNotEmpty()) {
             status = "Restored your saved timeline draft."
@@ -86,6 +90,8 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             .putString("audio_volumes", levels.toString())
             .putFloat("original_volume", originalVolume)
             .putString("transition", transition)
+            .putInt("export_height", exportHeight)
+            .putInt("export_fps", exportFps)
             .putLong("last_saved_at", System.currentTimeMillis())
             .apply()
     }
@@ -103,8 +109,9 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             MaterialTheme {
                 val scope = rememberCoroutineScope()
                 var showTransitionMenu by remember { mutableStateOf(false) }
+                var confirmClearProject by remember { mutableStateOf(false) }
                 val volumeSnapshot = audioVolumes.toList()
-                LaunchedEffect(videoClips, audioClips, volumeSnapshot, originalVolume, transition) {
+                LaunchedEffect(videoClips, audioClips, volumeSnapshot, originalVolume, transition, exportHeight, exportFps) {
                     persistDraft()
                 }
                 Column(
@@ -119,6 +126,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                             persistDraft()
                             status = "Project draft saved on this device. Your timeline will be restored when you reopen the editor."
                         }, modifier = Modifier.weight(1f)) { Text("Save project draft") }
+                        TextButton(onClick = { confirmClearProject = true }) { Text("Clear project") }
                         Text("AUTO-SAVE ON", modifier = Modifier.padding(top = 13.dp), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -182,11 +190,38 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                             }
                             audioClips.forEachIndexed { index, uri ->
                                 Column {
-                                    Text(
-                                        "AUDIO ${index + 1} · ${uri.lastPathSegment ?: "Audio clip"}",
-                                        maxLines = 1,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
+                                    Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                                        Text(
+                                            "AUDIO ${index + 1} · ${uri.lastPathSegment ?: "Audio clip"}",
+                                            Modifier.weight(1f),
+                                            maxLines = 1,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                        TextButton(enabled = index > 0, onClick = {
+                                            audioClips = audioClips.toMutableList().also {
+                                                val moved = it.removeAt(index)
+                                                it.add(index - 1, moved)
+                                            }
+                                            if (index < audioVolumes.size) {
+                                                val movedLevel = audioVolumes.removeAt(index)
+                                                audioVolumes.add(index - 1, movedLevel)
+                                            }
+                                        }) { Text("↑") }
+                                        TextButton(enabled = index < audioClips.lastIndex, onClick = {
+                                            audioClips = audioClips.toMutableList().also {
+                                                val moved = it.removeAt(index)
+                                                it.add(index + 1, moved)
+                                            }
+                                            if (index < audioVolumes.size) {
+                                                val movedLevel = audioVolumes.removeAt(index)
+                                                audioVolumes.add(index + 1, movedLevel)
+                                            }
+                                        }) { Text("↓") }
+                                        TextButton(onClick = {
+                                            audioClips = audioClips.toMutableList().also { it.removeAt(index) }
+                                            if (index < audioVolumes.size) audioVolumes.removeAt(index)
+                                        }) { Text("Remove") }
+                                    }
                                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                                         Slider(
                                             value = audioVolumes.getOrElse(index) { 0.85f },
@@ -215,6 +250,10 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                                     "Crossfade · 1 second",
                                     "Crossfade · 2 seconds",
                                     "Dip to black · 1 second",
+                                    "Slide left · 1 second",
+                                    "Wipe left · 1 second",
+                                    "Smooth left · 1 second",
+                                    "Zoom in · 1 second",
                                     "Hard cut"
                                 ).forEach { choice ->
                                     DropdownMenuItem(
@@ -231,11 +270,27 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                                 "Real overlapping transition: the outgoing image fades down while the incoming image fades up. Their audio crossfades too."
                             transition.startsWith("Dip") ->
                                 "Overlapping fade through black, with a matching audio crossfade."
+                            transition.startsWith("Slide") -> "The incoming clip slides over the outgoing clip during a true overlap."
+                            transition.startsWith("Wipe") -> "The incoming clip reveals across the outgoing clip during the overlap."
+                            transition.startsWith("Smooth") -> "A smooth directional reveal blends the two clips over the selected duration."
+                            transition.startsWith("Zoom") -> "The incoming clip expands into view during the overlap."
                             else -> "Clips join directly. Audio is joined at the same edit point."
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text("Export settings", fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf(480, 720, 1080).forEach { height ->
+                            FilterChip(selected = exportHeight == height, onClick = { exportHeight = height }, label = { Text("${height}p") })
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                        listOf(30, 60).forEach { rate ->
+                            FilterChip(selected = exportFps == rate, onClick = { exportFps = rate }, label = { Text("${rate} FPS") })
+                        }
+                    }
+                    Text("Higher resolution and frame rates take longer and may not be supported by every device encoder.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Audio mixing", fontWeight = FontWeight.SemiBold)
                     Text(
                         "Each added music or voice file has its own level control and is mixed over the video soundtrack. Export runs locally on this device.",
@@ -251,9 +306,11 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                             val levels = audioVolumes.toList()
                             val original = originalVolume
                             val style = transition
+                            val height = exportHeight
+                            val fps = exportFps
                             scope.launch {
                                 val result = runCatching {
-                                    exportTimeline(videos, audios, levels, original, style)
+                                    exportTimeline(videos, audios, levels, original, style, height, fps)
                                 }
                                 exporting = false
                                 status = result.fold(
@@ -266,6 +323,28 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                     ) { Text(if (exporting) "Rendering timeline…" else "Export mixed timeline") }
                     if (exporting) LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text(status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (confirmClearProject) {
+                        AlertDialog(
+                            onDismissRequest = { confirmClearProject = false },
+                            title = { Text("Clear timeline project?") },
+                            text = { Text("This removes clips and audio references from the saved draft. Original media files on your phone will not be deleted.") },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    videoClips = emptyList()
+                                    audioClips = emptyList()
+                                    audioVolumes.clear()
+                                    originalVolume = 1f
+                                    transition = "Crossfade · 1 second"
+                                    exportHeight = 720
+                                    exportFps = 30
+                                    projectPrefs.edit().clear().apply()
+                                    confirmClearProject = false
+                                    status = "Timeline project cleared. Original media files were kept."
+                                }) { Text("Clear draft") }
+                            },
+                            dismissButton = { TextButton(onClick = { confirmClearProject = false }) { Text("Cancel") } }
+                        )
+                    }
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) {
                         Text("Back to video editor")
@@ -286,7 +365,9 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         audios: List<Uri>,
         levels: List<Float>,
         originalLevel: Float,
-        transitionStyle: String
+        transitionStyle: String,
+        outputHeight: Int,
+        outputFps: Int
     ): Uri = withContext(Dispatchers.IO) {
         require(videos.isNotEmpty()) { "Add at least one video clip." }
 
@@ -322,13 +403,15 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         audioFiles.forEach { inputPaths += it.absolutePath }
 
         val outputFile = File(cacheDir, "kalize_crossfade_${System.currentTimeMillis()}.mp4")
+        val outputWidth = (outputHeight * 16 / 9).coerceAtLeast(1)
+        val videoBitrate = when (outputHeight) { 480 -> "2M"; 1080 -> "10M"; else -> "5M" }
         val command = buildString {
             append("-y ")
             inputPaths.forEach { append("-i ${shellQuote(it)} ") }
             append("-filter_complex_threads 1 ")
-            append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration))} ")
+            append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration, outputWidth, outputHeight, outputFps))} ")
             append("-map [vout] -map [aout] -t ${decimal(outputDuration)} ")
-            append("-c:v h264_mediacodec -b:v 8M -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ")
+            append("-c:v h264_mediacodec -b:v $videoBitrate -pix_fmt yuv420p -r $outputFps -c:a aac -b:a 192k -movflags +faststart ")
             append("${shellQuote(outputFile.absolutePath)}")
         }
 
@@ -336,7 +419,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         if (!ReturnCode.isSuccess(session.returnCode)) {
             val hardwareError = session.allLogsAsString
             val fallbackCommand = command
-                .replace("-c:v h264_mediacodec -b:v 8M", "-c:v mpeg4 -q:v 3")
+                .replace("-c:v h264_mediacodec -b:v $videoBitrate", "-c:v mpeg4 -q:v 3")
             session = FFmpegKit.execute(fallbackCommand)
             if (!ReturnCode.isSuccess(session.returnCode)) {
                 throw IllegalStateException(
@@ -386,12 +469,15 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         originalLevel: Float,
         transitionStyle: String,
         transitionSeconds: Double,
-        outputDuration: Double
+        outputDuration: Double,
+        outputWidth: Int,
+        outputHeight: Int,
+        outputFps: Int
     ): String {
         val filters = mutableListOf<String>()
         clips.forEachIndexed { index, clip ->
-            filters += "[$index:v:0]setpts=PTS-STARTPTS,scale=1280:720:force_original_aspect_ratio=decrease," +
-                "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=yuv420p,settb=AVTB[v$index]"
+            filters += "[$index:v:0]setpts=PTS-STARTPTS,scale=${outputWidth}:${outputHeight}:force_original_aspect_ratio=decrease," +
+                "pad=${outputWidth}:${outputHeight}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=${outputFps},format=yuv420p,settb=AVTB[v$index]"
         }
 
         if (clips.size == 1) {
@@ -404,7 +490,14 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             var previous = "v0"
             for (index in 1 until clips.size) {
                 val outputLabel = if (index == clips.lastIndex) "vout" else "vx$index"
-                val transitionName = if (transitionStyle.startsWith("Dip")) "fadeblack" else "fade"
+                val transitionName = when {
+                    transitionStyle.startsWith("Dip") -> "fadeblack"
+                    transitionStyle.startsWith("Slide") -> "slideleft"
+                    transitionStyle.startsWith("Wipe") -> "wipeleft"
+                    transitionStyle.startsWith("Smooth") -> "smoothleft"
+                    transitionStyle.startsWith("Zoom") -> "zoomin"
+                    else -> "fade"
+                }
                 val offset = (accumulated - transitionSeconds).coerceAtLeast(0.0)
                 filters += "[$previous][v$index]xfade=transition=$transitionName:duration=${decimal(transitionSeconds)}:" +
                     "offset=${decimal(offset)}[$outputLabel]"

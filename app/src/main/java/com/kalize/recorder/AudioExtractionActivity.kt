@@ -81,15 +81,15 @@ class AudioExtractionActivity : ComponentActivity() {
                                 val result = withContext(Dispatchers.IO) { runCatching { extract(uri) } }
                                 exporting = false
                                 details = result.fold(
-                                    { "Audio saved to Music/Kalize Recorder/Extracted Audio." },
-                                    { "Extraction failed: ${it.message ?: "unsupported audio format"}" }
+                                    { "Audio converted to AAC and saved to Music/Kalize Recorder/Extracted Audio." },
+                                    { "Extraction failed: ${it.message ?: "the source audio could not be decoded"}" }
                                 )
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (exporting) "Extracting…" else "Extract audio") }
                     if (exporting) LinearProgressIndicator(Modifier.fillMaxWidth())
-                    Text("The audio stream is copied without quality-loss re-encoding when the source codec is supported by the MP4/M4A container.",
+                    Text("Kalize converts supported source audio tracks to AAC/M4A so videos using different audio codecs can be extracted. The original video remains unchanged.",
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
                     OutlinedButton(onClick = { finish() }, modifier = Modifier.fillMaxWidth()) { Text("Close") }

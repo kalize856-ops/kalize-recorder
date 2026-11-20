@@ -79,6 +79,7 @@ class MainActivity : ComponentActivity() {
             var bubbleEnabled by remember { mutableStateOf(prefs.getBoolean("bubble_enabled", false)) }
             var bubbleSize by remember { mutableIntStateOf(prefs.getInt("bubble_size", 58)) }
             var bubbleOpacity by remember { mutableIntStateOf(prefs.getInt("bubble_opacity", 100)) }
+            var networkMonitor by remember { mutableStateOf(prefs.getBoolean("network_monitor_enabled", false)) }
             val accent = if (dark) Color(0xFF9B86FF) else Color(0xFF6952D8)
             val bg = if (dark) Color(0xFF0B1020) else Color(0xFFF4F5FA)
             val surface = if (dark) Color(0xFF171F32) else Color.White
@@ -140,7 +141,12 @@ class MainActivity : ComponentActivity() {
                                         prefs.edit().putInt("bubble_opacity", value).apply()
                                         if (bubbleEnabled) { stopService(Intent(this@MainActivity, FloatingBubbleService::class.java)); startBubbleService() }
                                     },
-                                    { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) }
+                                    { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
+                                    networkMonitor, { enabled ->
+                                        networkMonitor = enabled
+                                        prefs.edit().putBoolean("network_monitor_enabled", enabled).apply()
+                                        syncNetworkSampler()
+                                    }
                                 )
                             }
                         }
@@ -168,6 +174,24 @@ class MainActivity : ComponentActivity() {
         when (intent?.action) {
             ACTION_RECORD -> requestCapture()
             ACTION_SCREENSHOT -> requestScreenshot()
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        syncNetworkSampler()
+    }
+
+    override fun onStop() {
+        NetworkTrafficSampler.release(this)
+        super.onStop()
+    }
+
+    private fun syncNetworkSampler() {
+        if (prefs.getBoolean("network_monitor_enabled", false)) {
+            NetworkTrafficSampler.acquire(this)
+        } else {
+            NetworkTrafficSampler.release(this)
         }
     }
 
@@ -373,7 +397,8 @@ private fun SettingsDashboard(
     bubbleEnabled: Boolean, onBubble: (Boolean) -> Unit,
     bubbleSize: Int, onBubbleSize: (Int) -> Unit,
     bubbleOpacity: Int, onBubbleOpacity: (Int) -> Unit,
-    onStudio: () -> Unit
+    onStudio: () -> Unit,
+    networkMonitor: Boolean, onNetworkMonitor: (Boolean) -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, "show_touches", 0) == 1) }
@@ -393,6 +418,14 @@ private fun SettingsDashboard(
             Slider(value = bubbleSize.toFloat(), onValueChange = { onBubbleSize(it.toInt()) }, valueRange = 44f..68f, steps = 5, enabled = bubbleEnabled)
             Text("Bubble opacity · $bubbleOpacity%", style = MaterialTheme.typography.labelMedium)
             Slider(value = bubbleOpacity.toFloat(), onValueChange = { onBubbleOpacity(it.toInt()) }, valueRange = 50f..100f, steps = 9, enabled = bubbleEnabled)
+        }
+        SettingsCard("Network monitoring") {
+            SwitchSetting(
+                "Live network speed",
+                "Measure device download and upload traffic every second while Kalize is open. Includes other apps’ traffic and uses no test data.",
+                networkMonitor,
+                onNetworkMonitor
+            )
         }
         SettingsCard("Recording quality") {
             Text("Resolution", style = MaterialTheme.typography.labelMedium)

@@ -26,6 +26,16 @@ import android.net.TrafficStats
  * other apps; Game Session only keeps this screen awake while it is enabled.
  */
 class DeviceToolsActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        NetworkTrafficSampler.acquire(this)
+    }
+
+    override fun onStop() {
+        NetworkTrafficSampler.release(this)
+        super.onStop()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val device = buildDeviceReport()
@@ -39,30 +49,17 @@ class DeviceToolsActivity : ComponentActivity() {
                 var sessionMessage by remember { mutableStateOf("Game Session does not overclock the phone or terminate other apps.") }
                 var liveDownloadMbps by remember { mutableStateOf(0.0) }
                 var liveUploadMbps by remember { mutableStateOf(0.0) }
-                var speedAvailable by remember { mutableStateOf(true) }
+                var speedAvailable by remember { mutableStateOf(false) }
+                var monitorEnabled by remember { mutableStateOf(getSharedPreferences("kalize_settings", MODE_PRIVATE).getBoolean("network_monitor_enabled", false)) }
 
-                // Passively samples device network counters while Device Lab is visible.
-                // This creates no test traffic and therefore does not consume extra data.
                 LaunchedEffect(Unit) {
-                    var previousRx = TrafficStats.getTotalRxBytes()
-                    var previousTx = TrafficStats.getTotalTxBytes()
-                    var previousTime = android.os.SystemClock.elapsedRealtimeNanos()
-                    if (previousRx < 0L || previousTx < 0L) speedAvailable = false
                     while (true) {
+                        val settings = getSharedPreferences("kalize_settings", MODE_PRIVATE)
+                        monitorEnabled = settings.getBoolean("network_monitor_enabled", false)
+                        speedAvailable = monitorEnabled && settings.getBoolean("network_speed_available", false)
+                        liveDownloadMbps = settings.getFloat("network_down_mbps", 0f).toDouble()
+                        liveUploadMbps = settings.getFloat("network_up_mbps", 0f).toDouble()
                         delay(1000)
-                        val currentRx = TrafficStats.getTotalRxBytes()
-                        val currentTx = TrafficStats.getTotalTxBytes()
-                        val currentTime = android.os.SystemClock.elapsedRealtimeNanos()
-                        val elapsedSeconds = (currentTime - previousTime).coerceAtLeast(1L) / 1_000_000_000.0
-                        if (currentRx >= 0L && currentTx >= 0L && previousRx >= 0L && previousTx >= 0L) {
-                            liveDownloadMbps = ((currentRx - previousRx).coerceAtLeast(0L) * 8.0 / elapsedSeconds) / 1_000_000.0
-                            liveUploadMbps = ((currentTx - previousTx).coerceAtLeast(0L) * 8.0 / elapsedSeconds) / 1_000_000.0
-                        } else {
-                            speedAvailable = false
-                        }
-                        previousRx = currentRx
-                        previousTx = currentTx
-                        previousTime = currentTime
                     }
                 }
 
@@ -122,9 +119,17 @@ class DeviceToolsActivity : ComponentActivity() {
                                 Box(Modifier.size(8.dp).padding(0.dp), contentAlignment = androidx.compose.ui.Alignment.Center) {
                                     androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) { drawCircle(color = if (speedAvailable) androidx.compose.ui.graphics.Color(0xFF20B26B) else androidx.compose.ui.graphics.Color.Gray) }
                                 }
-                                Text(if (speedAvailable) "Live · updates every second while this page is open" else "Live network counters are not supported on this device", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    when {
+                                        !monitorEnabled -> "Turn on Live network speed in Settings to measure while Kalize is open."
+                                        speedAvailable -> "Live · updates every second while Kalize is open"
+                                        else -> "Network counters are unavailable on this device."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
                             }
-                            Text("Measured from actual device network traffic. Other apps' downloads and uploads are included. No test data is downloaded or uploaded.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Uses Android device traffic counters. Other apps’ downloads and uploads are included. No test data is transferred.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Card(Modifier.fillMaxWidth()) {

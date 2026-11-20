@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.6** (version code 7).
+Current development version: **1.0.7** (version code 8).
 
 Native Android screen recorder and video utility app.
 
@@ -48,7 +48,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 
 - Device and memory summary.
 - H.264 encoder inventory.
-- Network connectivity plus an opt-in Cloudflare download/upload throughput test with data-use disclosure.
+- Opt-in live download/upload traffic monitor while Kalize is open; samples Android device traffic counters every second without generating test traffic. Other apps’ traffic is included.
 - Short local CPU workload benchmark.
 - Game Session option to keep the display awake and hide system bars while the Device Lab page is open.
 
@@ -58,7 +58,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 - Internal playback capture is limited to eligible apps/audio usages and can be blocked by app policy. Microphone and internal playback are separate modes; simultaneous mixing is not included.
 - Pause/resume on the dedicated MediaCodec path detaches and reattaches the virtual-display surface; verify timestamp continuity on physical devices.
 - Game Session does not overclock the CPU, close other apps, or change system performance governors; Android does not grant ordinary apps those controls.
-- The optional internet speed test transfers approximately 4 MB through Cloudflare endpoints; results depend on server load and network conditions.
+- Live network rates are device-wide traffic estimates, not an isolated internet speed test; Android may report counters as unavailable on some devices.
 - Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail.
 - A production release still needs protected signing secrets, release-build validation, dependency/license review and physical-device testing.
 - Screen recording requires the user's explicit Android screen-capture consent for each session.

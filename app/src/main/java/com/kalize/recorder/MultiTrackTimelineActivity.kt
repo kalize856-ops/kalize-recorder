@@ -33,6 +33,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
     private var exporting by mutableStateOf(false)
     private var status by mutableStateOf("Add video clips and optional music or voice tracks.")
     private var transition by mutableStateOf("Crossfade · 1 second")
+    private var videoEffect by mutableStateOf("Original")
     private var originalVolume by mutableFloatStateOf(1f)
     private val audioVolumes = mutableStateListOf<Float>()
     private val projectPrefs by lazy { getSharedPreferences("kalize_timeline_project", MODE_PRIVATE) }
@@ -70,6 +71,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         }.onFailure { repeat(audioClips.size) { audioVolumes.add(0.85f) } }
         originalVolume = projectPrefs.getFloat("original_volume", 1f).coerceIn(0f, 1.5f)
         transition = projectPrefs.getString("transition", "Crossfade · 1 second") ?: "Crossfade · 1 second"
+        videoEffect = projectPrefs.getString("video_effect", "Original") ?: "Original"
         (videoClips + audioClips).forEach(::keepPermission)
         if (videoClips.isNotEmpty() || audioClips.isNotEmpty()) {
             status = "Restored your saved timeline draft."
@@ -86,6 +88,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             .putString("audio_volumes", levels.toString())
             .putFloat("original_volume", originalVolume)
             .putString("transition", transition)
+            .putString("video_effect", videoEffect)
             .putLong("last_saved_at", System.currentTimeMillis())
             .apply()
     }
@@ -104,7 +107,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var showTransitionMenu by remember { mutableStateOf(false) }
                 val volumeSnapshot = audioVolumes.toList()
-                LaunchedEffect(videoClips, audioClips, volumeSnapshot, originalVolume, transition) {
+                LaunchedEffect(videoClips, audioClips, volumeSnapshot, originalVolume, transition, videoEffect) {
                     persistDraft()
                 }
                 Column(

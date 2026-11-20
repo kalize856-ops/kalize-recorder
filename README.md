@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.2** (version code 3).
+Current development version: **1.0.4** (version code 5).
 
 Native Android screen recorder and video utility app.
 
@@ -18,45 +18,51 @@ gradle --no-daemon assembleDebug
 
 Debug APK: `app/build/outputs/apk/debug/app-debug.apk`.
 
-GitHub Actions builds the debug APK on pushes to `main` and uploads it as the `Kalize-Recorder-debug` artifact.
+GitHub Actions builds debug and release candidates on pushes to `main`.
 
-## Current features
+## Recording
 
-- Jetpack Compose recorder interface with organized Recorder, Library, and Settings pages
-- Dark and light appearance
-- Android MediaProjection screen recording to MP4 with an ongoing foreground notification
-- Draggable floating controls with record, stop, screenshot, app launch, and Pro Studio shortcuts
-- Floating overlay uses Android's secure-window flag to prevent its own window from appearing in screenshots and screen captures
-- Recording resolution targets from 240p to 2160p (4K) and frame-rate targets up to 240 FPS, subject to device encoder and display support
-- Countdown before capture and optional microphone recording
-- Optional Android touch indicators with an explicit system-settings authorization step
-- Pro Studio capture profiles and video bitrate presets
-- Recording and screenshot library with playback, sharing, and refresh
-- Video compression presets from 240p through 2160p (4K), with bitrate targets and aspect-ratio preservation; saves a separate copy
-- Split a selected video into two equal-duration clips without changing the original
-- Basic video trimming with optional source-audio retention
-- Audio extraction to a separate M4A file when the source audio codec is compatible with the MP4 container
-- Clip merging for compatible media tracks
-- Trim export controls for rotation and playback speed
-- No watermark is added to exported recordings
+- Jetpack Compose recorder interface with Recorder, Edit, Library and Settings pages.
+- Dark and light themes.
+- Android MediaProjection screen recording to MP4 with an ongoing foreground notification.
+- Video-only sessions prefer a dedicated surface-input H.264 MediaCodec pipeline, with hardware encoder selection, configurable bitrate/frame-rate hints, output draining and MP4 muxing.
+- MediaRecorder fallback if the dedicated codec cannot start.
+- Microphone capture remains on the MediaRecorder path.
+- Resolution targets from 240p through 2160p (4K), and frame-rate targets up to 240 FPS, subject to device display and encoder limits.
+- Countdown, optional microphone capture and Android touch indicators.
+- Draggable floating controls with record, stop, screenshot, pause/resume (standard MediaRecorder mode), editor, Pro Studio, annotation and app shortcuts.
+- The floating overlay uses a secure-window flag to reduce its appearance in screenshots and recordings; Android/system behaviour can vary by device.
+- No watermark is added to exported recordings.
 
-## Limitations
+## Editing and media tools
 
-- This is not yet a full multi-track editor. Multi-layer timeline editing, transitions, advanced audio mixing, and a visual clip-reordering timeline are not implemented. Basic filters, crop, resize, trim, split, rotation, playback speed, mute, and audio extraction are available.
-- Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail to merge.
-- Microphone recording captures microphone input; internal game/system audio capture is not included.
-- Resolution and FPS settings are requests, not guarantees. Android hardware and encoder capabilities determine the actual output.
-- Floating-window security flags protect the app's overlay window; Android/system behavior can vary by device and OS version.
-- A production release still needs a protected signing configuration and release-build validation.
+- Video trim, split, merge (compatible tracks), rotation and playback-speed export.
+- Compression presets from 240p through 2160p (4K), preserving aspect ratio and saving a separate copy.
+- Audio extraction to M4A when the source audio codec is compatible.
+- Advanced Media3 filters, crop and resize.
+- Multi-track timeline with reorderable video clips, multiple audio tracks, per-track gain, original-audio level, fades, overlapping video crossfades, dip-to-black, dissolve, wipe, slide and other transitions.
+- FFmpeg-backed timeline export to Movies/Kalize Recorder/Edits.
+
+## Device Lab
+
+- Device and memory summary.
+- H.264 encoder inventory.
+- Network connectivity and Android-reported link-capacity information (not a measured bandwidth test).
+- Short local CPU workload benchmark.
+- Game Session option to keep the display awake and hide system bars while the Device Lab page is open.
+
+## Current limitations and release checks
+
+- The 120/240 FPS values are configuration targets, not guarantees of sustained frame delivery. Physical-device testing is required.
+- The dedicated MediaCodec path currently handles video-only sessions. Microphone sessions use MediaRecorder; internal app/game audio capture is not implemented.
+- Pause/resume is not available in the dedicated MediaCodec path yet.
+- Game Session does not overclock the CPU, close other apps, or change system performance governors; Android does not grant ordinary apps those controls.
+- Network details use Android's reported connection capabilities; this is not a true upload/download speed test.
+- Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail.
+- A production release still needs protected signing secrets, release-build validation, dependency/license review and physical-device testing.
 - Screen recording requires the user's explicit Android screen-capture consent for each session.
-- Touch indicators use Android's system-wide SHOW_TOUCHES setting and require the user to authorize modification in Android Settings. The app does not change it without user action.
+- Touch indicators use Android's system-wide SHOW_TOUCHES setting and require user authorization before the app changes it.
 
+## Licensing note
 
-## Multi-track studio timeline (1.0.2)
-
-- Separate main video sequence with clip reordering and removal.
-- Multiple independent audio sequences layered over the video, with per-track gain controls, original-video audio level control, and automatic audio fade-in/fade-out.
-- True overlapping video crossfades (0.5s, 1s, or 2s), dip-to-black transitions, or hard cuts; matching audio crossfades are rendered with FFmpeg.
-- Multi-track export uses a local FFmpeg rendering pipeline and saves a new MP4 under Movies/Kalize Recorder/Edits.
-- Crossfade exports normalize clips to 720p at 30 FPS for consistent transition rendering. Hardware H.264 encoding is attempted first, with an MPEG-4 fallback when the device encoder is unavailable.
-- The FFmpegKit-compatible Android dependency is LGPL-licensed; review the bundled notices and dependency license before distributing builds.
+The FFmpegKit-compatible Android dependency is LGPL-licensed. Review the bundled notices and dependency license before distributing builds.

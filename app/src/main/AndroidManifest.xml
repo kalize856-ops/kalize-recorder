@@ -31,6 +31,9 @@
             android:name=".VideoEditorActivity"
             android:exported="false" />
         <activity
+            android:name=".DeviceToolsActivity"
+            android:exported="false" />
+        <activity
             android:name=".ProStudioActivity"
             android:exported="false" />
         <activity

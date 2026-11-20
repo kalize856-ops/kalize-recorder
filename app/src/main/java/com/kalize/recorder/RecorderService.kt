@@ -38,6 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class RecorderService : Service() {
     private var projection: MediaProjection? = null
     private var recorder: MediaRecorder? = null
+    private var codecPipeline: MediaCodecRecordingPipeline? = null
     private var display: VirtualDisplay? = null
     private var screenshotDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -160,6 +161,42 @@ class RecorderService : Service() {
                 else -> 1_500_000
             }
             val outputBitrate = minOf(presetBitrate, resolutionLimit)
+
+            // Prefer direct MediaCodec surface encoding for video-only sessions.
+            // Microphone sessions retain MediaRecorder until a synchronized audio
+            // encoder/muxer path is available.
+            if (!microphoneEnabled) {
+                val codecRecorder = runCatching {
+                    MediaCodecRecordingPipeline(
+                        width = width.coerceAtLeast(2),
+                        height = height.coerceAtLeast(2),
+                        frameRate = frameRate,
+                        bitRate = outputBitrate,
+                        outputDescriptor = outputDescriptor,
+                        outputFile = outputFile
+                    ).also { it.start() }
+                }.getOrNull()
+
+                if (codecRecorder != null) {
+                    codecPipeline = codecRecorder
+                    preferences.edit()
+                        .putInt("last_selected_fps", codecRecorder.actualFrameRate)
+                        .putString("last_recording_encoder", codecRecorder.encoderName)
+                        .apply()
+                    display = activeProjection.createVirtualDisplay(
+                        "KalizeCapture", width, height, metrics.densityDpi,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        codecRecorder.inputSurface, null, null
+                    )
+                    recordingActive = true
+                    getSharedPreferences("kalize_settings", MODE_PRIVATE)
+                        .edit().putBoolean("recording_active", true).apply()
+                    setBubbleCaptureVisibility(hidden = true)
+                    return
+                }
+                // If a vendor codec fails during configure/start, use MediaRecorder.
+            }
+
             val descriptor = outputDescriptor
             val fpsFallbacks = listOf(frameRate, 120, 90, 60, 30)
                 .distinct()
@@ -278,7 +315,12 @@ class RecorderService : Service() {
     }
 
     private fun pauseRecording() {
-        if (!recordingActive || recorder == null || stopping) return
+        if (!recordingActive || stopping) return
+        if (codecPipeline != null) {
+            Toast.makeText(this, "Pause is not supported in the dedicated high-FPS mode yet.", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (recorder == null) return
         try {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.pause()
@@ -292,7 +334,7 @@ class RecorderService : Service() {
     }
 
     private fun resumeRecording() {
-        if (!recordingActive || recorder == null || stopping) return
+        if (!recordingActive || stopping || codecPipeline != null || recorder == null) return
         try {
             if (Build.VERSION.SDK_INT >= 24) {
                 recorder?.resume()
@@ -423,9 +465,11 @@ class RecorderService : Service() {
         if (stopping) return
         stopping = true
         val activeRecorder = recorder
+        val activeCodecPipeline = codecPipeline
         val activeDisplay = display
         val activeProjection = projection
         recorder = null
+        codecPipeline = null
         display = null
         projection = null
         recordingActive = false
@@ -441,7 +485,15 @@ class RecorderService : Service() {
             outputFile?.delete()
             outputUri?.let { contentResolver.delete(it, null, null) }
         }
+        // Release the projection surface before signalling encoder end-of-stream.
         try { activeDisplay?.release() } catch (_: Exception) { }
+        if (activeCodecPipeline != null) {
+            saved = runCatching { activeCodecPipeline.stop() }.getOrDefault(false)
+            if (!saved) {
+                outputFile?.delete()
+                outputUri?.let { contentResolver.delete(it, null, null) }
+            }
+        }
         try { activeRecorder?.reset() } catch (_: Exception) { }
         try { activeRecorder?.release() } catch (_: Exception) { }
         try { activeProjection?.stop() } catch (_: Exception) { }

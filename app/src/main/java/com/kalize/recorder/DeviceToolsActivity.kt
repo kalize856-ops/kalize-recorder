@@ -207,7 +207,23 @@ class DeviceToolsActivity : ComponentActivity() {
             "Android" to "${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})",
             "CPU cores" to Runtime.getRuntime().availableProcessors().toString(),
             "Available RAM" to "${info.availMem / (1024L * 1024L)} MB",
-            "H.264 encoders" to codecSummary
+            "H.264 encoders" to codecSummary,
+            "H.264 capability" to runCatching {
+                val metrics = android.util.DisplayMetrics()
+                @Suppress("DEPRECATION")
+                (getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).defaultDisplay.getRealMetrics(metrics)
+                val supportedRates = listOf(240, 120, 90, 60, 30).filter { fps ->
+                    android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).codecInfos.any { codec ->
+                        codec.isEncoder && codec.supportedTypes.any { it.equals("video/avc", true) } &&
+                            codec.getCapabilitiesForType("video/avc").let { caps ->
+                                caps.colorFormats.contains(android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface) &&
+                                    caps.videoCapabilities.areSizeAndRateSupported(metrics.widthPixels, metrics.heightPixels, fps.toDouble())
+                            }
+                    }
+                }
+                if (supportedRates.isEmpty()) "No advertised rate at native display size"
+                else "Advertised up to ${supportedRates.first()} FPS at native size; sustained FPS is not guaranteed"
+            }.getOrDefault("Capability check unavailable")
         )
     }
 

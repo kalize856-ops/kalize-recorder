@@ -44,8 +44,21 @@ jobs:
           echo "$KALIZE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kalize-release.jks"
           echo "KALIZE_KEYSTORE_PATH=$RUNNER_TEMP/kalize-release.jks" >> "$GITHUB_ENV"
 
+      - name: Verify release signing key
+        if: github.event_name != 'pull_request' && env.KALIZE_KEYSTORE_BASE64 != '' && env.KALIZE_KEYSTORE_PASSWORD != '' && env.KALIZE_KEY_ALIAS != '' && env.KALIZE_KEY_PASSWORD != ''
+        run: |
+          test -s "$KALIZE_KEYSTORE_PATH"
+          keytool -list -keystore "$KALIZE_KEYSTORE_PATH" -storepass "$KALIZE_KEYSTORE_PASSWORD" -alias "$KALIZE_KEY_ALIAS" >/dev/null
+
       - name: Build release APK and Android App Bundle
         run: gradle --no-daemon assembleRelease bundleRelease
+
+      - name: Verify signed release APK
+        if: github.event_name != 'pull_request' && env.KALIZE_KEYSTORE_BASE64 != '' && env.KALIZE_KEYSTORE_PASSWORD != '' && env.KALIZE_KEY_ALIAS != '' && env.KALIZE_KEY_PASSWORD != ''
+        run: |
+          APK=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+          test -n "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4

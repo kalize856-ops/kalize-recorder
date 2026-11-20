@@ -162,15 +162,28 @@ class RecorderService : Service() {
             }
             val outputBitrate = minOf(presetBitrate, resolutionLimit)
 
-            // Prefer direct MediaCodec surface encoding for video-only sessions.
-            // Microphone sessions retain MediaRecorder until a synchronized audio
-            // encoder/muxer path is available.
             val internalAudioRequested = preferences.getBoolean("internal_audio_enabled", false) &&
                 Build.VERSION.SDK_INT >= 29 &&
                 checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
-            if (!microphoneEnabled) {
-                var codecRecorder = runCatching {
+            // MediaCodec mixes eligible playback audio and microphone input into one AAC track.
+            var codecRecorder = runCatching {
+                MediaCodecRecordingPipeline(
+                    width = width.coerceAtLeast(2),
+                    height = height.coerceAtLeast(2),
+                    frameRate = frameRate,
+                    bitRate = outputBitrate,
+                    outputDescriptor = outputDescriptor,
+                    outputFile = outputFile,
+                    projection = activeProjection,
+                    capturePlaybackAudio = internalAudioRequested,
+                    captureMicrophone = microphoneEnabled
+                ).also { it.start() }
+            }.getOrNull()
+
+            // If playback capture is unavailable, retain the microphone where possible.
+            if (codecRecorder == null && (internalAudioRequested || microphoneEnabled)) {
+                codecRecorder = runCatching {
                     MediaCodecRecordingPipeline(
                         width = width.coerceAtLeast(2),
                         height = height.coerceAtLeast(2),
@@ -178,48 +191,33 @@ class RecorderService : Service() {
                         bitRate = outputBitrate,
                         outputDescriptor = outputDescriptor,
                         outputFile = outputFile,
-                        projection = activeProjection,
-                        capturePlaybackAudio = internalAudioRequested
+                        captureMicrophone = microphoneEnabled
                     ).also { it.start() }
                 }.getOrNull()
-
-                // If playback capture is blocked by the device or target app, retry
-                // as a normal video-only recording rather than losing the session.
-                if (codecRecorder == null && internalAudioRequested) {
-                    codecRecorder = runCatching {
-                        MediaCodecRecordingPipeline(
-                            width = width.coerceAtLeast(2),
-                            height = height.coerceAtLeast(2),
-                            frameRate = frameRate,
-                            bitRate = outputBitrate,
-                            outputDescriptor = outputDescriptor,
-                            outputFile = outputFile
-                        ).also { it.start() }
-                    }.getOrNull()
-                    preferences.edit().putBoolean("last_internal_audio_captured", false).apply()
-                } else if (codecRecorder?.audioCaptureActive == true) {
-                    preferences.edit().putBoolean("last_internal_audio_captured", true).apply()
-                }
-
-                if (codecRecorder != null) {
-                    codecPipeline = codecRecorder
-                    preferences.edit()
-                        .putInt("last_selected_fps", codecRecorder.actualFrameRate)
-                        .putString("last_recording_encoder", codecRecorder.encoderName)
-                        .apply()
-                    display = activeProjection.createVirtualDisplay(
-                        "KalizeCapture", width, height, metrics.densityDpi,
-                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                        codecRecorder.inputSurface, null, null
-                    )
-                    recordingActive = true
-                    getSharedPreferences("kalize_settings", MODE_PRIVATE)
-                        .edit().putBoolean("recording_active", true).apply()
-                    setBubbleCaptureVisibility(hidden = true)
-                    return
-                }
-                // If a vendor codec fails during configure/start, use MediaRecorder.
             }
+            preferences.edit()
+                .putBoolean("last_internal_audio_captured", internalAudioRequested && codecRecorder?.audioCaptureActive == true)
+                .putBoolean("last_microphone_captured", codecRecorder?.microphoneCaptureActive == true)
+                .apply()
+
+            if (codecRecorder != null) {
+                codecPipeline = codecRecorder
+                preferences.edit()
+                    .putInt("last_selected_fps", codecRecorder.actualFrameRate)
+                    .putString("last_recording_encoder", codecRecorder.encoderName)
+                    .apply()
+                display = activeProjection.createVirtualDisplay(
+                    "KalizeCapture", width, height, metrics.densityDpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    codecRecorder.inputSurface, null, null
+                )
+                recordingActive = true
+                getSharedPreferences("kalize_settings", MODE_PRIVATE)
+                    .edit().putBoolean("recording_active", true).apply()
+                setBubbleCaptureVisibility(hidden = true)
+                return
+            }
+            // Last-resort MediaRecorder fallback preserves microphone-only recording.
 
             val descriptor = outputDescriptor
             val fpsFallbacks = listOf(frameRate, 120, 90, 60, 30)

@@ -1,6 +1,6 @@
 # Kalize Recorder
 
-Current development version: **1.0.7** (version code 8).
+Current development version: **1.0.8** (version code 9).
 
 Native Android screen recorder and video utility app.
 
@@ -59,6 +59,7 @@ GitHub Actions builds debug and release candidates on pushes to `main`.
 - Pause/resume on the dedicated MediaCodec path detaches and reattaches the virtual-display surface; verify timestamp continuity on physical devices.
 - Game Session does not overclock the CPU, close other apps, or change system performance governors; Android does not grant ordinary apps those controls.
 - Live network rates are device-wide traffic estimates, not an isolated internet speed test; Android may report counters as unavailable on some devices.
+- CI validates release signing material and verifies APK signatures when signing secrets are configured. Without those secrets, CI produces unsigned release candidates.
 - Clip merging currently supports compatible tracks without re-encoding; incompatible clips may fail.
 - A production release still needs protected signing secrets, release-build validation, dependency/license review and physical-device testing.
 - Screen recording requires the user's explicit Android screen-capture consent for each session.

@@ -316,32 +316,40 @@ class RecorderService : Service() {
 
     private fun pauseRecording() {
         if (!recordingActive || stopping) return
-        if (codecPipeline != null) {
-            Toast.makeText(this, "Pause is not supported in the dedicated high-FPS mode yet.", Toast.LENGTH_LONG).show()
-            return
-        }
-        if (recorder == null) return
+        val state = getSharedPreferences("kalize_bubble_position", MODE_PRIVATE)
+        if (state.getBoolean("recording_paused", false)) return
         try {
-            if (Build.VERSION.SDK_INT >= 24) {
+            if (codecPipeline != null) {
+                // Detaching the projection surface pauses incoming frames while
+                // keeping the encoder and MP4 muxer alive.
+                display?.setSurface(null)
+            } else {
+                if (Build.VERSION.SDK_INT < 24 || recorder == null) return
                 recorder?.pause()
-                getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", true).apply()
-                val manager = getSystemService(NotificationManager::class.java)
-                manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = true))
             }
+            state.edit().putBoolean("recording_paused", true).apply()
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTIFICATION_ID, buildRecordingNotification(paused = true))
         } catch (_: Exception) {
             Toast.makeText(this, "Pause is not supported by this device encoder.", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun resumeRecording() {
-        if (!recordingActive || stopping || codecPipeline != null || recorder == null) return
+        if (!recordingActive || stopping) return
+        val state = getSharedPreferences("kalize_bubble_position", MODE_PRIVATE)
+        if (!state.getBoolean("recording_paused", false)) return
         try {
-            if (Build.VERSION.SDK_INT >= 24) {
+            if (codecPipeline != null) {
+                display?.setSurface(codecPipeline?.inputSurface)
+                    ?: throw IllegalStateException("Recording display is unavailable")
+            } else {
+                if (Build.VERSION.SDK_INT < 24 || recorder == null) return
                 recorder?.resume()
-                getSharedPreferences("kalize_bubble_position", MODE_PRIVATE).edit().putBoolean("recording_paused", false).apply()
-                val manager = getSystemService(NotificationManager::class.java)
-                manager.notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
             }
+            state.edit().putBoolean("recording_paused", false).apply()
+            getSystemService(NotificationManager::class.java)
+                .notify(NOTIFICATION_ID, buildRecordingNotification(paused = false))
         } catch (_: Exception) {
             Toast.makeText(this, "Could not resume recording.", Toast.LENGTH_SHORT).show()
         }

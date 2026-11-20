@@ -218,6 +218,13 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                                     "Crossfade · 1 second",
                                     "Crossfade · 2 seconds",
                                     "Dip to black · 1 second",
+                                    "Dissolve · 1 second",
+                                    "Wipe left · 1 second",
+                                    "Wipe right · 1 second",
+                                    "Slide left · 1 second",
+                                    "Slide right · 1 second",
+                                    "Circle reveal · 1 second",
+                                    "Pixelize · 1 second",
                                     "Hard cut"
                                 ).forEach { choice ->
                                     DropdownMenuItem(
@@ -239,6 +246,22 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Text("VIDEO EFFECT", fontWeight = FontWeight.SemiBold)
+                    var showEffectMenu by remember { mutableStateOf(false) }
+                    Box {
+                        OutlinedButton(onClick = { showEffectMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Effect: $videoEffect")
+                        }
+                        DropdownMenu(expanded = showEffectMenu, onDismissRequest = { showEffectMenu = false }) {
+                            listOf("Original", "Warm", "Cool", "Vintage", "High contrast", "Sharpen", "Soft focus", "Black & white").forEach { choice ->
+                                DropdownMenuItem(text = { Text(choice) }, onClick = {
+                                    videoEffect = choice
+                                    showEffectMenu = false
+                                })
+                            }
+                        }
+                    }
+                    Text("Effects are rendered into a new export; the source clips remain unchanged.", style = MaterialTheme.typography.bodySmall)
                     Text("Audio mixing", fontWeight = FontWeight.SemiBold)
                     Text(
                         "Each added music or voice file has its own level control and is mixed over the video soundtrack. Export runs locally on this device.",
@@ -254,9 +277,10 @@ class MultiTrackTimelineActivity : ComponentActivity() {
                             val levels = audioVolumes.toList()
                             val original = originalVolume
                             val style = transition
+                            val effect = videoEffect
                             scope.launch {
                                 val result = runCatching {
-                                    exportTimeline(videos, audios, levels, original, style)
+                                    exportTimeline(videos, audios, levels, original, style, effect)
                                 }
                                 exporting = false
                                 status = result.fold(
@@ -289,7 +313,8 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         audios: List<Uri>,
         levels: List<Float>,
         originalLevel: Float,
-        transitionStyle: String
+        transitionStyle: String,
+        effectStyle: String
     ): Uri = withContext(Dispatchers.IO) {
         require(videos.isNotEmpty()) { "Add at least one video clip." }
 
@@ -329,7 +354,7 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             append("-y ")
             inputPaths.forEach { append("-i ${shellQuote(it)} ") }
             append("-filter_complex_threads 1 ")
-            append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration))} ")
+            append("-filter_complex ${shellQuote(buildFilterGraph(clipInfo, audioFiles, levels, originalLevel, transitionStyle, transitionSeconds, outputDuration, effectStyle))} ")
             append("-map [vout] -map [aout] -t ${decimal(outputDuration)} ")
             append("-c:v h264_mediacodec -b:v 8M -pix_fmt yuv420p -c:a aac -b:a 192k -movflags +faststart ")
             append("${shellQuote(outputFile.absolutePath)}")
@@ -389,11 +414,22 @@ class MultiTrackTimelineActivity : ComponentActivity() {
         originalLevel: Float,
         transitionStyle: String,
         transitionSeconds: Double,
-        outputDuration: Double
+        outputDuration: Double,
+        effectStyle: String
     ): String {
         val filters = mutableListOf<String>()
         clips.forEachIndexed { index, clip ->
-            filters += "[$index:v:0]setpts=PTS-STARTPTS,scale=1280:720:force_original_aspect_ratio=decrease," +
+            val effectFilter = when (effectStyle) {
+                "Warm" -> "colorbalance=rs=0.08:bs=-0.08"
+                "Cool" -> "colorbalance=rs=-0.08:bs=0.08"
+                "Vintage" -> "eq=saturation=0.75:contrast=1.08:brightness=0.02,colorbalance=rs=0.06:gs=0.02:bs=-0.06"
+                "High contrast" -> "eq=contrast=1.25:saturation=1.08"
+                "Sharpen" -> "unsharp=5:5:0.8:3:3:0.0"
+                "Soft focus" -> "gblur=sigma=0.7"
+                "Black & white" -> "hue=s=0"
+                else -> "null"
+            }
+            filters += "[$index:v:0]setpts=PTS-STARTPTS,$effectFilter,scale=1280:720:force_original_aspect_ratio=decrease," +
                 "pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,fps=30,format=yuv420p,settb=AVTB[v$index]"
         }
 
@@ -407,7 +443,17 @@ class MultiTrackTimelineActivity : ComponentActivity() {
             var previous = "v0"
             for (index in 1 until clips.size) {
                 val outputLabel = if (index == clips.lastIndex) "vout" else "vx$index"
-                val transitionName = if (transitionStyle.startsWith("Dip")) "fadeblack" else "fade"
+                val transitionName = when {
+                    transitionStyle.startsWith("Dip") -> "fadeblack"
+                    transitionStyle.startsWith("Dissolve") -> "dissolve"
+                    transitionStyle.startsWith("Wipe left") -> "wipeleft"
+                    transitionStyle.startsWith("Wipe right") -> "wiperight"
+                    transitionStyle.startsWith("Slide left") -> "slideleft"
+                    transitionStyle.startsWith("Slide right") -> "slideright"
+                    transitionStyle.startsWith("Circle reveal") -> "circleopen"
+                    transitionStyle.startsWith("Pixelize") -> "pixelize"
+                    else -> "fade"
+                }
                 val offset = (accumulated - transitionSeconds).coerceAtLeast(0.0)
                 filters += "[$previous][v$index]xfade=transition=$transitionName:duration=${decimal(transitionSeconds)}:" +
                     "offset=${decimal(offset)}[$outputLabel]"

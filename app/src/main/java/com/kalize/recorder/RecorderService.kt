@@ -90,7 +90,12 @@ class RecorderService : Service() {
                 if (wantsMicrophone) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
             startForeground(NOTIFICATION_ID, notification, serviceTypes)
         } else if (Build.VERSION.SDK_INT >= 29) {
-            startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            val wantsMicrophone = getSharedPreferences("kalize_settings", MODE_PRIVATE)
+                .getBoolean("microphone_enabled", false) &&
+                checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val serviceTypes = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                if (wantsMicrophone) android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
+            startForeground(NOTIFICATION_ID, notification, serviceTypes)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -196,7 +201,7 @@ class RecorderService : Service() {
                 }.getOrNull()
             }
             preferences.edit()
-                .putBoolean("last_internal_audio_captured", internalAudioRequested && codecRecorder?.audioCaptureActive == true)
+                .putBoolean("last_internal_audio_captured", codecRecorder?.playbackAudioCaptureActive == true)
                 .putBoolean("last_microphone_captured", codecRecorder?.microphoneCaptureActive == true)
                 .apply()
 

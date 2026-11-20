@@ -71,6 +71,9 @@ class MediaCodecRecordingPipeline(
     val microphoneCaptureActive: Boolean
         get() = captureMicrophone && microphoneRecord != null && audioEncoder != null
 
+    val playbackAudioCaptureActive: Boolean
+        get() = capturePlaybackAudio && playbackAudioRecord != null && audioEncoder != null
+
     fun start() {
         require(width >= 2 && height >= 2) { "Invalid recording dimensions" }
         require(outputDescriptor != null || outputFile != null) { "Missing MP4 output destination" }

@@ -344,9 +344,9 @@ class RecorderService : Service() {
         if (state.getBoolean("recording_paused", false)) return
         try {
             if (codecPipeline != null) {
-                // Detaching the projection surface pauses incoming frames while
-                // keeping the encoder and MP4 muxer alive.
+                // Pause both incoming video frames and optional playback audio.
                 display?.setSurface(null)
+                codecPipeline?.pausePlaybackAudio()
             } else {
                 if (Build.VERSION.SDK_INT < 24 || recorder == null) return
                 recorder?.pause()
@@ -365,6 +365,7 @@ class RecorderService : Service() {
         if (!state.getBoolean("recording_paused", false)) return
         try {
             if (codecPipeline != null) {
+                codecPipeline?.resumePlaybackAudio()
                 display?.setSurface(codecPipeline?.inputSurface)
                     ?: throw IllegalStateException("Recording display is unavailable")
             } else {

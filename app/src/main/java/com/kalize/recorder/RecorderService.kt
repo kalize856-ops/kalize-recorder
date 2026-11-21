@@ -219,7 +219,7 @@ class RecorderService : Service() {
                 recordingActive = true
                 getSharedPreferences("kalize_settings", MODE_PRIVATE)
                     .edit().putBoolean("recording_active", true).apply()
-                setBubbleCaptureVisibility(hidden = true)
+                setBubbleCaptureVisibility(hidden = false)
                 return
             }
             // Last-resort MediaRecorder fallback preserves microphone-only recording.
@@ -281,7 +281,7 @@ class RecorderService : Service() {
             mediaRecorder.start()
             recordingActive = true
             getSharedPreferences("kalize_settings", MODE_PRIVATE).edit().putBoolean("recording_active", true).apply()
-            setBubbleCaptureVisibility(hidden = true)
+            setBubbleCaptureVisibility(hidden = false)
         } catch (error: Exception) {
             Toast.makeText(this, "Recording could not start: ${error.localizedMessage ?: "unsupported device configuration"}", Toast.LENGTH_LONG).show()
             stopCapture()
@@ -336,8 +336,17 @@ class RecorderService : Service() {
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
             builder.addAction(0, label, controlIntent)
+            val screenshotIntent = android.app.PendingIntent.getService(
+                this, 4, Intent(this, RecorderService::class.java).setAction(SCREENSHOT),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.addAction(0, "Screenshot", screenshotIntent)
         }
         builder.addAction(0, "Stop", stopIntent)
+        builder.setContentIntent(android.app.PendingIntent.getActivity(
+            this, 5, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+        ))
         return builder.build()
     }
 

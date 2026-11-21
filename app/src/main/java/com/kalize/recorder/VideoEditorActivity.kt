@@ -82,6 +82,11 @@ class VideoEditorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         MobileAds.initialize(this) { loadCompressionRewardAd() }
+        intent.data?.let { uri ->
+            selectedUri = uri
+            durationMs = readDuration(uri)
+            message = if (durationMs > 0) "Video ready to trim. Export creates a separate copy." else "Could not read this video's duration."
+        }
         setContent {
             KalizeTheme {
                 var range by remember { mutableStateOf(0f..1f) }

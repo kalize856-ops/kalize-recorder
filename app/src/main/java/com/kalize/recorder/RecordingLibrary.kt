@@ -33,6 +33,73 @@ private data class LibraryMedia(
     val trashed: Boolean = false
 )
 
+
+@Composable
+fun HomeMediaDashboard(onOpenLibrary: () -> Unit, onRecord: () -> Unit, onScreenshot: () -> Unit) {
+    val context = LocalContext.current
+    val media = remember { queryKalizeMedia(context).filterNot { it.trashed } }
+    val videos = media.filterNot { it.image }
+    val images = media.filter { it.image }
+    val storage = remember {
+        runCatching {
+            val stats = StatFs(Environment.getExternalStorageDirectory().absolutePath)
+            Triple(stats.availableBytes, stats.totalBytes, videos.sumOf { it.size })
+        }.getOrDefault(Triple(0L, 0L, videos.sumOf { it.size }))
+    }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(11.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilledTonalButton(onClick = onRecord, modifier = Modifier.weight(1f)) { Text("● Record") }
+            OutlinedButton(onClick = onScreenshot, modifier = Modifier.weight(1f)) { Text("Screenshot") }
+        }
+        Card {
+            Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text("STORAGE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                Text("Free: ${bytes(storage.first)}  •  Kalize recordings: ${bytes(storage.third)}")
+                if (storage.second > 0) LinearProgressIndicator(
+                    progress = { (1f - storage.first.toFloat() / storage.second.toFloat()).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Recordings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onOpenLibrary) { Text("See all") }
+        }
+        if (videos.isEmpty()) Text("No recordings yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        videos.take(4).forEach { item ->
+            Card(onClick = { openItem(context, item) }) {
+                Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, null)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.name, maxLines = 1, fontWeight = FontWeight.SemiBold)
+                        Text(bytes(item.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Screenshots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            TextButton(onClick = onOpenLibrary) { Text("See all") }
+        }
+        if (images.isEmpty()) Text("No screenshots yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        images.take(4).forEach { item ->
+            Card(onClick = { openItem(context, item) }) {
+                Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Image, null)
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(item.name, maxLines = 1, fontWeight = FontWeight.SemiBold)
+                        Text(bytes(item.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+        }
+        TextButton(onClick = onOpenLibrary, modifier = Modifier.align(Alignment.End)) { Text("Open media library") }
+    }
+}
+
 @Composable
 fun RecordingLibrary(onBack: () -> Unit) {
     val context = LocalContext.current

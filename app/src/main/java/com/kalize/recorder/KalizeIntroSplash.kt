@@ -49,22 +49,22 @@ fun KalizeIntroSplash(onFinished: () -> Unit) {
 
                 // The four viewfinder corners are "written" in sequence.
                 val strokes = listOf(
-                    20f to 20f to 42f to 20f,
-                    20f to 20f to 20f to 42f,
-                    66f to 20f to 88f to 20f,
-                    88f to 20f to 88f to 42f,
-                    20f to 66f to 20f to 88f,
-                    20f to 88f to 42f to 88f,
-                    88f to 66f to 88f to 88f,
-                    66f to 88f to 88f to 88f
+                    floatArrayOf(20f, 20f, 42f, 20f),
+                    floatArrayOf(20f, 20f, 20f, 42f),
+                    floatArrayOf(66f, 20f, 88f, 20f),
+                    floatArrayOf(88f, 20f, 88f, 42f),
+                    floatArrayOf(20f, 66f, 20f, 88f),
+                    floatArrayOf(20f, 88f, 42f, 88f),
+                    floatArrayOf(88f, 66f, 88f, 88f),
+                    floatArrayOf(66f, 88f, 88f, 88f)
                 )
                 val frameProgress = (progress.value / 0.58f).coerceIn(0f, 1f)
                 strokes.forEachIndexed { index, s ->
                     val p = (frameProgress * strokes.size - index).coerceIn(0f, 1f)
-                    val x1 = s.first
-                    val y1 = s.second
-                    val x2 = s.third
-                    val y2 = s.fourth
+                    val x1 = s[0]
+                    val y1 = s[1]
+                    val x2 = s[2]
+                    val y2 = s[3]
                     drawLine(
                         color = Color.White.copy(alpha = 0.98f),
                         start = point(x1, y1),

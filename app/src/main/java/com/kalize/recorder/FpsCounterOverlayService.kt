@@ -49,8 +49,7 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
             WindowManager.LayoutParams.WRAP_CONTENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
@@ -59,7 +58,7 @@ class FpsCounterOverlayService : Service(), Choreographer.FrameCallback {
         }
         label = TextView(this).apply {
             text = "FPS --"
-            setTextColor(Color.WHITE)
+            setTextColor(getSharedPreferences(SETTINGS_PREFS, MODE_PRIVATE).getInt("fps_counter_color", Color.WHITE))
             textSize = getSharedPreferences(SETTINGS_PREFS, MODE_PRIVATE)
                 .getInt("fps_counter_size", 12).coerceIn(9, 22).toFloat()
             typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)

@@ -27,6 +27,7 @@
         <activity
             android:name=".MultiTrackTimelineActivity"
             android:exported="false" />
+        <activity android:name=".InAppVideoPlayerActivity" android:exported="false" />
         <activity
             android:name=".VideoEditorActivity"
             android:exported="false" />

@@ -110,15 +110,10 @@ class MainActivity : ComponentActivity() {
 
                         Box(Modifier.weight(1f)) {
                             when (page) {
-                                "Home" -> RecorderDashboard(
-                                    ink, surface, accent,
+                                "Home" -> HomeMediaDashboard(
+                                    onOpenLibrary = { page = "Library" },
                                     onRecord = { requestCapture() },
-                                    onBubble = { enableBubble() },
-                                    onLibrary = { page = "Library" },
-                                    onEdit = { startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java)) },
-                                    onStudio = { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
-                                    onScreenshot = { requestScreenshot() },
-                                    onDeviceLab = { startActivity(Intent(this@MainActivity, DeviceToolsActivity::class.java)) }
+                                    onScreenshot = { requestScreenshot() }
                                 )
                                 "Edit" -> EditorDashboard(ink, surface, accent) {
                                     startActivity(Intent(this@MainActivity, VideoEditorActivity::class.java))
@@ -507,6 +502,11 @@ private fun SettingsDashboard(
 
         SettingsCard("Floating controls") {
             SwitchSetting("Floating bubble", "Show quick recording tools over other apps", bubbleEnabled, onBubble)
+            Text("Bubble colour", style = MaterialTheme.typography.labelMedium)
+            var bubbleColor by remember { mutableIntStateOf(prefs.getInt("bubble_color", 0xFF7659EA.toInt())) }
+            ChoiceSetting(bubbleColor, listOf(0xFF7659EA.toInt(), 0xFFE94B55.toInt(), 0xFF2196F3.toInt(), 0xFF16A085.toInt(), 0xFFFF9800.toInt(), 0xFF202124.toInt()),
+                { color -> when (color) { 0xFF7659EA.toInt() -> "Violet"; 0xFFE94B55.toInt() -> "Red"; 0xFF2196F3.toInt() -> "Blue"; 0xFF16A085.toInt() -> "Teal"; 0xFFFF9800.toInt() -> "Orange"; else -> "Graphite" } },
+                { bubbleColor = it; prefs.edit().putInt("bubble_color", it).apply(); if (bubbleEnabled) { context.stopService(Intent(context, FloatingBubbleService::class.java)); context.startService(Intent(context, FloatingBubbleService::class.java)) } })
             Text("Bubble size · ${bubbleSize} dp", style = MaterialTheme.typography.labelMedium)
             Slider(value = bubbleSize.toFloat(), onValueChange = { onBubbleSize(it.toInt()) },
                 valueRange = 44f..68f, steps = 5, enabled = bubbleEnabled)
@@ -519,6 +519,11 @@ private fun SettingsDashboard(
 
         SettingsCard("FPS counter overlay") {
             SwitchSetting("Show FPS counter", "Display a compact, transparent counter over other apps. Requires display-over-other-apps permission.", fpsCounterEnabled, onFpsCounterEnabled)
+            Text("FPS text colour", style = MaterialTheme.typography.labelMedium)
+            var fpsColor by remember { mutableIntStateOf(prefs.getInt("fps_counter_color", android.graphics.Color.WHITE)) }
+            ChoiceSetting(fpsColor, listOf(android.graphics.Color.WHITE, android.graphics.Color.YELLOW, android.graphics.Color.CYAN, 0xFF80FF80.toInt(), 0xFFFF8080.toInt(), android.graphics.Color.MAGENTA),
+                { color -> when (color) { android.graphics.Color.WHITE -> "White"; android.graphics.Color.YELLOW -> "Yellow"; android.graphics.Color.CYAN -> "Cyan"; 0xFF80FF80.toInt() -> "Green"; 0xFFFF8080.toInt() -> "Coral"; else -> "Magenta" } },
+                { fpsColor = it; prefs.edit().putInt("fps_counter_color", it).apply(); if (fpsCounterEnabled && Settings.canDrawOverlays(context)) { context.stopService(Intent(context, FpsCounterOverlayService::class.java)); context.startService(Intent(context, FpsCounterOverlayService::class.java)) } })
             Text("Text size · ${fpsCounterSize} sp", style = MaterialTheme.typography.labelMedium)
             Slider(value = fpsCounterSize.toFloat(), onValueChange = { onFpsCounterSize(it.toInt()) }, valueRange = 9f..22f, steps = 12, enabled = fpsCounterEnabled)
             Text("Opacity · ${fpsCounterOpacity}%", style = MaterialTheme.typography.labelMedium)

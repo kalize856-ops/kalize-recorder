@@ -94,7 +94,7 @@ class FloatingBubbleService : Service() {
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             setTextColor(0xFFFFFFFF.toInt())
-            background = rounded(0xFF7659EA.toInt(), 30)
+            background = rounded(getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_color", 0xFF7659EA.toInt()), 30)
             elevation = dp(8).toFloat()
             alpha = bubbleOpacity
             contentDescription = "Kalize floating controls"
@@ -262,7 +262,7 @@ class FloatingBubbleService : Service() {
                 setTextColor(0xFFFFFFFF.toInt())
                 background = rounded(
                     if (action.label == "Start recording") 0xFFE94B45.toInt()
-                    else 0xFF29344A.toInt(),
+                    else getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_color", 0xFF29344A.toInt()),
                     28
                 )
                 elevation = dp(7).toFloat()

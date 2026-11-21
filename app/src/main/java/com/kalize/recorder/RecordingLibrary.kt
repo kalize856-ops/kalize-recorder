@@ -355,11 +355,19 @@ private fun updateTrash(context: android.content.Context, item: LibraryMedia, tr
 }
 
 private fun openItem(context: android.content.Context, item: LibraryMedia) {
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(item.uri, if (item.image) "image/*" else "video/*")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    if (item.image) {
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(item.uri, "image/*")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Open image"))
+    } else {
+        context.startActivity(Intent(context, InAppVideoPlayerActivity::class.java).apply {
+            data = item.uri
+            putExtra("video_name", item.name)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        })
     }
-    context.startActivity(Intent.createChooser(intent, "Open media"))
 }
 
 private fun shareItem(context: android.content.Context, item: LibraryMedia) {

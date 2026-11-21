@@ -47,14 +47,14 @@ private fun InAppVideoPlayer(uri: Uri, name: String, onBack: () -> Unit, onEdit:
     val context = LocalContext.current
     var details by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
-    val player = remember(uri) {
+    val exoPlayer = remember(uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
             prepare()
             playWhenReady = true
         }
     }
-    DisposableEffect(player) { onDispose { player.release() } }
+    DisposableEffect(exoPlayer) { onDispose { exoPlayer.release() } }
 
     Column(Modifier.fillMaxSize().background(Color.Black)) {
         Row(Modifier.fillMaxWidth().background(Color(0xFF111522)).padding(horizontal = 8.dp),
@@ -67,12 +67,12 @@ private fun InAppVideoPlayer(uri: Uri, name: String, onBack: () -> Unit, onEdit:
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             AndroidView(factory = { c ->
                 PlayerView(c).apply {
-                    this.player = player
+                    this.player = exoPlayer
                     useController = true
                     controllerAutoShow = true
                     setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
                 }
-            }, update = { it.player = player }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+            }, update = { it.player = exoPlayer }, modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f))
         }
         Column(Modifier.fillMaxWidth().background(Color(0xFF111522)).navigationBarsPadding().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {

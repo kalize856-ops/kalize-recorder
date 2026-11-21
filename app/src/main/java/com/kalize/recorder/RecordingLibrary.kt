@@ -5,8 +5,19 @@ import android.content.Intent
 import android.os.Build
 import android.os.Environment
 import android.os.StatFs
+import android.util.Size
+import android.graphics.Bitmap
 import android.provider.MediaStore
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -19,6 +30,8 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,19 +56,20 @@ fun HomeMediaDashboard(onOpenLibrary: () -> Unit, onRecord: () -> Unit, onScreen
     val storage = remember {
         runCatching {
             val stats = StatFs(Environment.getExternalStorageDirectory().absolutePath)
-            Triple(stats.availableBytes, stats.totalBytes, videos.sumOf { it.size })
-        }.getOrDefault(Triple(0L, 0L, videos.sumOf { it.size }))
+            Triple(stats.availableBytes, stats.totalBytes, media.sumOf { it.size })
+        }.getOrDefault(Triple(0L, 0L, media.sumOf { it.size }))
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(11.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             FilledTonalButton(onClick = onRecord, modifier = Modifier.weight(1f)) { Text("● Record") }
             OutlinedButton(onClick = onScreenshot, modifier = Modifier.weight(1f)) { Text("Screenshot") }
         }
-        Card {
-            Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("STORAGE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
-                Text("Free: ${bytes(storage.first)}  •  Kalize recordings: ${bytes(storage.third)}")
+        Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
+            Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("STORAGE", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+                Text("${bytes(storage.first)} available  ·  ${bytes(storage.third)} used by Kalize media",
+                    style = MaterialTheme.typography.bodyMedium)
                 if (storage.second > 0) LinearProgressIndicator(
                     progress = { (1f - storage.first.toFloat() / storage.second.toFloat()).coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth()
@@ -63,40 +77,99 @@ fun HomeMediaDashboard(onOpenLibrary: () -> Unit, onRecord: () -> Unit, onScreen
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Recordings", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Column {
+                Text("Your moments", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("Videos and screenshots", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
             TextButton(onClick = onOpenLibrary) { Text("See all") }
         }
-        if (videos.isEmpty()) Text("No recordings yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        videos.take(4).forEach { item ->
-            Card(onClick = { openItem(context, item) }) {
-                Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, null)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.name, maxLines = 1, fontWeight = FontWeight.SemiBold)
-                        Text(bytes(item.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Videos", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("${videos.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (videos.isEmpty()) EmptyMediaHint("Your recordings will appear here")
+        else LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(videos.take(8), key = { "home-video-${it.id}" }) { item ->
+                MediaGalleryTile(item, Modifier.width(218.dp), onClick = { openItem(context, item) })
             }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("Screenshots", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            TextButton(onClick = onOpenLibrary) { Text("See all") }
+            Text("Screenshots", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("${images.size}", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (images.isEmpty()) Text("No screenshots yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        images.take(4).forEach { item ->
-            Card(onClick = { openItem(context, item) }) {
-                Row(Modifier.fillMaxWidth().padding(11.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Image, null)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(item.name, maxLines = 1, fontWeight = FontWeight.SemiBold)
-                        Text(bytes(item.size), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (images.isEmpty()) EmptyMediaHint("Screenshots you take will appear here")
+        else LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            items(images.take(10), key = { "home-image-${it.id}" }) { item ->
+                MediaGalleryTile(item, Modifier.width(164.dp), onClick = { openItem(context, item) })
+            }
+        }
+        OutlinedButton(onClick = onOpenLibrary, modifier = Modifier.fillMaxWidth()) { Text("Open gallery") }
+    }
+}
+
+@Composable
+private fun EmptyMediaHint(message: String) {
+    Card(shape = RoundedCornerShape(18.dp)) {
+        Box(Modifier.fillMaxWidth().padding(22.dp), contentAlignment = Alignment.Center) {
+            Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun MediaGalleryTile(item: LibraryMedia, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Card(onClick = onClick, modifier = modifier, shape = RoundedCornerShape(18.dp)) {
+        Column {
+            Box {
+                MediaThumbnail(item, Modifier.fillMaxWidth().height(132.dp))
+                if (!item.image) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.Center),
+                        shape = RoundedCornerShape(50),
+                        color = Color.Black.copy(alpha = 0.58f)
+                    ) {
+                        Icon(Icons.Default.PlayArrow, "Play video", tint = Color.White,
+                            modifier = Modifier.padding(9.dp).size(27.dp))
+                    }
+                    Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp),
+                        shape = RoundedCornerShape(7.dp), color = Color.Black.copy(alpha = 0.72f)) {
+                        Text(duration(item.duration), color = Color.White,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                            style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }
+            Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(item.name, maxLines = 1, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                Text(bytes(item.size), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        TextButton(onClick = onOpenLibrary, modifier = Modifier.align(Alignment.End)) { Text("Open media library") }
+    }
+}
+
+@Composable
+private fun MediaThumbnail(item: LibraryMedia, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var bitmap by remember(item.uri) { mutableStateOf<Bitmap?>(null) }
+    LaunchedEffect(item.uri) {
+        bitmap = withContext(Dispatchers.IO) {
+            runCatching {
+                if (Build.VERSION.SDK_INT >= 29) context.contentResolver.loadThumbnail(item.uri, Size(480, 320), null)
+                else {
+                    val retriever = android.media.MediaMetadataRetriever()
+                    try {
+                        retriever.setDataSource(context, item.uri)
+                        retriever.getFrameAtTime(0L, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                    } finally { retriever.release() }
+                }
+            }.getOrNull()
+        }
+    }
+    Box(modifier.clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center) {
+        if (bitmap != null) Image(bitmap!!.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else Icon(if (item.image) Icons.Default.Image else Icons.Default.PlayArrow, null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(34.dp))
     }
 }
 
@@ -213,7 +286,7 @@ private fun MediaRow(
 ) {
     Card {
         Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(if (item.image) Icons.Default.Image else Icons.Default.PlayArrow, null)
+            MediaThumbnail(item, Modifier.size(76.dp))
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(item.name, fontWeight = FontWeight.SemiBold, maxLines = 1)

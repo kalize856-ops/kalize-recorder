@@ -343,7 +343,7 @@ private fun RecorderDashboard(
             FeatureCard("Video editor", "Trim, merge and compress", Icons.Default.ContentCut, accent, surface, Modifier.weight(1f), onEdit)
             FeatureCard("Pro capture", "Audio and quality presets", Icons.Default.Tune, accent, surface, Modifier.weight(1f), onStudio)
         }
-        FeatureCard("Device Lab", "CPU benchmark, network check and game session", Icons.Default.Speed, accent, surface, Modifier.fillMaxWidth(), onDeviceLab)
+        FeatureCard("CPU benchmark", "A simple test of your phone’s processor", Icons.Default.Speed, accent, surface, Modifier.fillMaxWidth(), onDeviceLab)
         Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = surface)) {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(Icons.Default.HighQuality, null, tint = accent, modifier = Modifier.size(27.dp))

@@ -29,7 +29,10 @@ class AnnotationOverlayService : Service() {
     private lateinit var root: FrameLayout
     private lateinit var drawing: DrawingSurface
     private var erasing = false
+    private var highlighter = false
     private var colorIndex = 0
+    private var brushSizeIndex = 1
+    private val brushSizes = floatArrayOf(2f, 4f, 7f, 11f)
 
     private val colors = intArrayOf(
         Color.RED, Color.YELLOW, Color.CYAN, Color.GREEN, Color.WHITE, Color.MAGENTA
@@ -94,11 +97,21 @@ class AnnotationOverlayService : Service() {
         tool("Color") {
             colorIndex = (colorIndex + 1) % colors.size
             erasing = false
-            drawing.setBrush(colors[colorIndex], false)
+            drawing.setBrush(colors[colorIndex], false, highlighter, dp(brushSizes[brushSizeIndex]).toFloat())
+        }
+        tool("Size") {
+            brushSizeIndex = (brushSizeIndex + 1) % brushSizes.size
+            drawing.setBrush(colors[colorIndex], erasing, highlighter, dp(brushSizes[brushSizeIndex]).toFloat())
+        }
+        tool("Highlight") {
+            highlighter = !highlighter
+            erasing = false
+            drawing.setBrush(colors[colorIndex], false, highlighter, dp(brushSizes[brushSizeIndex]).toFloat())
         }
         tool("Eraser") {
             erasing = !erasing
-            drawing.setBrush(colors[colorIndex], erasing)
+            highlighter = false
+            drawing.setBrush(colors[colorIndex], erasing, false, dp(brushSizes[brushSizeIndex]).toFloat())
         }
         tool("Undo") { drawing.undo() }
         tool("Clear") { drawing.clear() }
@@ -124,6 +137,7 @@ class AnnotationOverlayService : Service() {
         private var activeColor = Color.RED
         private var activeWidth = dp(4).toFloat()
         private var clearMode = false
+        private var highlightMode = false
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
             strokeCap = Paint.Cap.ROUND
@@ -132,10 +146,11 @@ class AnnotationOverlayService : Service() {
 
         init { setLayerType(View.LAYER_TYPE_SOFTWARE, null) }
 
-        fun setBrush(color: Int, erase: Boolean) {
+        fun setBrush(color: Int, erase: Boolean, highlight: Boolean = false, width: Float = dp(4).toFloat()) {
             activeColor = color
             clearMode = erase
-            activeWidth = if (erase) dp(24).toFloat() else dp(4).toFloat()
+            highlightMode = highlight
+            activeWidth = if (erase) dp(24).toFloat() else width
         }
 
         fun undo() {
@@ -162,7 +177,7 @@ class AnnotationOverlayService : Service() {
                 canvas.drawPath(stroke.path, paint)
             }
             activePath?.let { path ->
-                paint.color = activeColor
+                paint.color = if (highlightMode) (activeColor and 0x00FFFFFF) or 0x66000000 else activeColor
                 paint.strokeWidth = activeWidth
                 paint.xfermode = if (clearMode)
                     android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR)

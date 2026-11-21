@@ -8,6 +8,8 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
@@ -40,6 +42,8 @@ class FloatingBubbleService : Service() {
     private var deleteTarget: TextView? = null
     private var savedX = 0
     private var savedY = 0
+    private val idleHandler = Handler(Looper.getMainLooper())
+    private val idleRestTask = Runnable { restAtNearestCorner() }
 
     private val collapsedSize get() = dp(getSharedPreferences("kalize_settings", MODE_PRIVATE).getInt("bubble_size", 58).coerceIn(44, 68))
     private val expandedSize get() = dp(248)
@@ -108,6 +112,7 @@ class FloatingBubbleService : Service() {
 
         try {
             windowManager.addView(root, params)
+            scheduleIdleRest()
         } catch (_: Exception) {
             stopSelf()
         }
@@ -116,6 +121,8 @@ class FloatingBubbleService : Service() {
     private fun handleBubbleTouch(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
+                idleHandler.removeCallbacks(idleRestTask)
+                bubble.animate().scaleX(1f).scaleY(1f).setDuration(130).start()
                 downX = event.rawX
                 downY = event.rawY
                 startX = params.x
@@ -158,6 +165,7 @@ class FloatingBubbleService : Service() {
                 } else {
                     snapToNearestEdge()
                     savePosition()
+                    scheduleIdleRest()
                 }
                 return true
             }
@@ -312,6 +320,28 @@ class FloatingBubbleService : Service() {
         startActivity(intent)
     }
 
+    /** After five seconds without interaction, gently shrink and park the bubble in a corner. */
+    private fun scheduleIdleRest() {
+        idleHandler.removeCallbacks(idleRestTask)
+        if (!expanded) idleHandler.postDelayed(idleRestTask, 5_000L)
+    }
+
+    private fun restAtNearestCorner() {
+        if (expanded || !::root.isInitialized || !::bubble.isInitialized) return
+        val metrics = resources.displayMetrics
+        val maxX = (metrics.widthPixels - collapsedSize).coerceAtLeast(0)
+        val maxY = (metrics.heightPixels - collapsedSize).coerceAtLeast(0)
+        val goRight = savedX + collapsedSize / 2 >= metrics.widthPixels / 2
+        val goBottom = savedY + collapsedSize / 2 >= metrics.heightPixels / 2
+        savedX = if (goRight) maxX else 0
+        savedY = if (goBottom) maxY else 0
+        params.x = savedX
+        params.y = savedY
+        savePosition()
+        updateWindow()
+        bubble.animate().scaleX(0.88f).scaleY(0.88f).setDuration(260).start()
+    }
+
     /** Snap the collapsed bubble to the nearest screen edge and keep it fully visible. */
     private fun snapToNearestEdge() {
         val metrics = resources.displayMetrics
@@ -352,6 +382,7 @@ class FloatingBubbleService : Service() {
         (value * resources.displayMetrics.density).toInt()
 
     override fun onDestroy() {
+        idleHandler.removeCallbacks(idleRestTask)
         hideDeleteTarget()
         try {
             windowManager.removeView(root)

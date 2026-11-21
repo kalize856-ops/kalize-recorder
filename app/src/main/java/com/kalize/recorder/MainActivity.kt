@@ -82,7 +82,6 @@ class MainActivity : ComponentActivity() {
             var fpsCounterEnabled by remember { mutableStateOf(prefs.getBoolean("fps_counter_enabled", false)) }
             var fpsCounterSize by remember { mutableIntStateOf(prefs.getInt("fps_counter_size", 12)) }
             var fpsCounterOpacity by remember { mutableIntStateOf(prefs.getInt("fps_counter_opacity", 75)) }
-            var networkMonitor by remember { mutableStateOf(prefs.getBoolean("network_monitor_enabled", false)) }
             val accent = if (dark) Color(0xFF9B86FF) else Color(0xFF6952D8)
             val bg = if (dark) Color(0xFF0B1020) else Color(0xFFF4F5FA)
             val surface = if (dark) Color(0xFF171F32) else Color.White
@@ -166,12 +165,7 @@ class MainActivity : ComponentActivity() {
                                             startService(Intent(this@MainActivity, FpsCounterOverlayService::class.java))
                                         }
                                     },
-                                    { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) },
-                                    networkMonitor, { enabled ->
-                                        networkMonitor = enabled
-                                        prefs.edit().putBoolean("network_monitor_enabled", enabled).apply()
-                                        syncNetworkSampler()
-                                    }
+                                    { startActivity(Intent(this@MainActivity, ProStudioActivity::class.java)) }
                                 )
                             }
                         }
@@ -203,24 +197,6 @@ class MainActivity : ComponentActivity() {
         when (intent?.action) {
             ACTION_RECORD -> requestCapture()
             ACTION_SCREENSHOT -> requestScreenshot()
-        }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        syncNetworkSampler()
-    }
-
-    override fun onStop() {
-        NetworkTrafficSampler.release(this)
-        super.onStop()
-    }
-
-    private fun syncNetworkSampler() {
-        if (prefs.getBoolean("network_monitor_enabled", false)) {
-            NetworkTrafficSampler.acquire(this)
-        } else {
-            NetworkTrafficSampler.release(this)
         }
     }
 
@@ -446,8 +422,7 @@ private fun SettingsDashboard(
     fpsCounterEnabled: Boolean, onFpsCounterEnabled: (Boolean) -> Unit,
     fpsCounterSize: Int, onFpsCounterSize: (Int) -> Unit,
     fpsCounterOpacity: Int, onFpsCounterOpacity: (Int) -> Unit,
-    onStudio: () -> Unit,
-    networkMonitor: Boolean, onNetworkMonitor: (Boolean) -> Unit
+    onStudio: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var showTouches by remember { mutableStateOf(Settings.System.getInt(context.contentResolver, "show_touches", 0) == 1) }
@@ -548,12 +523,12 @@ private fun SettingsDashboard(
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
-        SettingsCard("Performance & network") {
-            SwitchSetting("Live network speed", "Continuously measure this device's download and upload traffic while Kalize is open. This is traffic monitoring, not a speed-test download.", networkMonitor, onNetworkMonitor)
+        SettingsCard("Device performance") {
+            Text("Run the optional CPU benchmark to see a simple performance rating for this device.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton(onClick = {
                 context.startActivity(Intent(context, DeviceToolsActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Default.Speed, null); Spacer(Modifier.width(8.dp)); Text("Open Device Lab & CPU benchmark")
+                Icon(Icons.Default.Speed, null); Spacer(Modifier.width(8.dp)); Text("Open CPU benchmark")
             }
         }
 
@@ -582,7 +557,7 @@ private fun SettingsDashboard(
         }
 
         SettingsCard("About Kalize Recorder") {
-            Text("Kalize Recorder · Version 1.0.8", fontWeight = FontWeight.SemiBold)
+            Text("Kalize Recorder · Version 1.0.9", fontWeight = FontWeight.SemiBold)
             Text("A no-watermark screen recorder. Features that depend on Android version, device hardware or app playback-capture permissions may not be available on every phone.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

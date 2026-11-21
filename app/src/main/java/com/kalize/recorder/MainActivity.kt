@@ -90,6 +90,8 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(colorScheme = if (dark) darkColorScheme(primary = accent, background = bg, surface = surface)
                 else lightColorScheme(primary = accent, background = bg, surface = surface)) {
                 Surface(Modifier.fillMaxSize(), color = bg) {
+                    var showIntro by remember { mutableStateOf(true) }
+                    Box(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize()) {
                         Row(
                             Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp),
@@ -180,6 +182,10 @@ class MainActivity : ComponentActivity() {
                             NavigationBarItem(page == "Library", { page = "Library" }, icon = { Icon(Icons.Default.VideoLibrary, null) }, label = { Text("Library") })
                             NavigationBarItem(page == "Settings", { page = "Settings" }, icon = { Icon(Icons.Default.Settings, null) }, label = { Text("Settings") })
                         }
+                    }
+                    if (showIntro) {
+                        KalizeIntroSplash(onFinished = { showIntro = false })
+                    }
                     }
                 }
             }

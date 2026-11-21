@@ -91,7 +91,7 @@ class AnnotationOverlayService : Service() {
         add("Done") { stopSelf() }
         return HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
-            addView(bar, HorizontalScrollView.LayoutParams(-2, -2))
+            addView(bar, android.view.ViewGroup.LayoutParams(-2, -2))
         }
     }
 

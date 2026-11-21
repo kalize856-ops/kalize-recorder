@@ -46,6 +46,7 @@ class RecorderService : Service() {
     private var outputFile: File? = null
     private var outputUri: Uri? = null
     private var outputDescriptor: ParcelFileDescriptor? = null
+    private var outputIsMediaStore = false
     private var stopping = false
     private var recordingActive = false
     private var screenshotOnlySession = false
@@ -488,6 +489,33 @@ class RecorderService : Service() {
 
     private fun prepareVideoOutput() {
         val fileName = "Kalize_${System.currentTimeMillis()}.mp4"
+        val treeString = getSharedPreferences("kalize_settings", MODE_PRIVATE)
+            .getString("recording_tree_uri", null)
+        if (!treeString.isNullOrBlank()) {
+            try {
+                val treeUri = Uri.parse(treeString)
+                val rootDocument = android.provider.DocumentsContract.buildDocumentUriUsingTree(
+                    treeUri,
+                    android.provider.DocumentsContract.getTreeDocumentId(treeUri)
+                )
+                val document = android.provider.DocumentsContract.createDocument(
+                    contentResolver, rootDocument, "video/mp4", fileName
+                ) ?: throw IllegalStateException("The selected folder did not create a video file.")
+                outputUri = document
+                outputIsMediaStore = false
+                outputDescriptor = contentResolver.openFileDescriptor(document, "w")
+                    ?: throw IllegalStateException("Could not open the video in the selected folder.")
+                return
+            } catch (error: Exception) {
+                outputUri?.let { runCatching { contentResolver.delete(it, null, null) } }
+                outputUri = null
+                outputDescriptor?.close()
+                outputDescriptor = null
+                getSharedPreferences("kalize_settings", MODE_PRIVATE).edit()
+                    .remove("recording_tree_uri").apply()
+                android.util.Log.w("KalizeRecorder", "Custom recording folder unavailable; using default storage.", error)
+            }
+        }
         if (Build.VERSION.SDK_INT >= 29) {
             val values = ContentValues().apply {
                 put(MediaStore.Video.Media.DISPLAY_NAME, fileName)
@@ -498,6 +526,7 @@ class RecorderService : Service() {
             val uri = contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
                 ?: throw IllegalStateException("Unable to create video in Movies")
             outputUri = uri
+            outputIsMediaStore = true
             outputDescriptor = contentResolver.openFileDescriptor(uri, "w")
                 ?: throw IllegalStateException("Unable to open output video")
         } else {
@@ -546,7 +575,7 @@ class RecorderService : Service() {
 
         try { outputDescriptor?.close() } catch (_: Exception) { }
         outputDescriptor = null
-        if (saved && Build.VERSION.SDK_INT >= 29) {
+        if (saved && outputIsMediaStore && Build.VERSION.SDK_INT >= 29) {
             outputUri?.let { uri ->
                 val values = ContentValues().apply { put(MediaStore.Video.Media.IS_PENDING, 0) }
                 contentResolver.update(uri, values, null, null)
@@ -554,6 +583,7 @@ class RecorderService : Service() {
         }
         outputUri = null
         outputFile = null
+        outputIsMediaStore = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

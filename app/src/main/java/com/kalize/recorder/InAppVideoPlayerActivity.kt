@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 
@@ -47,6 +48,7 @@ private fun InAppVideoPlayer(uri: Uri, name: String, onBack: () -> Unit, onEdit:
     val context = LocalContext.current
     var details by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var playbackSpeed by remember { mutableFloatStateOf(1f) }
     val exoPlayer = remember(uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
@@ -76,6 +78,19 @@ private fun InAppVideoPlayer(uri: Uri, name: String, onBack: () -> Unit, onEdit:
         }
         Column(Modifier.fillMaxWidth().background(Color(0xFF111522)).navigationBarsPadding().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("PLAYBACK SPEED", color = Color(0xFFB9A9FF), style = MaterialTheme.typography.labelSmall)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                    FilterChip(
+                        selected = playbackSpeed == speed,
+                        onClick = {
+                            playbackSpeed = speed
+                            exoPlayer.playbackParameters = PlaybackParameters(speed)
+                        },
+                        label = { Text("${speed}x") }
+                    )
+                }
+            }
             Text("VIDEO TOOLS", color = Color(0xFFB9A9FF), style = MaterialTheme.typography.labelSmall)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = {

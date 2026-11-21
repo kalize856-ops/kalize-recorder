@@ -533,9 +533,14 @@ private fun SettingsDashboard(
         }
 
         SettingsCard("Storage & saved recordings") {
-            Text("Automatic saving is enabled. Completed recordings are published to Movies/Kalize Recorder and appear in your device media library. This build does not yet support choosing a custom folder or SD-card destination from this screen.",
+            Text("Choose internal storage or an SD-card folder for new recordings. Existing recordings are not moved.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Recordings are stored in Movies/Kalize Recorder and are visible in your device's media library. Available storage and Android permissions can affect saving.",
+            OutlinedButton(onClick = {
+                context.startActivity(Intent(context, StorageDestinationActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Default.FolderOpen, null); Spacer(Modifier.width(8.dp)); Text("Recording destination")
+            }
+            Text("Default destination: Movies/Kalize Recorder. Android folder permissions and removable-card availability can affect saving.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
@@ -557,7 +562,7 @@ private fun SettingsDashboard(
         }
 
         SettingsCard("About Kalize Recorder") {
-            Text("Kalize Recorder · Version 1.0.9", fontWeight = FontWeight.SemiBold)
+            Text("Kalize Recorder · Version 1.1.0", fontWeight = FontWeight.SemiBold)
             Text("A no-watermark screen recorder. Features that depend on Android version, device hardware or app playback-capture permissions may not be available on every phone.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

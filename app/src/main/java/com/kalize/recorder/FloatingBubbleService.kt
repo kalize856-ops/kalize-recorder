@@ -300,6 +300,7 @@ class FloatingBubbleService : Service() {
         bubble.text = "K"
         root.addView(bubble, FrameLayout.LayoutParams((collapsedSize * 0.8f).toInt(), (collapsedSize * 0.8f).toInt(), Gravity.CENTER))
         updateWindow()
+        scheduleIdleRest()
     }
 
     private fun togglePauseResume() {
